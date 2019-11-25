@@ -1,7 +1,5 @@
 # DenDen047.github.io
 
-自己紹介用ページ
-
-自分の活動記録などを載せていくつもり。
+My portfolio website
 
 → https://denden047.github.io/
