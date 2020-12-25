@@ -1,0 +1,220 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Medium Length Professional CV
+% LaTeX Template
+% Version 2.0 (8/5/13)
+%
+% This template has been downloaded from:
+% http://www.LaTeXTemplates.com
+%
+% Original author:
+% Trey Hunner (http://www.treyhunner.com/)
+%
+% Important note:
+% This template requires the resume.cls file to be in the same directory as the
+% .tex file. The resume.cls file provides the resume style used for structuring the
+% document.
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%----------------------------------------------------------------------------------------
+%	PACKAGES AND OTHER DOCUMENT CONFIGURATIONS
+%----------------------------------------------------------------------------------------
+
+\documentclass{resume} % Use the custom resume.cls style
+
+\include{macro}	% マクロを読み込む
+
+\usepackage[left=0.75in,top=0.6in,right=0.75in,bottom=0.6in]{geometry} % Document margins
+\usepackage[dvipdfmx]{hyperref}
+\newcommand{\tab}[1]{\hspace{.2667\textwidth}\rlap{#1}}
+\newcommand{\itab}[1]{\hspace{0em}\rlap{#1}}
+\name{村松 直哉}	% Your name
+% \address{\href{http://www.u.tsukuba.ac.jp/~s1411453/}{http://www.u.tsukuba.ac.jp/~s1411453/}}
+\address{sh.mn.nat@gmail.com}	% Your phone number and email
+\address{埼玉県八潮市}	% Your address
+% \address{123 Pleasant Lane \\ City, State 12345} % Your secondary address (optional)
+
+
+\begin{document}
+
+%----------------------------------------------------------------------------------------
+%	EDUCATION SECTION
+%----------------------------------------------------------------------------------------
+
+\begin{rSection}{Education}
+
+    {\bf 筑波大学} \hfill {2018年4月 -- 現在}
+    \\ 修士（情報学）
+    \\ 図書館情報メディア研究科 図書館情報メディア専攻
+    \\ 指導教員: 佐藤 哲司 教授
+    \\ 副指導教員: 于 海涛 助教
+
+    {\bf 筑波大学} \hfill {2016年4月 -- 2018年3月}
+    \\ 学士（図書館情報学）
+    \\ 情報学群 知識情報・図書館学類
+    \\ 指導教員: 落合 陽一 准教授
+    % \\ GPA: \todo{xxx / 4.03}
+
+    {\bf National Institute of Technology, Nagano College} \hfill {2011年4月 -- 2016年3月}
+    \\ Foundation Degree
+    \\ Department of Electrical and Electronic Engineering
+    \\ 指導教員: Takashi Miyazaki
+    % \\ GPA: \todo{xxx / 4.03}
+
+\end{rSection}
+
+%----------------------------------------------------------------------------------------
+%	WORK EXPERIENCE SECTION
+%----------------------------------------------------------------------------------------
+
+\begin{rSection}{Research Experience}
+
+    \begin{rSubsection}{筑波大学}{April 2018 -- 現在}{Master Research}{}
+    % New type of deep learning
+    \item Proposed the method of applying spiking neural networks for event-based cameras.
+    \end{rSubsection}
+
+    \begin{rSubsection}{University of Cape Town}{July 2020}{Research Internship}{}
+    % New type of deep learning
+    \item Estimated the motion of a real cheetah from multi-cameras with trajectory optimization (Supervisor: \href{https://scholar.google.co.za/citations?user=RxMigV4AAAAJ&view_op=list_works&sortby=pubdate}{Dr. Amir Patel}).
+    \end{rSubsection}
+
+    \begin{rSubsection}{筑波大学}{April 2016 -- March 2018}{Undergraduate Research}{}
+    % ECサイトのレビュー
+    \item Analyzed reviews of EC site to find out points of variation.
+    % Sonoliards
+    \item Developed Sonoliards optimizing the direction of a parametric speaker with a ray tracing algorithm.
+    % DeepHolo
+    \item Developed DeepHolo that recognizes 3D objects using a deep neural network and computer-generated holography for convert 3D data to 2D data with depth information.
+    % DeepWear
+    \item Developed DeepWear, a method using deep convolutional generative adversarial networks (DCGANs) for clothes design.
+    \end{rSubsection}
+
+    \begin{rSubsection}{National Institute of Technology, Nagano College}{April 2015 -- March 2016}{Undergraduate Research}{}
+    \item Developed the noise filter that greatly suppresses the influence of radio noise in the indoor position information system using Link Quality Indication (LQI) value of radio waves.
+    \end{rSubsection}
+
+\end{rSection}
+
+%----------------------------------------------------------------------------------------
+%	TECHNICAL STRENGTHS SECTION
+%----------------------------------------------------------------------------------------
+
+\begin{rSection}{Technical Strengths}
+
+    \begin{tabular}{ @{} >{\bfseries}l @{\hspace{6ex}} l }
+    Programming Languages   &   Python(most fluent), C, C++, Verilog, Shell Script, \\
+    & Ruby, JavaScript, SQL \\
+    Machine Learning Libraries & Tensorflow, Keras, PyTorch, Scikit-learn, Chainer \\
+    Software    &   Git, Docker, PyBullet, Processing, Autodesk Fusion360 \\
+    OS          &   MacOS, Ubuntu, Windows, FreeNAS, CentOS \\
+    Hardware    &   Arduino, Mbed, PhantomX AX Metal Hexapod \\
+    \end{tabular}
+
+\end{rSection}
+
+%----------------------------------------------------------------------------------------
+%	EXAMPLE SECTION
+%----------------------------------------------------------------------------------------
+
+\begin{rSection}{Publications} \itemsep 4pt
+
+    % \begin{rSubsection}{Preprints}{}{}{}{}
+    %     % arxivとか
+    % \end{rSubsection}
+
+    % \begin{rSubsection}{JOURNAL ARTICLES}{}{}{}{}
+    % \end{rSubsection}
+
+    \begin{rSubsection}{INTERNATIONAL CONFERENCES (REFEREED)}{}{}{}{}
+        \item Chun Wei Ooi, \textbf{Naoya Muramatsu}, and Yoichi Ochiai. 2018. Eholo glass: Electroholography glass. A lensless approach to holographic augmented reality near-eye display. In \textit{SIGGRAPH Asia 2018 Technical Briefs} (SA ’18), December 4–7, 2018, Tokyo, Japan. ACM, New York, NY, USA, 4 pages. DOI: \url{https://doi.org/10.1145/3283254.3283288}
+
+        \item Natsumi Kato*, Hiroyuki Osone*, Daitetsu Sato, \textbf{Naoya Muramatsu}, and Yoichi Ochiai. 2018. DeepWear: a Case Study of Collaborative Design between Human and Artificial Intelligence. In \textit{Proceedings of the Twelfth International Conference on Tangible, Embedded, and Embodied Interaction} (TEI ’18). ACM, New York, NY, USA, 529-536. DOI: \url{https://doi.org/10.1145/3173225.3173302} (* Joint first authorship.)
+
+        \item \textbf{Naoya Muramatsu}, Ooi Chun Wei, Takashi Miyazaki. 2017. Development of High Performance Filter for Indoor Positioning System. In \textit{The 5th IIAE International Conference on Intelligent Systems and Image Processing 2017}(ICISIP 2017).
+    \end{rSubsection}
+
+    \begin{rSubsection}{INTERNATIONAL Posters and Workshops (REFEREED)}{}{}{}{}
+        \item Natsumi Kato, Hiroyuki Osone, Daitetsu Sato, \textbf{Naoya Muramatsu}, and Yoichi Ochiai. 2017. Crowd Sourcing Clothes Design Directed by Adversarial Neural Networks. In \textit{NIPS 2017 Workshop} (NIPS ’17).
+
+        \item \textbf{Naoya Muramatsu}, Kazuki Ohshima, Ryota Kawamura, Ooi Chun Wei, Yuta Sato, and Yoichi Ochiai. 2017. Sonoliards: Rendering Audible Sound Spots by Reflecting the Ultrasound Beams. In \textit{Adjunct Publication of the 30th Annual ACM Symposium on User Interface Software and Technology} (UIST ’17). ACM, New York, NY, USA, 57-59. DOI: \url{https://doi.org/10.1145/3131785.3131807}
+
+        \item \textbf{Naoya Muramatsu}, Chun Wei Ooi, Yuta Itoh, and Yoichi Ochiai. 2017. DeepHolo: Recognizing 3D Objects using a Binary-weighted Computer-Generated Hologram. In \textit{SIGGRAPH Asia 2017 Posters} (SA 2017), November 27– 30, 2017, Bangkok, Thailand. ACM, New York, NY, USA, 2 pages. DOI: \url{https://doi.org/10.1145/3145690.3145725}
+
+        \item Mose Sakashita, Yuta Sato, Ayaka Ebisu, Keisuke Kawahara, Satoshi Hashizume, \textbf{Naoya Muramatsu}, Yoichi Ochiai. 2017. Haptic Marionette: Wrist Control Technology Combined with Electrical Muscle Stimulation and Hanger Reflex. In \textit{SIGGRAPH Asia 2017 Posters} (SA 2017). ACM, New York, NY, USA, Article 33, 2 pages. DOI: \url{https://doi.org/10.1145/3145690.3145743}
+    \end{rSubsection}
+
+    % \begin{rSubsection}{INTERNATIONAL CONFERENCES (NOT REFEREED)}{}{}{}{}
+    % \end{rSubsection}
+
+    % \begin{rSubsection}{DOMESTIC CONFERENCES (REFEREED)}{}{}{}{}
+    % \end{rSubsection}
+
+    \begin{rSubsection}{DOMESTIC CONFERENCES (NOT REFEREED)}{}{}{}{}
+        \item \textbf{Naoya Muramatsu}, Tetsuji Satoh, Takayasu Fushimi. 2017. Product Attribute Extraction Method Based on Transition Pattern of Review Point of View. In \textit{Data Engineering and Information Management 2017} (DEIM 2017). (in Japanese) % レビュー観点の推移パターンに基づく商品属性の抽出手法
+    \end{rSubsection}
+
+
+
+
+\end{rSection}
+
+%----------------------------------------------------------------------------------------
+\begin{rSection}{Work Experience}
+
+    \begin{rSubsection}{\href{https://www.landscape.co.jp/}{Landscape Co.,Ltd.}}{January 2020 -- 現在}{Outside CTO}{}
+    \item Worked on development of some systems with Machine Learning techniques.
+    \end{rSubsection}
+
+    \begin{rSubsection}{Information-technology Promotion Agency, Japan. Exploratory Software Project (\href{https://www.mitou.org/}{MITOU})}{June 2018 -- March 2019}{Creator}{}
+    \item Developed the robot control system, able to walk even if a few legs are broken using hierarchy Q-learning.
+    \item 2,304,000 JPY / nine months.
+    \end{rSubsection}
+
+    \begin{rSubsection}{\href{http://pixiedusttech.com/}{Pixie Dust Technologies, Inc.}}{August 2017 -- April 2019}{Software Engineer}{}
+    \item Worked on development of management systems and web applications.
+    \end{rSubsection}
+
+    \begin{rSubsection}{\href{https://www.fixstars.com/en/}{Fixstars Corporation}}{August 2016 -- December 2016}{Software Engineer Intern}{}
+    \item Worked on development of semantic segmentation system for self-driving cars.
+    \end{rSubsection}
+
+    \begin{rSubsection}{\href{https://www.fixstars.com/en/}{Fixstars Corporation}}{August 2014 -- September 2014}{Software Engineer Intern}{}
+    \item Worked on software optimization for the microcomputer of cars.
+    \end{rSubsection}
+
+\end{rSection}
+
+%----------------------------------------------------------------------------------------
+% \begin{rSection}{Fellowships}
+%     \begin{tabular}{ @{} >{\bfseries}l @{\hspace{4ex}} l }
+%     \end{tabular}
+% \end{rSection}
+
+%----------------------------------------------------------------------------------------
+% \begin{rSection}{Research Grants}
+%     \begin{tabular}{ @{} >{\bfseries}l @{\hspace{4ex}} l }
+%     \end{tabular}
+% \end{rSection}
+
+%----------------------------------------------------------------------------------------
+\begin{rSection}{Awards}
+    \begin{tabular}{ @{} >{\bfseries}l @{\hspace{4ex}} l }
+    2018    &   MITOU Projects, \textbf{Super Creator}  \\
+            &   This award were given 16 creators from 27 people adopted from 300+ applications. \\
+    2018    &   筑波大学, \textbf{President's Award for Students}  \\
+    2017    &   DEIM 2017, \textbf{Student Presentation Award}.   \\
+    2015    &   RoboCupJunior Soccer 2015 in Hokushinetsu Block, \textbf{Prize: 3rd} \\
+    \end{tabular}
+\end{rSection}
+
+
+%----------------------------------------------------------------------------------------
+\begin{rSection}{Links}
+
+    {\bf Digital Nature Group} \hfill {\url{https://digitalnature.slis.tsukuba.ac.jp/}} \\
+    {\bf GitHub: DenDen047} \hfill {\url{https://github.com/DenDen047}} \\
+
+\end{rSection}
+
+\end{document}
