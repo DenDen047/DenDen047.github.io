@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="84" height="95" viewBox="0 0 84 95">
+  <defs>
+    <clipPath id="clip-path">
+      <rect x="16" y="-1" width="80" height="25" fill="none"/>
+    </clipPath>
+    <clipPath id="clip-path-2">
+      <rect x="16" y="74" width="80" height="20" fill="none"/>
+    </clipPath>
+  </defs>
+  <g id="Group_118" data-name="Group 118" transform="translate(-7824 -4909)">
+    <g id="Group_117" data-name="Group 117">
+      <text id="NM" transform="translate(7866 4978)" fill="#fff" font-size="50" font-family="UDDigiKyokashoNK-R, UD Digi Kyokasho NK-R"><tspan x="-41.101" y="0">NM</tspan></text>
+      <g id="Scroll_Group_3" data-name="Scroll Group 3" transform="translate(7810 4910)" clip-path="url(#clip-path)" style="isolation: isolate">
+        <g id="Ellipse_4" data-name="Ellipse 4" transform="translate(16 9)" fill="none" stroke="#fff" stroke-width="5">
+          <circle cx="40" cy="40" r="40" stroke="none"/>
+          <circle cx="40" cy="40" r="37.5" fill="none"/>
+        </g>
+      </g>
+      <g id="Scroll_Group_4" data-name="Scroll Group 4" transform="translate(7810 4910)" clip-path="url(#clip-path-2)" style="isolation: isolate">
+        <g id="Ellipse_6" data-name="Ellipse 6" transform="translate(16 9)" fill="none" stroke="#fff" stroke-width="5">
+          <circle cx="40" cy="40" r="40" stroke="none"/>
+          <circle cx="40" cy="40" r="37.5" fill="none"/>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>
