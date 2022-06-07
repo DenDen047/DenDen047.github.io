@@ -26,6 +26,7 @@
 
 \usepackage[left=0.75in,top=0.6in,right=0.75in,bottom=0.6in]{geometry} % Document margins
 \usepackage[dvipdfmx]{hyperref}
+\usepackage{amsmath}
 
 \newcommand{\tab}[1]{\hspace{.2667\textwidth}\rlap{#1}}
 \newcommand{\itab}[1]{\hspace{0em}\rlap{#1}}
@@ -46,7 +47,7 @@
 
     \begin{rSubsection}{University of Cape Town}{April 2021 -- Present}{PhD student in Electrical Engineering}{}
     % New type of deep learning
-    \item On the Neuromechanics of the Cheetah.
+    \item PhD Proposal title: ``{\it On the Neuromechanics of the Cheetah}''
     \item Adviser: \href{https://scholar.google.co.za/citations?user=RxMigV4AAAAJ&view_op=list_works&sortby=pubdate}{Amir Patel}
     \end{rSubsection}
 
@@ -71,25 +72,29 @@
 
 \begin{rSection}{Industrial Experience}
 
+    \begin{rSubsection}{\href{https://jp.jungle.xyz/}{$\text{JUNGLE}^\text{x}$}}{June 2022 -- Present}{Fellow}{}
+    \item Technical consultant and developing the 3D motion capture system for high-speed objects.
+    \end{rSubsection}
+
     \begin{rSubsection}{\href{https://info.gbiz.go.jp/hojin/ichiran?hojinBango=2430001082637}{Good Answers, Inc.}}{February 2021 -- Present}{Fellow}{}
-    \item Developing the motor control algorithm for electric scooters.
+    \item Technical consultant and developing the motor control algorithm for electric scooters.
     \end{rSubsection}
 
     \begin{rSubsection}{\href{https://www.landscape.co.jp/}{Landscape Co.,Ltd.}}{January 2020 -- Present}{Outside CTO}{}
-    \item Working on developing systems with Machine Learning techniques, such as optical character recognition and image recognition.
+    \item Developing various systems with machine learning techniques, such as optical character recognition and image recognition.
     \end{rSubsection}
 
-    \begin{rSubsection}{Information-technology Promotion Agency, Japan. Exploratory Software Project (\href{https://www.mitou.org/}{MITOU})}{June 2018 -- March 2019}{Creator}{}
+    \begin{rSubsection}{\href{https://www.mitou.org/}{Information-technology Promotion Agency, Japan. Exploratory Software Project (MITOU)}}{June 2018 -- March 2019}{Creator}{}
     \item Developed the robot control system, walking even with broken legs using hierarchy Q-learning.
     \item \textbf{2,304,000 JPY / nine months}.
     \end{rSubsection}
 
     \begin{rSubsection}{\href{http://pixiedusttech.com/}{Pixie Dust Technologies, Inc.}}{August 2017 -- April 2019}{Software Engineer}{}
-    \item Worked on the development of management systems and web applications.
+    \item Acquired a new big project and worked on the development of management systems and web applications.
     \end{rSubsection}
 
     \begin{rSubsection}{\href{https://www.fixstars.com/en/}{Fixstars Corporation}}{August 2016 -- December 2016}{Software Engineer Intern}{}
-    \item Worked on the development of a semantic segmentation system for self-driving cars.
+    \item Worked on the development of a semantic segmentation system for self-driving cars with poor computational resource.
     \end{rSubsection}
 
     \begin{rSubsection}{\href{https://www.fixstars.com/en/}{Fixstars Corporation}}{August 2014 -- September 2014}{Software Engineer Intern}{}
@@ -104,28 +109,26 @@
 
 \begin{rSection}{Publications} \itemsep 4pt
 
-    % \begin{rSubsection}{Preprints}{}{}{}{}
+    \begin{rSubsection}{JOURNALS}{}{}{}{}
+        \item \textbf{Naoya Muramatsu}*, Hai-Tao Yu, Tetsuji Satoh, ``Combining Spiking Neural Networks with Artificial Neural Networks for Enhanced Image Classification,'' \textit{IEICE Transactions on Information and Systems}, 2022. (under review)
+    \end{rSubsection}
+
+    \begin{rSubsection}{REFEREED CONFERENCES}{}{}{}{}
+        \item \textbf{Naoya Muramatsu}*, Zico da Silva*, Daniel Joska, Fred Nicolls, Amir Patel, ``Improving 3D Markerless Pose Estimation of Animals in the Wild using Low-Cost Cameras,'' in Proc. IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS 2022) (* co-first authors). (under review)
+        \item Amaan Vally, Daniel Joska, \textbf{Naoya Muramatsu}, Paul Amayo, Amir Patel, ``3D Markerless Motion Capture of Animals in the Wild using Autonomous Tracking Cameras,'' in Proc. IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS 2022). (under review)
+        \item Daniel Joska, Liam Clark, \textbf{Naoya Muramatsu}, Ricky Jericevich, Fred Nicolls, Alexander Mathis, Mackenzie Mathis, Amir Patel, ``AcinoSet: A 3D Pose Estimation Dataset and Baseline Models for Cheetahs in the Wild,'' in Proc. IEEE International Conference on Robotics and Automation (ICRA 2021).
+        \item Chun Wei Ooi, \textbf{Naoya Muramatsu}, Yoichi Ochiai, ``Eholo glass: Electroholography glass. A lensless approach to holographic augmented reality near-eye display,'' in Technical Briefs of 11th ACM SIGGRAPH Asia (SA 2018).
+        \item Natsumi Kato*, Hiroyuki Osone*, Daitetsu Sato, \textbf{Naoya Muramatsu}, Yoichi Ochiai, ``DeepWear: a Case Study of Collaborative Design between Human and Artificial Intelligence,''  in Proc. 12th ACM Twelfth International Conference on Tangible, Embedded, and Embodied Interaction (TEI 2018). (* co-first authors)
+        \item Natsumi Kato, Hiroyuki Osone, Daitetsu Sato, \textbf{Naoya Muramatsu}, Yoichi Ochiai, ``Crowd Sourcing Clothes Design Directed by Adversarial Neural Networks,'' in  Adjunct Proc. 31st Neural Information Processing Systems (NIPS 2017 Workshop).
+        \item \textbf{Naoya Muramatsu}, Chun Wei Ooi, Yuta Itoh, Yoichi Ochiai, ``DeepHolo: Recognizing 3D Objects using a Binary-weighted Computer-Generated Hologram,'' in Technical Briefs of 10th ACM SIGGRAPH Asia (SA 2017).
+        \item Mose Sakashita, Yuta Sato, Ayaka Ebisu, Keisuke Kawahara, Satoshi Hashizume, \textbf{Naoya Muramatsu}, Yoichi Ochiai, ``Haptic Marionette: Wrist Control Technology Combined with Electrical Muscle Stimulation and Hanger Reflex,'' in in Adjunct Proc. 10th ACM SIGGRAPH Asia (SA 2017 Posters).
+        \item \textbf{Naoya Muramatsu}, Ooi Chun Wei, Takashi Miyazaki, ``Development of High Performance Filter for Indoor Positioning System,'' in Proc. 5th IIAE International Conference on Intelligent Systems and Image Processing 2017 (ICISIP 2017).
+        \item \textbf{Naoya Muramatsu}, Kazuki Ohshima, Ryota Kawamura, Ooi Chun Wei, Yuta Sato, Yoichi Ochiai, ``Sonoliards: Rendering Audible Sound Spots by Reflecting the Ultrasound Beams,'' in Adjunct Proc. 30th ACM User Interface Software and Technology (UIST 2017 Adjunct).
+    \end{rSubsection}
+
+    % \begin{rSubsection}{PREPRINTS}{}{}{}{}
     %     % arxivとか
     % \end{rSubsection}
-
-    % \begin{rSubsection}{JOURNAL ARTICLES}{}{}{}{}
-    % \end{rSubsection}
-
-    \begin{rSubsection}{INTERNATIONAL CONFERENCES (REFEREED)}{}{}{}{}
-        \item \textbf{Naoya Muramatsu}*, Zico da Silva*, Daniel Joska, Fred Nicolls, Amir Patel. 2022. Improving 3D Markerless Pose Estimation of Animals in the Wild using Low-Cost Cameras. In \textit{International Conference on Intelligent Robots and Systems} (IROS 2022). IEEE, Kyoto, Japan. (* co-first authors) (under review)
-        \item Amaan Vally, Daniel Joska, \textbf{Naoya Muramatsu}, Paul Amayo, Amir Patel. 2022. 3D Markerless Motion Capture of Animals in the Wild using Autonomous Tracking Cameras. In \textit{International Conference on Intelligent Robots and Systems} (IROS 2022). IEEE, Kyoto, Japan. (under review)
-        \item Daniel Joska, Liam Clark, \textbf{Naoya Muramatsu}, Ricky Jericevich, Fred Nicolls, Alexander Mathis, Mackenzie Mathis, Amir Patel. 2021. AcinoSet: A 3D Pose Estimation Dataset and Baseline Models for Cheetahs in the Wild. In \textit{International Conference on Robotics and Automation} (ICRA 2021). IEEE, Xi' an, China.
-        \item Chun Wei Ooi, \textbf{Naoya Muramatsu}, and Yoichi Ochiai. 2018. Eholo glass: Electroholography glass. A lensless approach to holographic augmented reality near-eye display. In \textit{SIGGRAPH Asia 2018 Technical Briefs} (SA ’18), December 4–7, 2018, Tokyo, Japan. ACM, New York, NY, USA, 4 pages. DOI: \url{https://doi.org/10.1145/3283254.3283288}
-        \item Natsumi Kato*, Hiroyuki Osone*, Daitetsu Sato, \textbf{Naoya Muramatsu}, and Yoichi Ochiai. 2018. DeepWear: a Case Study of Collaborative Design between Human and Artificial Intelligence. In \textit{Proceedings of the Twelfth International Conference on Tangible, Embedded, and Embodied Interaction} (TEI ’18). ACM, New York, NY, USA, 529-536. DOI: \url{https://doi.org/10.1145/3173225.3173302} (* co-first authors)
-        \item \textbf{Naoya Muramatsu}, Ooi Chun Wei, Takashi Miyazaki. 2017. Development of High Performance Filter for Indoor Positioning System. In \textit{The 5th IIAE International Conference on Intelligent Systems and Image Processing 2017}(ICISIP 2017).
-    \end{rSubsection}
-
-    \begin{rSubsection}{INTERNATIONAL POSTERS AND WORKSHOPS (REFEREED)}{}{}{}{}
-        \item Natsumi Kato, Hiroyuki Osone, Daitetsu Sato, \textbf{Naoya Muramatsu}, and Yoichi Ochiai. 2017. Crowd Sourcing Clothes Design Directed by Adversarial Neural Networks. In \textit{NIPS 2017 Workshop} (NIPS ’17).
-        \item \textbf{Naoya Muramatsu}, Kazuki Ohshima, Ryota Kawamura, Ooi Chun Wei, Yuta Sato, and Yoichi Ochiai. 2017. Sonoliards: Rendering Audible Sound Spots by Reflecting the Ultrasound Beams. In \textit{Adjunct Publication of the 30th Annual ACM Symposium on User Interface Software and Technology} (UIST ’17). ACM, New York, NY, USA, 57-59. DOI: \url{https://doi.org/10.1145/3131785.3131807}
-        \item \textbf{Naoya Muramatsu}, Chun Wei Ooi, Yuta Itoh, and Yoichi Ochiai. 2017. DeepHolo: Recognizing 3D Objects using a Binary-weighted Computer-Generated Hologram. In \textit{SIGGRAPH Asia 2017 Posters} (SA 2017), November 27– 30, 2017, Bangkok, Thailand. ACM, New York, NY, USA, 2 pages. DOI: \url{https://doi.org/10.1145/3145690.3145725}
-        \item Mose Sakashita, Yuta Sato, Ayaka Ebisu, Keisuke Kawahara, Satoshi Hashizume, \textbf{Naoya Muramatsu}, Yoichi Ochiai. 2017. Haptic Marionette: Wrist Control Technology Combined with Electrical Muscle Stimulation and Hanger Reflex. In \textit{SIGGRAPH Asia 2017 Posters} (SA 2017). ACM, New York, NY, USA, Article 33, 2 pages. DOI: \url{https://doi.org/10.1145/3145690.3145743}
-    \end{rSubsection}
 
     % \begin{rSubsection}{INTERNATIONAL CONFERENCES (NOT REFEREED)}{}{}{}{}
     % \end{rSubsection}
@@ -133,20 +136,26 @@
     % \begin{rSubsection}{DOMESTIC CONFERENCES (REFEREED)}{}{}{}{}
     % \end{rSubsection}
 
-    \begin{rSubsection}{DOMESTIC CONFERENCES (NOT REFEREED)}{}{}{}{}
-        \item \textbf{Naoya Muramatsu}, Hai-Tao Yu. 2021. Combining Spiking Neural Network and Artificial Neural Network for Enhanced Image Classification. In \textit{Data Engineering and Information Management 2021} (DEIM 2021).
-        \item \textbf{Naoya Muramatsu}, Tetsuji Satoh, Takayasu Fushimi. 2017. Product Attribute Extraction Method Based on Transition Pattern of Review Point of View. In \textit{Data Engineering and Information Management 2017} (DEIM 2017). (in Japanese) % レビュー観点の推移パターンに基づく商品属性の抽出手法
+    \begin{rSubsection}{NON-REFEREED CONFERENCES}{}{}{}{}
+        \item \textbf{Naoya Muramatsu}, Hai-Tao Yu, ``Combining Spiking Neural Network and Artificial Neural Network for Enhanced Image Classification,'' in Proc. 13th Data Engineering and Information Management (DEIM 2021).
+        \item \textbf{Naoya Muramatsu}, Tetsuji Satoh, Takayasu Fushimi, ``Product Attribute Extraction Method Based on Transition Pattern of Review Point of View,'' in Proc. 9th Data Engineering and Information Management (DEIM 2017). (Student Presentation Award) % レビュー観点の推移パターンに基づく商品属性の抽出手法
     \end{rSubsection}
 
 \end{rSection}
 
 \begin{rSection}{Professional Experience} \itemsep 4pt
-
     \begin{rSubsection}{PAPER REVIEWER}{}{}{}{}
         \item IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS), 2022.
-        \item ACM 9th Augmented Human International Conference (AH), 2018.
+        \item ACM Augmented Human International Conference (AH), 2018.
     \end{rSubsection}
-
+    \begin{rSubsection}{CERTIFICATES}{}{}{}{}
+        \item Kinematics: Describing the Motions of Spacecraft (Coursera), University of Colorado Boulder, 2022.
+        \item Motion Planning for Self-Driving Cars (Coursera), University of Toronto, 2021.
+        \item Robotics: Mobility (Coursera), University of Pennsylvania, 2021.
+        \item Julia Scientific Programming (Coursera), University of Cape Town, 2021.
+        \item State Estimation and Localization for Self-Driving Cars (Coursera), University of Toronto, 2021.
+        \item Visual Perception for Self-Driving Cars (Coursera), University of Toronto, 2021.
+    \end{rSubsection}
 \end{rSection}
 
 %----------------------------------------------------------------------------------------
@@ -182,10 +191,10 @@
 \begin{rSection}{Technical Strengths}
 
     \begin{tabular}{ @{} >{\bfseries}l @{\hspace{6ex}} l }
-    Programming Languages   &   Python(most fluent), MATLAB, Julia, C, C++, Verilog, \\
-    & Shell Script, Ruby, JavaScript, SQL \\
+    Programming Languages   & Python(most fluent), MATLAB, Julia, C, C++, Verilog, \\
+                            & Shell Script, SQL \\
     Machine Learning Libraries & Tensorflow, Keras, PyTorch, Scikit-learn, Chainer \\
-    Software    &   Git, Docker, PyBullet, Pyomo, IPOPT, Processing, Autodesk Fusion360 \\
+    Software    &   Git, Docker, PyBullet, Pyomo, IPOPT, Processing \\
     OS          &   MacOS, Ubuntu, Windows, TrueNAS, CentOS \\
     Hardware    &   mbed, Arduino, Raspberry Pi, Hexapod \\
     \end{tabular}
@@ -198,7 +207,6 @@
     {\bf Portfolio} \hfill {\url{https://denden047.github.io/index_en.html}} \\
     {\bf GitHub} \hfill {\url{https://github.com/DenDen047}} \\
     {\bf Linkedin} \hfill {\url{https://www.linkedin.com/in/naoya-muramatsu-a01182184/}} \\
-
 \end{rSection}
 
 \end{document}
