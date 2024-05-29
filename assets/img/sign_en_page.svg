@@ -19,9 +19,21 @@
     <g transform="matrix(1, 0, 0, 1, 6354.55, -8682)" filter="url(#A_lots_of_experience_a_wealth_of_knowledge_and_great_achievements_in_the_fields_of_astronomy_robots_and_machine_learning)">
       <text id="A_lots_of_experience_a_wealth_of_knowledge_and_great_achievements_in_the_fields_of_astronomy_robots_and_machine_learning-2" data-name="A lots of experience, a wealth of knowledge
 and great achievements in the fields of
-astronomy, robots and machine learning" transform="translate(9 36)" fill="#0faf8a" font-size="30" font-family="YuGothic-Medium, Yu Gothic" font-weight="500"><tspan x="0" y="0">A lots of experience</tspan><tspan y="0" fill="#fff">,</tspan><tspan y="0" xml:space="preserve"> a wealth of knowledge </tspan><tspan fill="#fff"><tspan x="0" y="48">and</tspan><tspan y="48" xml:space="preserve" fill="#0faf8a"> great achievements </tspan><tspan y="48">in the fields of </tspan><tspan x="0" y="96">biomechanics, robotics and machine learning</tspan></tspan></text>
+astronomy, robots and machine learning" transform="translate(9 36)" fill="#0faf8a" font-size="30" font-family="YuGothic-Medium, Yu Gothic" font-weight="500">
+        <!-- <tspan x="0" y="0">A lots of experience</tspan>
+        <tspan y="0" fill="#fff">,</tspan>
+        <tspan y="0" xml:space="preserve"> a wealth of knowledge </tspan>
+        <tspan fill="#fff">
+          <tspan x="0" y="48">and</tspan><tspan y="48" xml:space="preserve" fill="#0faf8a"> great achievements </tspan>
+          <tspan y="48">in the fields of </tspan>
+          <tspan x="0" y="96">biomechanics, robotics and machine learning</tspan>
+        </tspan> -->
+        <tspan x="140" y="0" fill="#fff">Live as if you were to die tomorrow.</tspan>
+        <tspan fill="#fff"><tspan x="140" y="48">Learn as if you were to live forever.</tspan></tspan>
+      </text>
     </g>
     <g transform="matrix(1, 0, 0, 1, 6354.55, -8682)" filter="url(#Naoya_Muramatsu)">
+    <!-- <g transform="matrix(1, 0, 0, 1, 7883, 5282)" filter="url(#Naoya_Muramatsu)"> -->
       <text id="Naoya_Muramatsu-2" data-name="Naoya Muramatsu" transform="translate(394 187)" fill="#fff" font-size="25" font-family="SWScrpc"><tspan x="0" y="0">Naoya Muramatsu</tspan></text>
     </g>
   </g>
