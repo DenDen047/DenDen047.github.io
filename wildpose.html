@@ -33,8 +33,7 @@
   <link rel="stylesheet" href="static/css/bulma-carousel.min.css">
   <link rel="stylesheet" href="static/css/bulma-slider.min.css">
   <link rel="stylesheet" href="static/css/fontawesome.all.min.css">
-  <link rel="stylesheet"
-  href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons/css/academicons.min.css">
   <link rel="stylesheet" href="static/css/index.css">
 
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
@@ -73,48 +72,58 @@
 
             <div class="column has-text-centered">
               <div class="publication-links">
-                <!-- PDF link -->
+                <!-- JEB link -->
                 <span class="link-block">
-                  <a href="https://www.biorxiv.org/content/10.1101/2024.02.05.578861v3.full.pdf" target="_blank"
+                  <a href="https://journals.biologists.com/jeb/article-abstract/228/5/JEB249987/367271/WildPose-a-long-range-3D-wildlife-motion-capture?redirectedFrom=fulltext" target="_blank"
                   class="external-link button is-normal is-rounded is-dark">
-                  <span class="icon">
-                    <i class="fas fa-file-pdf"></i>
-                  </span>
-                  <span>Paper</span>
-                </a>
-              </span>
+                    <span class="icon">
+                      <i class="fa fa-file"></i>
+                    </span>
+                    <span>Journal of Experimental Biology</span>
+                  </a>
+                </span>
+                <span class="link-block">
+                  <a href="https://journals.biologists.com/jeb/article/228/5/JEB250311/367270/High-resolution-WildPose-3D-scans-revolutionise" target="_blank"
+                  class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon">
+                      <i class="fa fa-file"></i>
+                    </span>
+                    <span>Inside JEB</span>
+                  </a>
+                </span>
 
-              <!-- Supplementary PDF link -->
-              <!-- <span class="link-block">
-                <a href="static/pdfs/supplementary_material.pdf" target="_blank" class="external-link button is-normal is-rounded is-dark">
-                  <span class="icon">
-                    <i class="fas fa-file-pdf"></i>
-                  </span>
-                  <span>Supplementary</span>
-                </a>
-              </span> -->
+                <!-- Supplementary PDF link -->
+                <!-- <span class="link-block">
+                  <a href="static/pdfs/supplementary_material.pdf" target="_blank" class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon">
+                      <i class="fas fa-file-pdf"></i>
+                    </span>
+                    <span>Supplementary</span>
+                  </a>
+                </span> -->
 
-              <!-- Github link -->
-              <!-- <span class="link-block">
-                <a href="https://github.com/YOUR REPO HERE" target="_blank" class="external-link button is-normal is-rounded is-dark">
-                  <span class="icon">
-                    <i class="fab fa-github"></i>
-                  </span>
-                  <span>Code</span>
-                </a>
-              </span> -->
+                <!-- ArXiv abstract Link -->
+                <span class="link-block">
+                  <a href="https://www.biorxiv.org/content/10.1101/2024.02.05.578861v4" target="_blank" class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon">
+                      <i class="ai ai-biorxiv"></i>
+                    </span>
+                      <span>bioRxiv</span>
+                  </a>
+                </span>
 
-            <!-- ArXiv abstract Link -->
-            <span class="link-block">
-              <a href="https://www.biorxiv.org/content/10.1101/2024.02.05.578861v1" target="_blank" class="external-link button is-normal is-rounded is-dark">
-              <span class="icon">
-                <i class="ai ai-biorxiv"></i>
-              </span>
-                <span>bioRxiv</span>
-            </a>
-            </span>
-        </div>
-        </div>
+                <!-- Github link -->
+                <span class="link-block">
+                  <a href="https://github.com/DenDen047/WildPose_v1.1" target="_blank" class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon">
+                      <i class="fab fa-github"></i>
+                    </span>
+                    <span>Code</span>
+                  </a>
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -140,18 +149,23 @@
 
 <!-- Paper abstract -->
 <section class="section hero is-light">
-  <div class="container is-max-desktop">
+  <div class="container">
     <div class="columns is-centered has-text-centered">
       <div class="column is-four-fifths">
         <h2 class="title is-3">Abstract</h2>
         <div class="content has-text-justified">
-          <p>
-            WildPose is a novel long-range motion capture system designed for free-ranging wildlife observation.
-            It combines an electronically controllable zoom-lens camera with a solid-state LiDAR to capture both 2D videos and 3D point cloud data remotely.
-            This enables researchers to observe high-fidelity animal morphometrics, behavior, and interactions in a non-intrusive manner.
-            Field trials in Kgalagadi Transfrontier Park successfully demonstrated WildPose's ability to quantify morphological features of different species, precisely track the 3D movements of a springbok herd over time, and observe the respiratory patterns of a distant lion.
-            By facilitating long-range 3D data collection, WildPose significantly advances ecological and biomechanical studies, offering new possibilities for conservation, animal welfare, and interdisciplinary research.
-          </p>
+          <div class="columns">
+            <div class="column is-4">
+              <img src="static/images/wildpose/jexbio_228_5_cover_RGB.jpg" alt="Journal of Experimental Biology Cover" style="width: 100%;">
+            </div>
+            <div class="column is-8">
+              <p>
+                Understanding and monitoring wildlife behavior is crucial in ecology and biomechanics, yet challenging because of the limitations of current methods. To address this issue, we introduce WildPose, a novel long-range motion capture system specifically tailored for free-ranging wildlife observation. This system combines an electronically controllable zoom-lens camera with a LiDAR to capture both 2D videos and 3D point cloud data, thereby allowing researchers to observe high-fidelity animal morphometrics, behavior and interactions in a completely remote manner. Field trials conducted in Kgalagadi Transfrontier Park (South Africa) have successfully demonstrated WildPose's ability to quantify morphological features of different species, accurately track the 3D movements of a springbok herd over time, and observe the respiratory patterns of a distant lion. By facilitating non-intrusive, long-range 3D data collection, WildPose marks a significant complementary technique in ecological and biomechanical studies, offering new possibilities for conservation efforts and animal welfare, and enriching the prospects for interdisciplinary research.
+                <br>
+                <span style="color: red; font-weight: bold;">This work has been recognized for its significance and selected as the cover of the <i>Journal of Experimental Biology</i> (March 2025 issue).</span>
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -160,47 +174,34 @@
 <!-- End paper abstract -->
 
 
-<!-- Paper poster -->
-<section class="hero is-small is-light">
-  <div class="hero-body">
-    <div class="container">
-      <h2 class="title">Poster in CV4Animals Workshop (CVPR 2024)</h2>
-
-      <iframe  src="static/pdfs/cvpr2024_poster.pdf" width="100%" height="550"></iframe>
-    </div>
-  </div>
-</section>
-<!--End paper poster -->
-
-
 
 <!-- Image carousel -->
 <section class="hero is-small">
   <div class="hero-body">
     <div class="container">
-      <h2 class="title is-3">Field Trials</h2>
+      <h2 class="title is-3">Gallery</h2>
       <div id="results-carousel" class="carousel results-carousel">
-       <div class="item">
-        <img src="static/images/wildpose/IMG_5295.jpg" alt="MY ALT TEXT"/>
-        <!-- <h2 class="subtitle has-text-centered">
-          First image description.
-        </h2> -->
+        <div class="item text-center" style="display: flex; justify-content: center; align-items: center;">
+          <img src="static/images/wildpose/IMG_5295.jpg" alt="Wildlife image" width="70%" style="margin: 0 auto;"/>
+          <!-- <h2 class="subtitle has-text-centered">
+            First image description.
+          </h2> -->
+        </div>
+        <div class="item text-center" style="display: flex; justify-content: center; align-items: center;">
+          <img src="static/images/wildpose/IMG_5445.jpg" alt="Wildlife image" width="70%" style="margin: 0 auto;"/>
+          <!-- <h2 class="subtitle has-text-centered">
+           Third image description.
+         </h2> -->
+        </div>
+        <div class="item text-center" style="display: flex; justify-content: center; align-items: center; height: 100%;">
+          <img src="static/images/wildpose/lion_walk.png" alt="Lion walking" style="margin: auto;"/>
+          <!-- <h2 class="subtitle has-text-centered">
+           Third image description.
+         </h2> -->
+        </div>
       </div>
-      <div class="item">
-        <img src="static/images/wildpose/IMG_5362.jpg" alt="MY ALT TEXT"/>
-        <!-- <h2 class="subtitle has-text-centered">
-          Second image description.
-        </h2> -->
-      </div>
-      <div class="item">
-        <img src="static/images/wildpose/IMG_5445.jpg" alt="MY ALT TEXT"/>
-        <!-- <h2 class="subtitle has-text-centered">
-         Third image description.
-       </h2> -->
-     </div>
+    </div>
   </div>
-</div>
-</div>
 </section>
 <!-- End image carousel -->
 
@@ -210,7 +211,9 @@
     <div class="container">
       <h2 class="title">Hardware</h2>
 
-      <img src="static/images/wildpose/hardware_connection.jpg" width="100%" height="550">
+      <div style="display: flex; justify-content: center; align-items: center;">
+        <img src="static/images/wildpose/hardware_connection.jpg" width="80%" height="550">
+      </div>
     </div>
   </div>
 </section>
@@ -304,6 +307,19 @@
 <!-- End video carousel -->
 
 
+<!-- Paper poster -->
+<section class="hero is-small is-light">
+  <div class="hero-body">
+    <div class="container">
+      <h2 class="title">Poster in CV4Animals Workshop (CVPR 2024)</h2>
+
+      <iframe  src="static/pdfs/cvpr2024_poster.pdf" width="100%" height="550"></iframe>
+    </div>
+  </div>
+</section>
+<!--End paper poster -->
+
+
 
 
 
@@ -312,12 +328,19 @@
 <section class="section" id="BibTeX">
   <div class="container is-max-desktop content">
     <h2 class="title">BibTeX</h2>
-    <pre><code>@article {Muramatsu2024.02.05.578861,
-  author={Muramatsu, Naoya and Shin, Sangyun and Deng, Qianyi and Markham, Andrew and Patel, Amir},
-  title={WildPose: A Long-Range 3D wildlife motion capture system},
-  year={2024},
-  doi={10.1101/2024.02.05.578861},
-  journal={bioRxiv},
+    <pre><code>@article{10.1242/jeb.249987,
+    author = {Muramatsu, Naoya and Shin, Sangyun and Deng, Qianyi and Markham, Andrew and Patel, Amir},
+    title = {WildPose: a long-range 3D wildlife motion capture system},
+    journal = {Journal of Experimental Biology},
+    volume = {228},
+    number = {5},
+    pages = {JEB249987},
+    year = {2025},
+    month = {03},
+    issn = {0022-0949},
+    doi = {10.1242/jeb.249987},
+    url = {https://doi.org/10.1242/jeb.249987},
+    eprint = {https://journals.biologists.com/jeb/article-pdf/228/5/JEB249987/3637925/jeb249987.pdf},
 }</code></pre>
 </section>
 <!--End BibTex citation -->
