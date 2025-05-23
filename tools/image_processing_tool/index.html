@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-translate="pageTitle">画像処理ツール</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5; /* Light slate background */
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .canvas-container {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.07), 0 4px 6px -4px rgba(0, 0, 0, 0.07);
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        canvas {
+            max-width: 100%;
+            height: auto;
+            border-radius: 0.5rem;
+            border: 1px solid #e2e8f0; /* slate-200 */
+        }
+        #histogramCanvas {
+            width: 100%;
+            max-width: 280px;
+            height: 150px;
+            background-color: #f8fafc; /* slate-50 */
+            border-radius: 0.375rem;
+        }
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .filter-group {
+            background-color: white;
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .btn {
+            padding: 0.65rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            font-size: 0.875rem;
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+            text-align: center;
+            white-space: nowrap;
+            border: 1px solid transparent;
+        }
+        .btn-primary {
+            background-color: #2563eb; /* blue-600 */
+            color: white;
+            border-color: #2563eb;
+        }
+        .btn-primary:hover {
+            background-color: #1d4ed8; /* blue-700 */
+            box-shadow: 0 2px 10px -1px rgba(37, 99, 235, 0.5);
+        }
+        .btn-secondary {
+            background-color: #475569; /* slate-600 */
+            color: white;
+            border-color: #475569;
+        }
+        .btn-secondary:hover {
+            background-color: #334155; /* slate-700 */
+            box-shadow: 0 2px 10px -1px rgba(51, 65, 85, 0.4);
+        }
+        .btn-reset {
+            background-color: #dc2626; /* red-600 */
+            color: white;
+            border-color: #dc2626;
+        }
+        .btn-reset:hover {
+            background-color: #b91c1c; /* red-700 */
+             box-shadow: 0 2px 10px -1px rgba(185, 28, 28, 0.5);
+        }
+
+        .param-slider-group label {
+            font-size: 0.8rem;
+            color: #475569; /* slate-600 */
+            margin-bottom: 0.25rem;
+            display: block;
+        }
+        .param-slider-group input[type="range"] {
+            width: 100%;
+            height: 0.5rem;
+            border-radius: 9999px;
+            background-color: #e2e8f0; /* slate-200 */
+            appearance: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+        }
+        .param-slider-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 1rem;
+            height: 1rem;
+            background-color: #3b82f6; /* blue-500 */
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .param-slider-group input[type="range"]::-moz-range-thumb {
+            width: 1rem;
+            height: 1rem;
+            background-color: #3b82f6; /* blue-500 */
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            cursor: pointer;
+        }
+
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+        .message-box {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(120%); /* Start off-screen */
+            background-color: #10b981; /* emerald-500 for info */
+            color: white;
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out, background-color 0.3s;
+            pointer-events: none;
+        }
+        .message-box.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+            pointer-events: auto;
+        }
+        .message-box.error {
+             background-color: #f43f5e; /* rose-500 for errors */
+        }
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1e293b; /* slate-800 */
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #cbd5e1; /* slate-300 */
+        }
+        #filterHistoryList li {
+            transition: background-color 0.2s;
+        }
+        #filterHistoryList li:hover {
+            background-color: #e2e8f0; /* slate-200 on hover */
+        }
+        .lang-switcher {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            display: flex;
+            border-radius: 0.375rem;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .lang-switcher button {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .lang-switcher button.active {
+            background-color: #2563eb; /* blue-600 */
+            color: white;
+        }
+        .lang-switcher button:not(.active) {
+            background-color: #e2e8f0; /* slate-200 */
+            color: #334155; /* slate-700 */
+        }
+        .lang-switcher button:not(.active):hover {
+            background-color: #cbd5e1; /* slate-300 */
+        }
+    </style>
+</head>
+<body>
+    <div class="lang-switcher">
+        <button id="langJaBtn">JA</button>
+        <button id="langEnBtn">EN</button>
+    </div>
+
+    <div class="container">
+        <header class="text-center py-6 mb-8">
+            <h1 class="text-5xl font-bold text-slate-800" data-translate="toolTitle">画像処理ツール</h1>
+            <p class="text-xl text-slate-600 mt-3" data-translate="toolSubtitle">画像をアップロードして、様々なフィルターや調整を試せます。</p>
+        </header>
+
+        <div class="mb-10 p-6 bg-white rounded-xl shadow-lg">
+            <label for="imageUpload" class="block text-md font-medium text-slate-700 mb-2" data-translate="uploadLabel">画像ファイルを選択:</label>
+            <input type="file" id="imageUpload" accept="image/*" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+        </div>
+
+        <div>
+            <h2 class="section-title" data-translate="basicAdjustmentsTitle">基本調整</h2>
+            <div class="controls-grid mb-8">
+                <div class="filter-group">
+                    <label for="brightnessSlider" class="text-sm font-medium text-slate-700"><span data-translate="brightnessLabel">明るさ</span>: <span id="brightnessValue" class="font-semibold">100</span>%</label>
+                    <input type="range" id="brightnessSlider" min="0" max="200" value="100" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                </div>
+                <div class="filter-group">
+                    <label for="contrastSlider" class="text-sm font-medium text-slate-700"><span data-translate="contrastLabel">コントラスト</span>: <span id="contrastValue" class="font-semibold">100</span>%</label>
+                    <input type="range" id="contrastSlider" min="0" max="200" value="100" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                </div>
+                <div class="filter-group">
+                    <label for="blurSlider" class="text-sm font-medium text-slate-700"><span data-translate="cssBlurLabel">ぼかし (CSS)</span>: <span id="blurValue" class="font-semibold">0</span>px</label>
+                    <input type="range" id="blurSlider" min="0" max="10" value="0" step="1" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                </div>
+            </div>
+
+            <h2 class="section-title" data-translate="filtersTitle">フィルター処理</h2>
+            <div class="controls-grid">
+                <div class="filter-group">
+                    <button id="grayscaleBtn" class="btn btn-secondary w-full" data-translate="grayscaleBtn">グレースケール</button>
+                </div>
+
+                <div class="filter-group">
+                    <button id="sharpenBtn" class="btn btn-secondary w-full" data-translate="sharpenBtn">シャープ化</button>
+                    <div class="param-slider-group mt-2">
+                        <label for="sharpenStrength"><span data-translate="sharpenStrengthLabel">強さ</span>: <span id="sharpenStrengthValue">5</span></label>
+                        <input type="range" id="sharpenStrength" min="1" max="10" step="1" value="5">
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <button id="gaussianBtn" class="btn btn-secondary w-full" data-translate="gaussianBlurBtn">ガウシアンぼかし</button>
+                    <div class="param-slider-group mt-2 space-y-2">
+                        <div>
+                            <label for="gaussianKernelSize"><span data-translate="gaussianKernelSizeLabel">カーネルサイズ</span>: <span id="gaussianKernelSizeValue">5</span></label>
+                            <input type="range" id="gaussianKernelSize" min="3" max="11" step="2" value="5">
+                        </div>
+                        <div>
+                            <label for="gaussianSigma"><span data-translate="gaussianSigmaLabel">シグマ</span>: <span id="gaussianSigmaValue">1.5</span></label>
+                            <input type="range" id="gaussianSigma" min="0.1" max="5" step="0.1" value="1.5">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <button id="sobelBtn" class="btn btn-secondary w-full" data-translate="sobelBtn">エッジ検出 (Sobel)</button>
+                </div>
+
+                <div class="filter-group">
+                    <button id="otsuBinarizationBtn" class="btn btn-secondary w-full" data-translate="otsuBtn">自動二値化 (大津法)</button>
+                </div>
+
+                <div class="filter-group">
+                    <button id="bilateralBtn" class="btn btn-secondary w-full" data-translate="bilateralBtn">バイラテラルフィルター</button>
+                    <div class="param-slider-group mt-2 space-y-2">
+                        <div>
+                            <label for="bilateralDiameter"><span data-translate="bilateralDiameterLabel">直径</span>: <span id="bilateralDiameterValue">5</span></label>
+                            <input type="range" id="bilateralDiameter" min="3" max="11" step="2" value="5">
+                        </div>
+                        <div>
+                            <label for="bilateralSigmaColor"><span data-translate="bilateralSigmaColorLabel">Sigma Color</span>: <span id="bilateralSigmaColorValue">50</span></label>
+                            <input type="range" id="bilateralSigmaColor" min="10" max="150" step="5" value="50">
+                        </div>
+                        <div>
+                            <label for="bilateralSigmaSpace"><span data-translate="bilateralSigmaSpaceLabel">Sigma Space</span>: <span id="bilateralSigmaSpaceValue">50</span></label>
+                            <input type="range" id="bilateralSigmaSpace" min="10" max="150" step="5" value="50">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <h2 class="section-title mt-8" data-translate="segmentationTitle">セグメンテーション</h2>
+            <div class="controls-grid">
+                 <div class="filter-group">
+                    <button id="slicBtn" class="btn btn-secondary w-full" data-translate="slicBtn">スーパーピクセル (SLIC)</button>
+                    <div class="param-slider-group mt-2 space-y-2">
+                        <div>
+                            <label for="slicK"><span data-translate="slicKLabel">スーパーピクセル数 (K)</span>: <span id="slicKValue">200</span></label>
+                            <input type="range" id="slicK" min="50" max="1000" step="50" value="200">
+                        </div>
+                        <div>
+                            <label for="slicM"><span data-translate="slicMLabel">コンパクトさ (m)</span>: <span id="slicMValue">10</span></label>
+                            <input type="range" id="slicM" min="1" max="40" step="1" value="10">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="my-8 text-center">
+             <button id="resetBtn" class="btn btn-reset px-8 py-3 text-lg" data-translate="resetAllBtn">全ての処理をリセット</button>
+        </div>
+
+        <div class="image-grid">
+            <div class="canvas-container">
+                <h3 class="text-2xl font-semibold text-slate-700 mb-3" data-translate="originalImageTitle">元画像</h3>
+                <canvas id="originalCanvas"></canvas>
+            </div>
+            <div class="canvas-container">
+                <h3 class="text-2xl font-semibold text-slate-700 mb-3" data-translate="processedImageTitle">処理後画像</h3>
+                <canvas id="processedCanvas"></canvas>
+                <div class="mt-6 w-full max-w-xs">
+                    <h4 class="text-lg font-medium text-slate-600 mb-2 text-center" data-translate="histogramTitle">輝度ヒストグラム</h4>
+                    <canvas id="histogramCanvas"></canvas>
+                </div>
+                <div class="mt-6 w-full">
+                    <h4 class="text-lg font-medium text-slate-600 mb-2 text-center" data-translate="historyTitle">適用フィルター履歴</h4>
+                    <ul id="filterHistoryList" class="space-y-1 max-h-48 overflow-y-auto bg-white p-3 rounded-md border border-slate-200 shadow-sm">
+                        {/* History items will be populated by JavaScript */}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="messageBox" class="message-box">メッセージ</div>
+
+    <script>
+        // --- Translations ---
+        const translations = {
+            'ja': {
+                'pageTitle': '画像処理ツール',
+                'toolTitle': '画像処理ツール',
+                'toolSubtitle': '画像をアップロードして、様々なフィルターや調整を試せます。',
+                'uploadLabel': '画像ファイルを選択:',
+                'basicAdjustmentsTitle': '基本調整',
+                'filtersTitle': 'フィルター処理',
+                'segmentationTitle': 'セグメンテーション', // New Section Title
+                'originalImageTitle': '元画像',
+                'processedImageTitle': '処理後画像',
+                'histogramTitle': '輝度ヒストグラム',
+                'historyTitle': '適用フィルター履歴',
+                'grayscaleBtn': 'グレースケール',
+                'sharpenBtn': 'シャープ化',
+                'gaussianBlurBtn': 'ガウシアンぼかし',
+                'sobelBtn': 'エッジ検出 (Sobel)',
+                'otsuBtn': '自動二値化 (大津法)',
+                'bilateralBtn': 'バイラテラルフィルター',
+                'slicBtn': 'スーパーピクセル (SLIC)',
+                'resetAllBtn': '全ての処理をリセット',
+                'brightnessLabel': '明るさ',
+                'contrastLabel': 'コントラスト',
+                'cssBlurLabel': 'ぼかし (CSS)',
+                'sharpenStrengthLabel': '強さ',
+                'gaussianKernelSizeLabel': 'カーネルサイズ',
+                'gaussianSigmaLabel': 'シグマ',
+                'bilateralDiameterLabel': '直径',
+                'bilateralSigmaColorLabel': 'Sigma Color',
+                'bilateralSigmaSpaceLabel': 'Sigma Space',
+                'slicKLabel': 'スーパーピクセル数 (K)',
+                'slicMLabel': 'コンパクトさ (m)',
+                'errorMustUpload': 'まず画像をアップロードしてください。',
+                'errorImageLoadFailed': '画像の読み込みに失敗しました。',
+                'errorFileLoadFailed': 'ファイルの読み込みに失敗しました。',
+                'errorMustBeImage': '画像ファイルを選択してください。',
+                'infoApplyingFilter': '{filterName}適用中...',
+                'infoFilterApplied': '{filterName}を適用しました。',
+                'infoOtsuThreshold': '大津法による自動しきい値: {threshold}',
+                'infoErrorDuringFilter': '{filterName}適用中にエラーが発生しました。',
+                'infoNoImageToReset': 'リセットする画像がありません。',
+                'infoAllReset': '全ての処理とパラメータをリセットしました。',
+                'historyEmpty': '適用されたフィルターはありません',
+                'paramKSize': 'KSize', 'paramSigma': 'σ', 'paramStrength': 'Str',
+                'paramDiameter': 'Dia', 'paramSigmaColor': 'σCol', 'paramSigmaSpace': 'σSpc',
+                'paramK': 'K', 'paramM': 'm'
+            },
+            'en': {
+                'pageTitle': 'Image Processing Tool',
+                'toolTitle': 'Image Processing Tool',
+                'toolSubtitle': 'Upload an image and try various filters and adjustments.',
+                'uploadLabel': 'Select Image File:',
+                'basicAdjustmentsTitle': 'Basic Adjustments',
+                'filtersTitle': 'Filters',
+                'segmentationTitle': 'Segmentation', // New Section Title
+                'originalImageTitle': 'Original Image',
+                'processedImageTitle': 'Processed Image',
+                'histogramTitle': 'Luminance Histogram',
+                'historyTitle': 'Applied Filter History',
+                'grayscaleBtn': 'Grayscale',
+                'sharpenBtn': 'Sharpen',
+                'gaussianBlurBtn': 'Gaussian Blur',
+                'sobelBtn': 'Edge Detection (Sobel)',
+                'otsuBtn': 'Otsu Binarization',
+                'bilateralBtn': 'Bilateral Filter',
+                'slicBtn': 'Superpixels (SLIC)',
+                'resetAllBtn': 'Reset All Processing',
+                'brightnessLabel': 'Brightness',
+                'contrastLabel': 'Contrast',
+                'cssBlurLabel': 'Blur (CSS)',
+                'sharpenStrengthLabel': 'Strength',
+                'gaussianKernelSizeLabel': 'Kernel Size',
+                'gaussianSigmaLabel': 'Sigma',
+                'bilateralDiameterLabel': 'Diameter',
+                'bilateralSigmaColorLabel': 'Sigma Color',
+                'bilateralSigmaSpaceLabel': 'Sigma Space',
+                'slicKLabel': 'Number of Superpixels (K)',
+                'slicMLabel': 'Compactness (m)',
+                'errorMustUpload': 'Please upload an image first.',
+                'errorImageLoadFailed': 'Failed to load the image.',
+                'errorFileLoadFailed': 'Failed to read the file.',
+                'errorMustBeImage': 'Please select an image file.',
+                'infoApplyingFilter': 'Applying {filterName}...',
+                'infoFilterApplied': '{filterName} applied.',
+                'infoOtsuThreshold': 'Otsu Threshold: {threshold}',
+                'infoErrorDuringFilter': 'Error applying {filterName}.',
+                'infoNoImageToReset': 'No image to reset.',
+                'infoAllReset': 'All processing and parameters have been reset.',
+                'historyEmpty': 'No filters applied yet.',
+                'paramKSize': 'KSize', 'paramSigma': 'σ', 'paramStrength': 'Str',
+                'paramDiameter': 'Dia', 'paramSigmaColor': 'σCol', 'paramSigmaSpace': 'σSpc',
+                'paramK': 'K', 'paramM': 'm'
+            }
+        };
+        let currentLang = 'ja'; // Default language
+
+        // --- Language Switcher Logic ---
+        const langJaBtn = document.getElementById('langJaBtn');
+        const langEnBtn = document.getElementById('langEnBtn');
+
+        function updateUIText(lang) {
+            if (!translations[lang]) return;
+            currentLang = lang;
+            document.documentElement.lang = lang;
+            document.querySelectorAll('[data-translate]').forEach(el => {
+                const key = el.getAttribute('data-translate');
+                if (translations[lang][key]) {
+                    el.textContent = translations[lang][key];
+                }
+            });
+            if (lang === 'ja') {
+                langJaBtn.classList.add('active'); langEnBtn.classList.remove('active');
+            } else {
+                langEnBtn.classList.add('active'); langJaBtn.classList.remove('active');
+            }
+            localStorage.setItem('preferredLang', lang);
+            updateFilterHistoryDisplay();
+        }
+        langJaBtn.addEventListener('click', () => updateUIText('ja'));
+        langEnBtn.addEventListener('click', () => updateUIText('en'));
+
+        // --- DOM Elements (rest) ---
+        const imageUpload = document.getElementById('imageUpload');
+        const originalCanvas = document.getElementById('originalCanvas');
+        const processedCanvas = document.getElementById('processedCanvas');
+        const originalCtx = originalCanvas.getContext('2d');
+        const processedCtx = processedCanvas.getContext('2d', { willReadFrequently: true });
+        const histogramCanvas = document.getElementById('histogramCanvas');
+        const histogramCtx = histogramCanvas.getContext('2d');
+        const filterHistoryList = document.getElementById('filterHistoryList');
+
+        const grayscaleBtn = document.getElementById('grayscaleBtn');
+        const sharpenBtn = document.getElementById('sharpenBtn');
+        const gaussianBtn = document.getElementById('gaussianBtn');
+        const sobelBtn = document.getElementById('sobelBtn');
+        const otsuBinarizationBtn = document.getElementById('otsuBinarizationBtn');
+        const bilateralBtn = document.getElementById('bilateralBtn');
+        const slicBtn = document.getElementById('slicBtn');
+        const resetBtn = document.getElementById('resetBtn');
+
+        const brightnessSlider = document.getElementById('brightnessSlider');
+        const brightnessValue = document.getElementById('brightnessValue');
+        const contrastSlider = document.getElementById('contrastSlider');
+        const contrastValue = document.getElementById('contrastValue');
+        const blurSlider = document.getElementById('blurSlider');
+        const blurValue = document.getElementById('blurValue');
+
+        const sharpenStrengthSlider = document.getElementById('sharpenStrength');
+        const sharpenStrengthValue = document.getElementById('sharpenStrengthValue');
+        const gaussianKernelSizeSlider = document.getElementById('gaussianKernelSize');
+        const gaussianKernelSizeValue = document.getElementById('gaussianKernelSizeValue');
+        const gaussianSigmaSlider = document.getElementById('gaussianSigma');
+        const gaussianSigmaValue = document.getElementById('gaussianSigmaValue');
+        const bilateralDiameterSlider = document.getElementById('bilateralDiameter');
+        const bilateralDiameterValue = document.getElementById('bilateralDiameterValue');
+        const bilateralSigmaColorSlider = document.getElementById('bilateralSigmaColor');
+        const bilateralSigmaColorValue = document.getElementById('bilateralSigmaColorValue');
+        const bilateralSigmaSpaceSlider = document.getElementById('bilateralSigmaSpace');
+        const bilateralSigmaSpaceValue = document.getElementById('bilateralSigmaSpaceValue');
+        const slicKSlider = document.getElementById('slicK');
+        const slicKValue = document.getElementById('slicKValue');
+        const slicMSlider = document.getElementById('slicM');
+        const slicMValue = document.getElementById('slicMValue');
+        const messageBox = document.getElementById('messageBox');
+
+        let originalImage = null;
+        let currentCSSAdjustedImageState = null;
+        let lastAppliedPixelOperationState = null;
+        let filterHistory = [];
+
+        function showMessage(translationKey, duration = 3000, isError = false, params = {}) {
+            let text = (translations[currentLang] && translations[currentLang][translationKey]) || translationKey;
+            if (params) {
+                for (const key in params) text = text.replace(`{${key}}`, params[key]);
+            }
+            messageBox.textContent = text;
+            messageBox.className = 'message-box';
+            if (isError) messageBox.classList.add('error');
+            messageBox.classList.add('show');
+            setTimeout(() => messageBox.classList.remove('show'), duration);
+        }
+
+        imageUpload.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                if (!file.type.startsWith('image/')) {
+                    showMessage('errorMustBeImage', 3000, true); imageUpload.value = ''; return;
+                }
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    originalImage = new Image();
+                    originalImage.onload = () => {
+                        originalCanvas.width = originalImage.width; originalCanvas.height = originalImage.height;
+                        processedCanvas.width = originalImage.width; processedCanvas.height = originalImage.height;
+                        originalCtx.drawImage(originalImage, 0, 0);
+                        resetAll();
+                    };
+                    originalImage.onerror = () => showMessage('errorImageLoadFailed', 3000, true);
+                    originalImage.src = e.target.result;
+                };
+                reader.onerror = () => showMessage('errorFileLoadFailed', 3000, true);
+                reader.readAsDataURL(file);
+            }
+        });
+
+        function updateFilterHistoryDisplay() {
+            if (!filterHistoryList) return;
+            filterHistoryList.innerHTML = '';
+            if (filterHistory.length === 0) {
+                const li = document.createElement('li');
+                li.textContent = (translations[currentLang] && translations[currentLang]['historyEmpty']) || 'No filters applied yet.';
+                li.className = 'text-slate-500 text-sm italic px-2 py-1';
+                filterHistoryList.appendChild(li); return;
+            }
+            filterHistory.forEach((item, index) => {
+                const li = document.createElement('li');
+                li.className = 'text-sm text-slate-700 p-2 bg-slate-50 rounded-md flex justify-between items-center hover:bg-slate-100';
+                let paramsStr = '';
+                if (item.params && Object.keys(item.params).length > 0) {
+                    paramsStr = Object.entries(item.params)
+                        .map(([key, value]) => {
+                            let displayKey = key;
+                            const paramKeyTranslation = `param${key.charAt(0).toUpperCase() + key.slice(1)}`;
+                            if (translations[currentLang] && translations[currentLang][paramKeyTranslation]) {
+                                displayKey = translations[currentLang][paramKeyTranslation];
+                            } else if (translations[currentLang] && translations[currentLang][`param${key}`]) {
+                                displayKey = translations[currentLang][`param${key}`];
+                            }
+                            return `${displayKey}: ${value}`;
+                        }).join(', ');
+                }
+                const filterDisplayName = (translations[currentLang] && translations[currentLang][item.nameKey]) || item.nameKey;
+                li.textContent = `${index + 1}. ${filterDisplayName}${paramsStr ? ` (${paramsStr})` : ''}`;
+                filterHistoryList.appendChild(li);
+            });
+        }
+
+        function addFilterToHistory(filterNameKey, params = {}) {
+            filterHistory.push({ nameKey: filterNameKey, params: { ...params } });
+            updateFilterHistoryDisplay();
+        }
+
+        function applyBaseCSSAdjustments() {
+            if (!originalImage) return null;
+            const brightness = parseFloat(brightnessSlider.value) / 100;
+            const contrast = parseFloat(contrastSlider.value) / 100;
+            const blurCss = parseInt(blurSlider.value);
+            let filterString = '';
+            if (brightness !== 1) filterString += `brightness(${brightness}) `;
+            if (contrast !== 1) filterString += `contrast(${contrast}) `;
+            if (blurCss > 0) filterString += `blur(${blurCss}px) `;
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = originalImage.width > 0 ? originalImage.width : 1;
+            tempCanvas.height = originalImage.height > 0 ? originalImage.height : 1;
+            const tempCtx = tempCanvas.getContext('2d');
+            if (filterString.trim() !== '') tempCtx.filter = filterString.trim();
+            tempCtx.drawImage(originalImage, 0, 0, tempCanvas.width, tempCanvas.height);
+            tempCtx.filter = 'none';
+            return tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+        }
+
+        async function reapplyAllPixelFilters(baseImageData) {
+            if (!baseImageData) return null;
+            let currentImageData = new ImageData(
+                new Uint8ClampedArray(baseImageData.data),
+                baseImageData.width, baseImageData.height
+            );
+            for (const filterItem of filterHistory) {
+                const operationFn = getOperationFunctionByNameKey(filterItem.nameKey, filterItem.params);
+                if (operationFn) {
+                    const imageDataForThisStep = new ImageData(
+                        new Uint8ClampedArray(currentImageData.data),
+                        currentImageData.width, currentImageData.height
+                    );
+                    operationFn(imageDataForThisStep);
+                    currentImageData = imageDataForThisStep;
+                }
+            }
+            return currentImageData;
+        }
+
+        function getOperationFunctionByNameKey(nameKey, params) {
+            switch (nameKey) {
+                case "grayscaleBtn": return (imageData) => { const d=imageData.data; for(let i=0;i<d.length;i+=4){const a=(d[i]+d[i+1]+d[i+2])/3;d[i]=a;d[i+1]=a;d[i+2]=a;}};
+                case "sharpenBtn": return (imageData) => { const s=params.strength||5; const k=[[0,-1,0],[-1,s,-1],[0,-1,0]]; convolve(imageData,k);};
+                case "gaussianBlurBtn": return (imageData) => { const ks=params.kernelSize||5; const sig=params.sigma||1.5; const gk=generateGaussianKernel(ks,sig); convolve(imageData,gk);};
+                case "sobelBtn": return (imageData) => sobelFilterLogic(imageData);
+                case "otsuBtn": return (imageData) => otsuBinarizationLogic(imageData, false);
+                case "bilateralBtn": return (imageData) => { const dia=params.diameter||5; const sc=params.sigmaColor||50; const ss=params.sigmaSpace||50; bilateralFilterFn(imageData,dia,sc,ss);};
+                case "slicBtn": return (imageData) => { const k=params.K||200; const m=params.m||10; slicAlgorithm(imageData,k,m); };
+                default: return null;
+            }
+        }
+
+        function sobelFilterLogic(imageData) {
+            const data=imageData.data; const w=imageData.width; const h=imageData.height;
+            const g=new Uint8ClampedArray(data.length);
+            for(let i=0;i<data.length;i+=4){const a=(data[i]+data[i+1]+data[i+2])/3; g[i]=a;g[i+1]=a;g[i+2]=a;g[i+3]=data[i+3];}
+            const sx=[[-1,0,1],[-2,0,2],[-1,0,1]]; const sy=[[-1,-2,-1],[0,0,0],[1,2,1]];
+            const o=new Uint8ClampedArray(data.length); const ig=new Uint8ClampedArray(g);
+            for(let y=0;y<h;y++){for(let x=0;x<w;x++){let gx=0,gy=0;
+            for(let ky=0;ky<3;ky++){for(let kx=0;kx<3;kx++){
+                const iy=Math.min(h-1,Math.max(0,y+ky-1)); const ix=Math.min(w-1,Math.max(0,x+kx-1));
+                const pv=ig[(iy*w+ix)*4]; gx+=pv*sx[ky][kx]; gy+=pv*sy[ky][kx];}}
+            const m=Math.sqrt(gx*gx+gy*gy); const off=(y*w+x)*4;
+            o[off]=m;o[off+1]=m;o[off+2]=m;o[off+3]=ig[off+3];}}
+            for(let i=0;i<data.length;i++)data[i]=o[i];
+        }
+        function otsuBinarizationLogic(imageData, showMsg = true) {
+            const d=imageData.data; const w=imageData.width; const h=imageData.height; const tp=w*h;
+            const hist=new Array(256).fill(0);
+            for(let i=0;i<d.length;i+=4){const a=Math.round((d[i]+d[i+1]+d[i+2])/3);hist[a]++;d[i]=a;d[i+1]=a;d[i+2]=a;}
+            let sum=0;for(let i=0;i<256;i++)sum+=i*hist[i];
+            let sumB=0,wB=0,wF=0,maxV=0,thresh=0;
+            for(let t=0;t<256;t++){wB+=hist[t];if(wB===0)continue;wF=tp-wB;if(wF===0)break;sumB+=t*hist[t];
+            const mB=sumB/wB;const mF=(sum-sumB)/wF;const vB=wB*wF*(mB-mF)**2;
+            if(vB>maxV){maxV=vB;thresh=t;}}
+            if(showMsg)showMessage('infoOtsuThreshold',2000,false,{threshold:thresh});
+            for(let i=0;i<d.length;i+=4){const v=d[i];const bv=v>thresh?255:0;d[i]=bv;d[i+1]=bv;d[i+2]=bv;}
+        }
+
+        function applyAndRecordPixelOperation(operationFunction, filterNameKey, params = {}) {
+            if (!originalImage) { showMessage('errorMustUpload', 3000, true); return; }
+            const base = filterHistory.length === 0 ? currentCSSAdjustedImageState : lastAppliedPixelOperationState;
+            if (!base) { showMessage('errorMustUpload', 3000, true); console.error("Base image state is null for pixel op."); return; }
+            const filterDisplayName = (translations[currentLang] && translations[currentLang][filterNameKey]) || filterNameKey;
+            showMessage('infoApplyingFilter', 2500, false, { filterName: filterDisplayName });
+
+            setTimeout(async () => {
+                try {
+                    const imageDataOp = new ImageData(new Uint8ClampedArray(base.data), base.width, base.height);
+                    operationFunction(imageDataOp);
+                    processedCtx.putImageData(imageDataOp, 0, 0);
+                    lastAppliedPixelOperationState = processedCtx.getImageData(0, 0, processedCanvas.width, processedCanvas.height);
+                    addFilterToHistory(filterNameKey, params);
+                    drawHistogram();
+                    showMessage('infoFilterApplied', 2000, false, { filterName: filterDisplayName });
+                } catch (error) {
+                    console.error(`${filterNameKey} error:`, error);
+                    showMessage('infoErrorDuringFilter', 3000, true, { filterName: filterDisplayName });
+                }
+            }, 50);
+        }
+
+        [brightnessSlider, contrastSlider, blurSlider].forEach(slider => {
+            slider.addEventListener('input', async () => {
+                if (!originalImage) return;
+                const valueDisplayId = slider.id.replace('Slider', 'Value');
+                const valueDisplayElement = document.getElementById(valueDisplayId);
+                if (valueDisplayElement) valueDisplayElement.textContent = slider.value;
+                currentCSSAdjustedImageState = applyBaseCSSAdjustments();
+                if (currentCSSAdjustedImageState) {
+                    const finalImageData = await reapplyAllPixelFilters(currentCSSAdjustedImageState);
+                    if (finalImageData) {
+                        processedCtx.putImageData(finalImageData, 0, 0);
+                        lastAppliedPixelOperationState = processedCtx.getImageData(0, 0, processedCanvas.width, processedCanvas.height);
+                    } else if (filterHistory.length === 0) {
+                        processedCtx.putImageData(currentCSSAdjustedImageState, 0, 0);
+                        lastAppliedPixelOperationState = currentCSSAdjustedImageState;
+                    }
+                    drawHistogram();
+                }
+            });
+        });
+
+        grayscaleBtn.addEventListener('click', () => applyAndRecordPixelOperation((imageData) => {const d=imageData.data;for(let i=0;i<d.length;i+=4){const a=(d[i]+d[i+1]+d[i+2])/3;d[i]=a;d[i+1]=a;d[i+2]=a;}}, "grayscaleBtn"));
+        sharpenBtn.addEventListener('click', () => { const str=parseFloat(sharpenStrengthSlider.value); applyAndRecordPixelOperation((imageData) => {const k=[[0,-1,0],[-1,str,-1],[0,-1,0]]; convolve(imageData,k);}, "sharpenBtn", {strength: str});});
+        gaussianBtn.addEventListener('click', () => { const ks=parseInt(gaussianKernelSizeSlider.value); const sig=parseFloat(gaussianSigmaSlider.value); applyAndRecordPixelOperation((imageData) => {const gk=generateGaussianKernel(ks,sig); convolve(imageData,gk);}, "gaussianBlurBtn", {kernelSize: ks, sigma: sig});});
+        sobelBtn.addEventListener('click', () => applyAndRecordPixelOperation(sobelFilterLogic, "sobelBtn"));
+        otsuBinarizationBtn.addEventListener('click', () => applyAndRecordPixelOperation((imageData) => otsuBinarizationLogic(imageData, true), "otsuBtn"));
+        bilateralBtn.addEventListener('click', () => { const dia=parseInt(bilateralDiameterSlider.value); const sc=parseFloat(bilateralSigmaColorSlider.value); const ss=parseFloat(bilateralSigmaSpaceSlider.value); applyAndRecordPixelOperation((imageData) => {bilateralFilterFn(imageData,dia,sc,ss);}, "bilateralBtn", {diameter: dia, sigmaColor: sc, sigmaSpace: ss});});
+        slicBtn.addEventListener('click', () => { const kVal=parseInt(slicKSlider.value); const mVal=parseFloat(slicMSlider.value); applyAndRecordPixelOperation((imageData) => {slicAlgorithm(imageData, kVal, mVal);}, "slicBtn", {K: kVal, m: mVal});});
+
+
+        function generateGaussianKernel(size, sigma) {
+            if (size % 2 === 0) size++;
+            const kernel = Array(size).fill(null).map(() => Array(size).fill(0));
+            const radius = Math.floor(size / 2); let sum = 0;
+            const twoSigmaSq = 2 * sigma * sigma;
+            for (let y = -radius; y <= radius; y++) {
+                for (let x = -radius; x <= radius; x++) {
+                    const value = Math.exp(-(x * x + y * y) / twoSigmaSq);
+                    kernel[y + radius][x + radius] = value; sum += value;
+                }
+            }
+            if (sum !== 0) {
+                for (let y = 0; y < size; y++) {
+                    for (let x = 0; x < size; x++) kernel[y][x] /= sum;
+                }
+            } return kernel;
+        }
+        function convolve(imageData, kernel) {
+            const srcData = imageData.data; const width = imageData.width; const height = imageData.height;
+            const kernelSize = kernel.length; const halfKernel = Math.floor(kernelSize / 2);
+            const outData = new Uint8ClampedArray(srcData.length);
+            const inData = new Uint8ClampedArray(srcData);
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    let r = 0, g = 0, b = 0;
+                    for (let ky = 0; ky < kernelSize; ky++) {
+                        for (let kx = 0; kx < kernelSize; kx++) {
+                            const imgY = Math.min(height - 1, Math.max(0, y + ky - halfKernel));
+                            const imgX = Math.min(width - 1, Math.max(0, x + kx - halfKernel));
+                            const weight = kernel[ky][kx];
+                            const offset = (imgY * width + imgX) * 4;
+                            r += inData[offset] * weight; g += inData[offset + 1] * weight; b += inData[offset + 2] * weight;
+                        }
+                    }
+                    const dstOffset = (y * width + x) * 4;
+                    outData[dstOffset] = r; outData[dstOffset + 1] = g; outData[dstOffset + 2] = b;
+                    outData[dstOffset + 3] = inData[dstOffset + 3];
+                }
+            }
+            for(let i=0; i < srcData.length; i++) imageData.data[i] = outData[i];
+        }
+        function bilateralFilterFn(imageData, diameter, sigmaColor, sigmaSpace) {
+            const data = imageData.data; const srcData = new Uint8ClampedArray(imageData.data);
+            const width = imageData.width; const height = imageData.height;
+            const radius = Math.floor(diameter / 2);
+            const twoSigmaSpaceSq = 2 * sigmaSpace * sigmaSpace;
+            const twoSigmaColorSq = 2 * sigmaColor * sigmaColor;
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    let sumR = 0, sumG = 0, sumB = 0; let totalWeight = 0;
+                    const centerPixelOffset = (y * width + x) * 4;
+                    const cR = srcData[centerPixelOffset], cG = srcData[centerPixelOffset + 1], cB = srcData[centerPixelOffset + 2];
+                    for (let j = -radius; j <= radius; j++) {
+                        for (let i = -radius; i <= radius; i++) {
+                            const nX = x + i, nY = y + j;
+                            if (nX >= 0 && nX < width && nY >= 0 && nY < height) {
+                                const spatialDistSq = i * i + j * j;
+                                const weightSpatial = Math.exp(-spatialDistSq / twoSigmaSpaceSq);
+                                const neighborPixelOffset = (nY * width + nX) * 4;
+                                const nR = srcData[neighborPixelOffset], nG = srcData[neighborPixelOffset + 1], nB = srcData[neighborPixelOffset + 2];
+                                const colorDistSq = (cR - nR)**2 + (cG - nG)**2 + (cB - nB)**2;
+                                const weightColor = Math.exp(-colorDistSq / twoSigmaColorSq);
+                                const weight = weightSpatial * weightColor;
+                                sumR += nR * weight; sumG += nG * weight; sumB += nB * weight; totalWeight += weight;
+                            }
+                        }
+                    }
+                    const targetPixelOffset = (y * width + x) * 4;
+                    data[targetPixelOffset] = totalWeight > 0 ? sumR / totalWeight : cR;
+                    data[targetPixelOffset + 1] = totalWeight > 0 ? sumG / totalWeight : cG;
+                    data[targetPixelOffset + 2] = totalWeight > 0 ? sumB / totalWeight : cB;
+                }
+            }
+        }
+
+        function slicAlgorithm(imageData, numSuperpixelsK, compactnessM) {
+            const width = imageData.width; const height = imageData.height;
+            const numPixels = width * height; const data = imageData.data;
+            const S = Math.sqrt(numPixels / numSuperpixelsK);
+            let clusters = []; let numClustersY = Math.round(height / S);
+            let numClustersX = Math.round(width / S); let actualK = 0;
+            for (let i = 0; i < numClustersY; i++) {
+                for (let j = 0; j < numClustersX; j++) {
+                    let y = Math.round(i * S + S / 2); let x = Math.round(j * S + S / 2);
+                    if (x < width && y < height) {
+                        let index = (y * width + x) * 4;
+                        clusters.push({ x, y, r: data[index], g: data[index + 1], b: data[index + 2], id: actualK });
+                        actualK++;
+                    }
+                }
+            }
+            numSuperpixelsK = actualK;
+            if (numSuperpixelsK === 0) { console.warn("SLIC: No clusters initialized."); return; }
+            const numIterations = 5;
+            let pixelLabels = new Int32Array(numPixels).fill(-1);
+            let distances = new Float32Array(numPixels).fill(Infinity);
+            for (let iter = 0; iter < numIterations; iter++) {
+                distances.fill(Infinity);
+                for (let k = 0; k < numSuperpixelsK; k++) {
+                    const cluster = clusters[k];
+                    const yMin = Math.max(0, Math.floor(cluster.y - S));
+                    const yMax = Math.min(height, Math.ceil(cluster.y + S +1));
+                    const xMin = Math.max(0, Math.floor(cluster.x - S));
+                    const xMax = Math.min(width, Math.ceil(cluster.x + S +1));
+                    for (let y = yMin; y < yMax; y++) {
+                        for (let x = xMin; x < xMax; x++) {
+                            const pixelIndex = y * width + x;
+                            const rPx = data[pixelIndex * 4], gPx = data[pixelIndex * 4 + 1], bPx = data[pixelIndex * 4 + 2];
+                            const dcSq = (rPx - cluster.r)**2 + (gPx - cluster.g)**2 + (bPx - cluster.b)**2;
+                            const dsSq = (x - cluster.x)**2 + (y - cluster.y)**2;
+                            const distSq = dcSq + (dsSq / (S*S)) * (compactnessM * compactnessM);
+                            if (distSq < distances[pixelIndex]) {
+                                distances[pixelIndex] = distSq; pixelLabels[pixelIndex] = cluster.id;
+                            }
+                        }
+                    }
+                }
+                let newClusters = Array(numSuperpixelsK).fill(null).map((_, idx) => ({ sumX:0,sumY:0,sumR:0,sumG:0,sumB:0,count:0,id:idx }));
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        const pixelIndex = y * width + x; const label = pixelLabels[pixelIndex];
+                        if (label !== -1 && label < numSuperpixelsK) {
+                            newClusters[label].sumX += x; newClusters[label].sumY += y;
+                            newClusters[label].sumR += data[pixelIndex*4]; newClusters[label].sumG += data[pixelIndex*4+1];
+                            newClusters[label].sumB += data[pixelIndex*4+2]; newClusters[label].count++;
+                        }
+                    }
+                }
+                for (let k = 0; k < numSuperpixelsK; k++) {
+                    if (newClusters[k].count > 0) {
+                        clusters[k].x = Math.round(newClusters[k].sumX / newClusters[k].count);
+                        clusters[k].y = Math.round(newClusters[k].sumY / newClusters[k].count);
+                        clusters[k].r = Math.round(newClusters[k].sumR / newClusters[k].count);
+                        clusters[k].g = Math.round(newClusters[k].sumG / newClusters[k].count);
+                        clusters[k].b = Math.round(newClusters[k].sumB / newClusters[k].count);
+                    }
+                }
+            }
+            const outputData = new Uint8ClampedArray(data.length);
+            const boundaryColorR = 0, boundaryColorG = 0, boundaryColorB = 0;
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const pixelIndex = y * width + x; const label = pixelLabels[pixelIndex];
+                    let isBoundary = false;
+                    if (label !== -1) {
+                        if (x < width - 1) { const rightLabel = pixelLabels[pixelIndex + 1]; if (rightLabel !== -1 && rightLabel !== label) isBoundary = true; }
+                        if (!isBoundary && y < height - 1) { const bottomLabel = pixelLabels[pixelIndex + width]; if (bottomLabel !== -1 && bottomLabel !== label) isBoundary = true; }
+                    }
+                    const outOffset = pixelIndex * 4;
+                    if (isBoundary) {
+                        outputData[outOffset]=boundaryColorR; outputData[outOffset+1]=boundaryColorG; outputData[outOffset+2]=boundaryColorB; outputData[outOffset+3]=255;
+                    } else {
+                        outputData[outOffset]=data[outOffset]; outputData[outOffset+1]=data[outOffset+1]; outputData[outOffset+2]=data[outOffset+2]; outputData[outOffset+3]=data[outOffset+3];
+                    }
+                }
+            }
+            for (let i = 0; i < data.length; i++) imageData.data[i] = outputData[i];
+        }
+
+        function setupSliderListenerWithValueUpdate(sliderElement, valueElement) {
+            if (sliderElement && valueElement) {
+                sliderElement.addEventListener('input', () => valueElement.textContent = sliderElement.value);
+                valueElement.textContent = sliderElement.value;
+            }
+        }
+        setupSliderListenerWithValueUpdate(sharpenStrengthSlider, sharpenStrengthValue);
+        setupSliderListenerWithValueUpdate(gaussianKernelSizeSlider, gaussianKernelSizeValue);
+        setupSliderListenerWithValueUpdate(gaussianSigmaSlider, gaussianSigmaValue);
+        setupSliderListenerWithValueUpdate(bilateralDiameterSlider, bilateralDiameterValue);
+        setupSliderListenerWithValueUpdate(bilateralSigmaColorSlider, bilateralSigmaColorValue);
+        setupSliderListenerWithValueUpdate(bilateralSigmaSpaceSlider, bilateralSigmaSpaceValue);
+        setupSliderListenerWithValueUpdate(slicKSlider, slicKValue);
+        setupSliderListenerWithValueUpdate(slicMSlider, slicMValue);
+        setupSliderListenerWithValueUpdate(brightnessSlider, brightnessValue);
+        setupSliderListenerWithValueUpdate(contrastSlider, contrastValue);
+        setupSliderListenerWithValueUpdate(blurSlider, blurValue);
+
+        function resetAll() {
+            brightnessSlider.value = 100; brightnessValue.textContent = 100;
+            contrastSlider.value = 100; contrastValue.textContent = 100;
+            blurSlider.value = 0; blurValue.textContent = 0;
+            sharpenStrengthSlider.value = 5; sharpenStrengthValue.textContent = 5;
+            gaussianKernelSizeSlider.value = 5; gaussianKernelSizeValue.textContent = 5;
+            gaussianSigmaSlider.value = 1.5; gaussianSigmaValue.textContent = 1.5;
+            bilateralDiameterSlider.value = 5; bilateralDiameterValue.textContent = 5;
+            bilateralSigmaColorSlider.value = 50; bilateralSigmaColorValue.textContent = 50;
+            bilateralSigmaSpaceSlider.value = 50; bilateralSigmaSpaceValue.textContent = 50;
+            slicKSlider.value = 200; slicKValue.textContent = 200;
+            slicMSlider.value = 10; slicMValue.textContent = 10;
+            filterHistory = [];
+            updateFilterHistoryDisplay();
+            if (originalImage) {
+                processedCtx.filter = 'none';
+                currentCSSAdjustedImageState = applyBaseCSSAdjustments();
+                if (currentCSSAdjustedImageState) {
+                    processedCtx.putImageData(currentCSSAdjustedImageState, 0, 0);
+                    lastAppliedPixelOperationState = currentCSSAdjustedImageState;
+                    drawHistogram();
+                } else if (originalImage.width > 0 && originalImage.height > 0) {
+                    processedCtx.drawImage(originalImage, 0, 0, processedCanvas.width, processedCanvas.height);
+                    lastAppliedPixelOperationState = processedCtx.getImageData(0,0,processedCanvas.width, processedCanvas.height);
+                    currentCSSAdjustedImageState = lastAppliedPixelOperationState;
+                    drawHistogram();
+                } else {
+                     clearAllCanvasesAndStates();
+                }
+            } else {
+                clearAllCanvasesAndStates();
+            }
+        }
+        function clearAllCanvasesAndStates() {
+            originalCtx.clearRect(0, 0, originalCanvas.width, originalCanvas.height);
+            processedCtx.clearRect(0, 0, processedCanvas.width, processedCanvas.height);
+            histogramCtx.clearRect(0, 0, histogramCanvas.width, histogramCanvas.height);
+            currentCSSAdjustedImageState = null;
+            lastAppliedPixelOperationState = null;
+        }
+        resetBtn.addEventListener('click', () => {
+            if (!originalImage) { showMessage('infoNoImageToReset', 3000, true); return; }
+            resetAll(); showMessage('infoAllReset', 2000);
+        });
+
+        function drawHistogram() {
+            if (!processedCanvas.width || !processedCanvas.height || !processedCtx ) {
+                 histogramCtx.clearRect(0, 0, histogramCanvas.width, histogramCanvas.height); return;
+            }
+            try {
+                const imageDataToAnalyze = processedCtx.getImageData(0, 0, processedCanvas.width, processedCanvas.height);
+                const data = imageDataToAnalyze.data;
+                const histogramData = new Array(256).fill(0);
+                for (let i = 0; i < data.length; i += 4) {
+                    const r = data[i], g = data[i + 1], b = data[i + 2];
+                    const brightness = Math.round((r + g + b) / 3);
+                    if(brightness >=0 && brightness <=255) histogramData[brightness]++;
+                }
+                histogramCtx.clearRect(0, 0, histogramCanvas.width, histogramCanvas.height);
+                const maxFreq = Math.max(1, ...histogramData);
+                const barWidth = histogramCanvas.width / 256;
+                histogramCtx.fillStyle = '#4b5563';
+                for (let i = 0; i < 256; i++) {
+                    const barHeight = (histogramData[i] / maxFreq) * histogramCanvas.height;
+                    histogramCtx.fillRect(i * barWidth, histogramCanvas.height - barHeight, barWidth, barHeight);
+                }
+            } catch (e) { console.error("Error drawing histogram:", e); }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const preferredLang = localStorage.getItem('preferredLang');
+            if (preferredLang && translations[preferredLang]) {
+                updateUIText(preferredLang);
+            } else {
+                updateUIText('ja');
+            }
+            resetAll();
+            updateFilterHistoryDisplay();
+        });
+    </script>
+</body>
+</html>
