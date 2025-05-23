@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画像処理ツール</title>
+    <title data-translate="pageTitle">画像処理ツール</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -137,7 +137,7 @@
             position: fixed;
             bottom: 20px;
             left: 50%;
-            transform: translateX(-50%) translateY(100%); /* Start off-screen */
+            transform: translateX(-50%) translateY(120%); /* Start off-screen */
             background-color: #10b981; /* emerald-500 for info */
             color: white;
             padding: 0.75rem 1.25rem;
@@ -170,86 +170,119 @@
         #filterHistoryList li:hover {
             background-color: #e2e8f0; /* slate-200 on hover */
         }
+        .lang-switcher {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            display: flex;
+            border-radius: 0.375rem;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .lang-switcher button {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .lang-switcher button.active {
+            background-color: #2563eb; /* blue-600 */
+            color: white;
+        }
+        .lang-switcher button:not(.active) {
+            background-color: #e2e8f0; /* slate-200 */
+            color: #334155; /* slate-700 */
+        }
+        .lang-switcher button:not(.active):hover {
+            background-color: #cbd5e1; /* slate-300 */
+        }
     </style>
 </head>
 <body>
+    <div class="lang-switcher">
+        <button id="langJaBtn">JA</button>
+        <button id="langEnBtn">EN</button>
+    </div>
+
     <div class="container">
         <header class="text-center py-6 mb-8">
-            <h1 class="text-5xl font-bold text-slate-800">画像処理ツール</h1>
-            <p class="text-xl text-slate-600 mt-3">画像をアップロードして、様々なフィルターや調整を試せます。</p>
+            <h1 class="text-5xl font-bold text-slate-800" data-translate="toolTitle">画像処理ツール</h1>
+            <p class="text-xl text-slate-600 mt-3" data-translate="toolSubtitle">画像をアップロードして、様々なフィルターや調整を試せます。</p>
         </header>
 
         <div class="mb-10 p-6 bg-white rounded-xl shadow-lg">
-            <label for="imageUpload" class="block text-md font-medium text-slate-700 mb-2">画像ファイルを選択:</label>
+            <label for="imageUpload" class="block text-md font-medium text-slate-700 mb-2" data-translate="uploadLabel">画像ファイルを選択:</label>
             <input type="file" id="imageUpload" accept="image/*" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
         </div>
 
         <div>
-            <h2 class="section-title">基本調整</h2>
+            <h2 class="section-title" data-translate="basicAdjustmentsTitle">基本調整</h2>
             <div class="controls-grid mb-8">
                 <div class="filter-group">
-                    <label for="brightnessSlider" class="text-sm font-medium text-slate-700">明るさ: <span id="brightnessValue" class="font-semibold">100</span>%</label>
+                    <label for="brightnessSlider" class="text-sm font-medium text-slate-700"><span data-translate="brightnessLabel">明るさ</span>: <span id="brightnessValue" class="font-semibold">100</span>%</label>
                     <input type="range" id="brightnessSlider" min="0" max="200" value="100" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500">
                 </div>
                 <div class="filter-group">
-                    <label for="contrastSlider" class="text-sm font-medium text-slate-700">コントラスト: <span id="contrastValue" class="font-semibold">100</span>%</label>
+                    <label for="contrastSlider" class="text-sm font-medium text-slate-700"><span data-translate="contrastLabel">コントラスト</span>: <span id="contrastValue" class="font-semibold">100</span>%</label>
                     <input type="range" id="contrastSlider" min="0" max="200" value="100" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500">
                 </div>
                 <div class="filter-group">
-                    <label for="blurSlider" class="text-sm font-medium text-slate-700">ぼかし (CSS): <span id="blurValue" class="font-semibold">0</span>px</label>
+                    <label for="blurSlider" class="text-sm font-medium text-slate-700"><span data-translate="cssBlurLabel">ぼかし (CSS)</span>: <span id="blurValue" class="font-semibold">0</span>px</label>
                     <input type="range" id="blurSlider" min="0" max="10" value="0" step="1" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500">
                 </div>
             </div>
 
-            <h2 class="section-title">フィルター処理</h2>
+            <h2 class="section-title" data-translate="filtersTitle">フィルター処理</h2>
             <div class="controls-grid">
                 <div class="filter-group">
-                    <button id="grayscaleBtn" class="btn btn-secondary w-full">グレースケール</button>
+                    <button id="grayscaleBtn" class="btn btn-secondary w-full" data-translate="grayscaleBtn">グレースケール</button>
                 </div>
 
                 <div class="filter-group">
-                    <button id="sharpenBtn" class="btn btn-secondary w-full">シャープ化</button>
+                    <button id="sharpenBtn" class="btn btn-secondary w-full" data-translate="sharpenBtn">シャープ化</button>
                     <div class="param-slider-group mt-2">
-                        <label for="sharpenStrength">強さ: <span id="sharpenStrengthValue">5</span></label>
+                        <label for="sharpenStrength"><span data-translate="sharpenStrengthLabel">強さ</span>: <span id="sharpenStrengthValue">5</span></label>
                         <input type="range" id="sharpenStrength" min="1" max="10" step="1" value="5">
                     </div>
                 </div>
 
                 <div class="filter-group">
-                    <button id="gaussianBtn" class="btn btn-secondary w-full">ガウシアンぼかし</button>
+                    <button id="gaussianBtn" class="btn btn-secondary w-full" data-translate="gaussianBlurBtn">ガウシアンぼかし</button>
                     <div class="param-slider-group mt-2 space-y-2">
                         <div>
-                            <label for="gaussianKernelSize">カーネルサイズ: <span id="gaussianKernelSizeValue">5</span></label>
+                            <label for="gaussianKernelSize"><span data-translate="gaussianKernelSizeLabel">カーネルサイズ</span>: <span id="gaussianKernelSizeValue">5</span></label>
                             <input type="range" id="gaussianKernelSize" min="3" max="11" step="2" value="5">
                         </div>
                         <div>
-                            <label for="gaussianSigma">シグマ: <span id="gaussianSigmaValue">1.5</span></label>
+                            <label for="gaussianSigma"><span data-translate="gaussianSigmaLabel">シグマ</span>: <span id="gaussianSigmaValue">1.5</span></label>
                             <input type="range" id="gaussianSigma" min="0.1" max="5" step="0.1" value="1.5">
                         </div>
                     </div>
                 </div>
 
                 <div class="filter-group">
-                    <button id="sobelBtn" class="btn btn-secondary w-full">エッジ検出 (Sobel)</button>
+                    <button id="sobelBtn" class="btn btn-secondary w-full" data-translate="sobelBtn">エッジ検出 (Sobel)</button>
                 </div>
 
                 <div class="filter-group">
-                    <button id="otsuBinarizationBtn" class="btn btn-secondary w-full">自動二値化 (大津法)</button>
+                    <button id="otsuBinarizationBtn" class="btn btn-secondary w-full" data-translate="otsuBtn">自動二値化 (大津法)</button>
                 </div>
 
                 <div class="filter-group">
-                    <button id="bilateralBtn" class="btn btn-secondary w-full">バイラテラルフィルター</button>
+                    <button id="bilateralBtn" class="btn btn-secondary w-full" data-translate="bilateralBtn">バイラテラルフィルター</button>
                     <div class="param-slider-group mt-2 space-y-2">
                         <div>
-                            <label for="bilateralDiameter">直径: <span id="bilateralDiameterValue">5</span></label>
+                            <label for="bilateralDiameter"><span data-translate="bilateralDiameterLabel">直径</span>: <span id="bilateralDiameterValue">5</span></label>
                             <input type="range" id="bilateralDiameter" min="3" max="11" step="2" value="5">
                         </div>
                         <div>
-                            <label for="bilateralSigmaColor">Sigma Color: <span id="bilateralSigmaColorValue">50</span></label>
+                            <label for="bilateralSigmaColor"><span data-translate="bilateralSigmaColorLabel">Sigma Color</span>: <span id="bilateralSigmaColorValue">50</span></label>
                             <input type="range" id="bilateralSigmaColor" min="10" max="150" step="5" value="50">
                         </div>
                         <div>
-                            <label for="bilateralSigmaSpace">Sigma Space: <span id="bilateralSigmaSpaceValue">50</span></label>
+                            <label for="bilateralSigmaSpace"><span data-translate="bilateralSigmaSpaceLabel">Sigma Space</span>: <span id="bilateralSigmaSpaceValue">50</span></label>
                             <input type="range" id="bilateralSigmaSpace" min="10" max="150" step="5" value="50">
                         </div>
                     </div>
@@ -258,23 +291,23 @@
         </div>
 
         <div class="my-8 text-center">
-             <button id="resetBtn" class="btn btn-reset px-8 py-3 text-lg">全ての処理をリセット</button>
+             <button id="resetBtn" class="btn btn-reset px-8 py-3 text-lg" data-translate="resetAllBtn">全ての処理をリセット</button>
         </div>
 
         <div class="image-grid">
             <div class="canvas-container">
-                <h3 class="text-2xl font-semibold text-slate-700 mb-3">元画像</h3>
+                <h3 class="text-2xl font-semibold text-slate-700 mb-3" data-translate="originalImageTitle">元画像</h3>
                 <canvas id="originalCanvas"></canvas>
             </div>
             <div class="canvas-container">
-                <h3 class="text-2xl font-semibold text-slate-700 mb-3">処理後画像</h3>
+                <h3 class="text-2xl font-semibold text-slate-700 mb-3" data-translate="processedImageTitle">処理後画像</h3>
                 <canvas id="processedCanvas"></canvas>
                 <div class="mt-6 w-full max-w-xs">
-                    <h4 class="text-lg font-medium text-slate-600 mb-2 text-center">輝度ヒストグラム</h4>
+                    <h4 class="text-lg font-medium text-slate-600 mb-2 text-center" data-translate="histogramTitle">輝度ヒストグラム</h4>
                     <canvas id="histogramCanvas"></canvas>
                 </div>
                 <div class="mt-6 w-full">
-                    <h4 class="text-lg font-medium text-slate-600 mb-2 text-center">適用フィルター履歴</h4>
+                    <h4 class="text-lg font-medium text-slate-600 mb-2 text-center" data-translate="historyTitle">適用フィルター履歴</h4>
                     <ul id="filterHistoryList" class="space-y-1 max-h-48 overflow-y-auto bg-white p-3 rounded-md border border-slate-200 shadow-sm">
                         {/* History items will be populated by JavaScript */}
                     </ul>
@@ -286,7 +319,137 @@
     <div id="messageBox" class="message-box">メッセージ</div>
 
     <script>
-        // --- DOM Elements ---
+        // --- Translations ---
+        const translations = {
+            'ja': {
+                'pageTitle': '画像処理ツール',
+                'toolTitle': '画像処理ツール',
+                'toolSubtitle': '画像をアップロードして、様々なフィルターや調整を試せます。',
+                'uploadLabel': '画像ファイルを選択:',
+                'basicAdjustmentsTitle': '基本調整',
+                'filtersTitle': 'フィルター処理',
+                'originalImageTitle': '元画像',
+                'processedImageTitle': '処理後画像',
+                'histogramTitle': '輝度ヒストグラム',
+                'historyTitle': '適用フィルター履歴',
+                'grayscaleBtn': 'グレースケール',
+                'sharpenBtn': 'シャープ化',
+                'gaussianBlurBtn': 'ガウシアンぼかし',
+                'sobelBtn': 'エッジ検出 (Sobel)',
+                'otsuBtn': '自動二値化 (大津法)',
+                'bilateralBtn': 'バイラテラルフィルター',
+                'resetAllBtn': '全ての処理をリセット',
+                'brightnessLabel': '明るさ',
+                'contrastLabel': 'コントラスト',
+                'cssBlurLabel': 'ぼかし (CSS)',
+                'sharpenStrengthLabel': '強さ',
+                'gaussianKernelSizeLabel': 'カーネルサイズ',
+                'gaussianSigmaLabel': 'シグマ',
+                'bilateralDiameterLabel': '直径',
+                'bilateralSigmaColorLabel': 'Sigma Color',
+                'bilateralSigmaSpaceLabel': 'Sigma Space',
+                'errorMustUpload': 'まず画像をアップロードしてください。',
+                'errorImageLoadFailed': '画像の読み込みに失敗しました。',
+                'errorFileLoadFailed': 'ファイルの読み込みに失敗しました。',
+                'errorMustBeImage': '画像ファイルを選択してください。',
+                'infoApplyingFilter': '{filterName}適用中...',
+                'infoFilterApplied': '{filterName}を適用しました。',
+                'infoOtsuThreshold': '大津法による自動しきい値: {threshold}',
+                'infoErrorDuringFilter': '{filterName}適用中にエラーが発生しました。',
+                'infoNoImageToReset': 'リセットする画像がありません。',
+                'infoAllReset': '全ての処理とパラメータをリセットしました。',
+                'historyEmpty': '適用されたフィルターはありません',
+                'paramKSize': 'KSize', 'paramSigma': 'σ', 'paramStrength': 'Str',
+                'paramDiameter': 'Dia', 'paramSigmaColor': 'σCol', 'paramSigmaSpace': 'σSpc'
+            },
+            'en': {
+                'pageTitle': 'Image Processing Tool',
+                'toolTitle': 'Image Processing Tool',
+                'toolSubtitle': 'Upload an image and try various filters and adjustments.',
+                'uploadLabel': 'Select Image File:',
+                'basicAdjustmentsTitle': 'Basic Adjustments',
+                'filtersTitle': 'Filters',
+                'originalImageTitle': 'Original Image',
+                'processedImageTitle': 'Processed Image',
+                'histogramTitle': 'Luminance Histogram',
+                'historyTitle': 'Applied Filter History',
+                'grayscaleBtn': 'Grayscale',
+                'sharpenBtn': 'Sharpen',
+                'gaussianBlurBtn': 'Gaussian Blur',
+                'sobelBtn': 'Edge Detection (Sobel)',
+                'otsuBtn': 'Otsu Binarization',
+                'bilateralBtn': 'Bilateral Filter',
+                'resetAllBtn': 'Reset All Processing',
+                'brightnessLabel': 'Brightness',
+                'contrastLabel': 'Contrast',
+                'cssBlurLabel': 'Blur (CSS)',
+                'sharpenStrengthLabel': 'Strength',
+                'gaussianKernelSizeLabel': 'Kernel Size',
+                'gaussianSigmaLabel': 'Sigma',
+                'bilateralDiameterLabel': 'Diameter',
+                'bilateralSigmaColorLabel': 'Sigma Color',
+                'bilateralSigmaSpaceLabel': 'Sigma Space',
+                'errorMustUpload': 'Please upload an image first.',
+                'errorImageLoadFailed': 'Failed to load the image.',
+                'errorFileLoadFailed': 'Failed to read the file.',
+                'errorMustBeImage': 'Please select an image file.',
+                'infoApplyingFilter': 'Applying {filterName}...',
+                'infoFilterApplied': '{filterName} applied.',
+                'infoOtsuThreshold': 'Otsu Threshold: {threshold}',
+                'infoErrorDuringFilter': 'Error applying {filterName}.',
+                'infoNoImageToReset': 'No image to reset.',
+                'infoAllReset': 'All processing and parameters have been reset.',
+                'historyEmpty': 'No filters applied yet.',
+                'paramKSize': 'KSize', 'paramSigma': 'σ', 'paramStrength': 'Str',
+                'paramDiameter': 'Dia', 'paramSigmaColor': 'σCol', 'paramSigmaSpace': 'σSpc'
+            }
+        };
+        let currentLang = 'ja'; // Default language
+
+        // --- Language Switcher Logic ---
+        const langJaBtn = document.getElementById('langJaBtn');
+        const langEnBtn = document.getElementById('langEnBtn');
+
+        function updateUIText(lang) {
+            if (!translations[lang]) return;
+            currentLang = lang;
+            document.documentElement.lang = lang; // Update HTML lang attribute
+
+            document.querySelectorAll('[data-translate]').forEach(el => {
+                const key = el.getAttribute('data-translate');
+                if (translations[lang][key]) {
+                    el.textContent = translations[lang][key];
+                }
+            });
+
+            // Update language switcher button active state
+            if (lang === 'ja') {
+                langJaBtn.classList.add('active');
+                langEnBtn.classList.remove('active');
+                langJaBtn.classList.replace('bg-slate-300', 'bg-blue-500');
+                langJaBtn.classList.replace('text-slate-700', 'text-white');
+                langEnBtn.classList.replace('bg-blue-500', 'bg-slate-300');
+                langEnBtn.classList.replace('text-white', 'text-slate-700');
+            } else {
+                langEnBtn.classList.add('active');
+                langJaBtn.classList.remove('active');
+                langEnBtn.classList.replace('bg-slate-300', 'bg-blue-500');
+                langEnBtn.classList.replace('text-slate-700', 'text-white');
+                langJaBtn.classList.replace('bg-blue-500', 'bg-slate-300');
+                langJaBtn.classList.replace('text-white', 'text-slate-700');
+            }
+            localStorage.setItem('preferredLang', lang);
+            updateFilterHistoryDisplay(); // Refresh history display with new lang
+            // If an image is loaded, refresh messages that might have been shown
+            // This is complex, better to just have new messages use the new lang.
+            // Reset might need to re-show its message in new lang if it was just clicked.
+        }
+
+        langJaBtn.addEventListener('click', () => updateUIText('ja'));
+        langEnBtn.addEventListener('click', () => updateUIText('en'));
+
+
+        // --- DOM Elements (rest) ---
         const imageUpload = document.getElementById('imageUpload');
         const originalCanvas = document.getElementById('originalCanvas');
         const processedCanvas = document.getElementById('processedCanvas');
@@ -297,8 +460,6 @@
         const histogramCtx = histogramCanvas.getContext('2d');
         const filterHistoryList = document.getElementById('filterHistoryList');
 
-
-        // Filter Buttons
         const grayscaleBtn = document.getElementById('grayscaleBtn');
         const sharpenBtn = document.getElementById('sharpenBtn');
         const gaussianBtn = document.getElementById('gaussianBtn');
@@ -307,45 +468,44 @@
         const bilateralBtn = document.getElementById('bilateralBtn');
         const resetBtn = document.getElementById('resetBtn');
 
-        // Basic Adjustment Sliders & Values
         const brightnessSlider = document.getElementById('brightnessSlider');
         const brightnessValue = document.getElementById('brightnessValue');
         const contrastSlider = document.getElementById('contrastSlider');
         const contrastValue = document.getElementById('contrastValue');
-        const blurSlider = document.getElementById('blurSlider'); // CSS Blur
+        const blurSlider = document.getElementById('blurSlider');
         const blurValue = document.getElementById('blurValue');
 
-        // Sharpen Parameter UI
         const sharpenStrengthSlider = document.getElementById('sharpenStrength');
         const sharpenStrengthValue = document.getElementById('sharpenStrengthValue');
-
-        // Gaussian Parameter UI
         const gaussianKernelSizeSlider = document.getElementById('gaussianKernelSize');
         const gaussianKernelSizeValue = document.getElementById('gaussianKernelSizeValue');
         const gaussianSigmaSlider = document.getElementById('gaussianSigma');
         const gaussianSigmaValue = document.getElementById('gaussianSigmaValue');
-
-        // Bilateral Parameter UI
         const bilateralDiameterSlider = document.getElementById('bilateralDiameter');
         const bilateralDiameterValue = document.getElementById('bilateralDiameterValue');
         const bilateralSigmaColorSlider = document.getElementById('bilateralSigmaColor');
         const bilateralSigmaColorValue = document.getElementById('bilateralSigmaColorValue');
         const bilateralSigmaSpaceSlider = document.getElementById('bilateralSigmaSpace');
         const bilateralSigmaSpaceValue = document.getElementById('bilateralSigmaSpaceValue');
-
         const messageBox = document.getElementById('messageBox');
 
         // --- Global State ---
         let originalImage = null;
-        let currentCSSAdjustedImageState = null; // ImageData after CSS adjustments (brightness, contrast, CSS blur)
-        let lastAppliedPixelOperationState = null; // ImageData after the last pixel operation filter
-        let filterHistory = []; // To store applied pixel operation filters and their params
+        let currentCSSAdjustedImageState = null;
+        let lastAppliedPixelOperationState = null;
+        let filterHistory = [];
 
 
         // --- Utility Functions ---
-        function showMessage(text, duration = 3000, isError = false) {
+        function showMessage(translationKey, duration = 3000, isError = false, params = {}) {
+            let text = (translations[currentLang] && translations[currentLang][translationKey]) || translationKey;
+            if (params) {
+                for (const key in params) {
+                    text = text.replace(`{${key}}`, params[key]);
+                }
+            }
             messageBox.textContent = text;
-            messageBox.className = 'message-box'; // Reset classes
+            messageBox.className = 'message-box';
             if (isError) messageBox.classList.add('error');
             messageBox.classList.add('show');
             setTimeout(() => messageBox.classList.remove('show'), duration);
@@ -356,7 +516,7 @@
             const file = event.target.files[0];
             if (file) {
                 if (!file.type.startsWith('image/')) {
-                    showMessage('画像ファイルを選択してください。', 3000, true);
+                    showMessage('errorMustBeImage', 3000, true);
                     imageUpload.value = '';
                     return;
                 }
@@ -371,10 +531,10 @@
                         originalCtx.drawImage(originalImage, 0, 0);
                         resetAll();
                     };
-                    originalImage.onerror = () => showMessage('画像の読み込みに失敗しました。', 3000, true);
+                    originalImage.onerror = () => showMessage('errorImageLoadFailed', 3000, true);
                     originalImage.src = e.target.result;
                 };
-                reader.onerror = () => showMessage('ファイルの読み込みに失敗しました。', 3000, true);
+                reader.onerror = () => showMessage('errorFileLoadFailed', 3000, true);
                 reader.readAsDataURL(file);
             }
         });
@@ -382,51 +542,46 @@
         // --- Update and Display Filter History ---
         function updateFilterHistoryDisplay() {
             if (!filterHistoryList) return;
-
             filterHistoryList.innerHTML = '';
             if (filterHistory.length === 0) {
                 const li = document.createElement('li');
-                li.textContent = '適用されたフィルターはありません';
+                li.textContent = (translations[currentLang] && translations[currentLang]['historyEmpty']) || 'No filters applied yet.';
                 li.className = 'text-slate-500 text-sm italic px-2 py-1';
                 filterHistoryList.appendChild(li);
                 return;
             }
-
             filterHistory.forEach((item, index) => {
                 const li = document.createElement('li');
                 li.className = 'text-sm text-slate-700 p-2 bg-slate-50 rounded-md flex justify-between items-center hover:bg-slate-100';
-
                 let paramsStr = '';
                 if (item.params && Object.keys(item.params).length > 0) {
                     paramsStr = Object.entries(item.params)
                         .map(([key, value]) => {
-                            // Abbreviate keys for display
                             let displayKey = key;
-                            if (key === "kernelSize") displayKey = "KSize";
-                            if (key === "sigma") displayKey = "σ";
-                            if (key === "strength") displayKey = "Str";
-                            if (key === "diameter") displayKey = "Dia";
-                            if (key === "sigmaColor") displayKey = "σCol";
-                            if (key === "sigmaSpace") displayKey = "σSpc";
+                            if (translations[currentLang] && translations[currentLang][`param${key.charAt(0).toUpperCase() + key.slice(1)}`]) {
+                                displayKey = translations[currentLang][`param${key.charAt(0).toUpperCase() + key.slice(1)}`];
+                            } else if (translations[currentLang] && translations[currentLang][`param${key}`]) { // for custom abbr like KSize
+                                displayKey = translations[currentLang][`param${key}`];
+                            }
                             return `${displayKey}: ${value}`;
                         })
                         .join(', ');
                 }
-                li.textContent = `${index + 1}. ${item.name}${paramsStr ? ` (${paramsStr})` : ''}`;
+                const filterDisplayName = (translations[currentLang] && translations[currentLang][item.nameKey]) || item.nameKey;
+                li.textContent = `${index + 1}. ${filterDisplayName}${paramsStr ? ` (${paramsStr})` : ''}`;
                 filterHistoryList.appendChild(li);
             });
         }
 
         // --- Add to History ---
-        function addFilterToHistory(filterName, params = {}) {
-            filterHistory.push({ name: filterName, params: { ...params } });
+        function addFilterToHistory(filterNameKey, params = {}) { // Store key instead of translated name
+            filterHistory.push({ nameKey: filterNameKey, params: { ...params } });
             updateFilterHistoryDisplay();
         }
 
         // --- Apply CSS Adjustments and update base state ---
         function applyBaseCSSAdjustments() {
             if (!originalImage) return null;
-
             const brightness = parseFloat(brightnessSlider.value) / 100;
             const contrast = parseFloat(contrastSlider.value) / 100;
             const blurCss = parseInt(blurSlider.value);
@@ -436,76 +591,66 @@
             if (blurCss > 0) filterString += `blur(${blurCss}px) `;
 
             const tempCanvas = document.createElement('canvas');
-            // Ensure tempCanvas has dimensions, otherwise getImageData fails in some browsers if 0x0
             tempCanvas.width = originalImage.width > 0 ? originalImage.width : 1;
             tempCanvas.height = originalImage.height > 0 ? originalImage.height : 1;
             const tempCtx = tempCanvas.getContext('2d');
-
             if (filterString.trim() !== '') tempCtx.filter = filterString.trim();
             tempCtx.drawImage(originalImage, 0, 0, tempCanvas.width, tempCanvas.height);
             tempCtx.filter = 'none';
-
             return tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
         }
 
         // --- Re-apply all pixel operation filters from history ---
         async function reapplyAllPixelFilters(baseImageData) {
             if (!baseImageData) return null;
-
             let currentImageData = new ImageData(
                 new Uint8ClampedArray(baseImageData.data),
-                baseImageData.width,
-                baseImageData.height
+                baseImageData.width, baseImageData.height
             );
-
             for (const filterItem of filterHistory) {
-                // This loop needs to be synchronous in its effect on currentImageData
-                const operationFn = getOperationFunctionByName(filterItem.name, filterItem.params);
+                const operationFn = getOperationFunctionByNameKey(filterItem.nameKey, filterItem.params);
                 if (operationFn) {
-                    // Create a new ImageData for each operation to avoid unintended side effects
-                    // if operationFn modifies its input and we pass the same object.
                     const imageDataForThisStep = new ImageData(
                         new Uint8ClampedArray(currentImageData.data),
-                        currentImageData.width,
-                        currentImageData.height
+                        currentImageData.width, currentImageData.height
                     );
-                    operationFn(imageDataForThisStep); // Apply filter to the copy
-                    currentImageData = imageDataForThisStep; // Update currentImageData with the result
+                    operationFn(imageDataForThisStep);
+                    currentImageData = imageDataForThisStep;
                 }
             }
             return currentImageData;
         }
 
-        // --- Get Operation Function by Name (Helper for reapplication) ---
-        function getOperationFunctionByName(name, params) {
-            switch (name) {
-                case "グレースケール":
-                    return (imageData) => {
+        // --- Get Operation Function by Name Key (Helper for reapplication) ---
+        function getOperationFunctionByNameKey(nameKey, params) { // Use key
+            switch (nameKey) {
+                case "grayscaleBtn":
+                    return (imageData) => { /* Grayscale logic */
                         const data = imageData.data;
                         for (let i = 0; i < data.length; i += 4) {
                             const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
                             data[i] = avg; data[i + 1] = avg; data[i + 2] = avg;
                         }
                     };
-                case "シャープ化":
-                    return (imageData) => {
+                case "sharpenBtn":
+                    return (imageData) => { /* Sharpen logic */
                         const strength = params.strength || 5;
                         const sharpenKernel = [[0, -1, 0], [-1, strength, -1], [0, -1, 0]];
                         convolve(imageData, sharpenKernel);
                     };
-                case "ガウシアンぼかし":
-                    return (imageData) => {
+                case "gaussianBlurBtn":
+                    return (imageData) => { /* Gaussian logic */
                         const kernelSize = params.kernelSize || 5;
                         const sigma = params.sigma || 1.5;
                         const gaussianKernel = generateGaussianKernel(kernelSize, sigma);
                         convolve(imageData, gaussianKernel);
                     };
-                case "エッジ検出 (Sobel)":
+                case "sobelBtn":
                     return (imageData) => sobelFilterLogic(imageData);
-                case "自動二値化 (大津法)":
-                    return (imageData) => otsuBinarizationLogic(imageData, false); // false = don't show message during reapply
-                case "バイラテラルフィルター":
-                    return (imageData) => {
+                case "otsuBtn":
+                    return (imageData) => otsuBinarizationLogic(imageData, false);
+                case "bilateralBtn":
+                    return (imageData) => { /* Bilateral logic */
                         const diameter = params.diameter || 5;
                         const sigmaColor = params.sigmaColor || 50;
                         const sigmaSpace = params.sigmaSpace || 50;
@@ -515,7 +660,7 @@
             }
         }
 
-        function sobelFilterLogic(imageData) {
+        function sobelFilterLogic(imageData) { /* ... Same as before ... */
             const data = imageData.data; const width = imageData.width; const height = imageData.height;
             const grayDataForSobel = new Uint8ClampedArray(data.length);
             for (let i = 0; i < data.length; i += 4) {
@@ -547,8 +692,7 @@
             }
             for(let i=0; i < data.length; i++) data[i] = outData[i];
         }
-
-        function otsuBinarizationLogic(imageData, showMsg = true) {
+        function otsuBinarizationLogic(imageData, showMsg = true) { /* ... Same as before ... */
             const data = imageData.data; const width = imageData.width; const height = imageData.height;
             const totalPixels = width * height; const grayHistogram = new Array(256).fill(0);
             for (let i = 0; i < data.length; i += 4) {
@@ -566,7 +710,7 @@
                 const varianceBetween = wB * wF * (mB - mF) * (mB - mF);
                 if (varianceBetween > maxVariance) { maxVariance = varianceBetween; threshold = t; }
             }
-            if (showMsg) showMessage(`大津法による自動しきい値: ${threshold}`, 2000);
+            if (showMsg) showMessage('infoOtsuThreshold', 2000, false, {threshold});
             else console.log(`Otsu Threshold (reapply): ${threshold}`);
             for (let i = 0; i < data.length; i += 4) {
                 const val = data[i]; const binarizedVal = val > threshold ? 255 : 0;
@@ -575,16 +719,18 @@
         }
 
         // --- Core Pixel Operation Application ---
-        function applyAndRecordPixelOperation(operationFunction, operationName, params = {}) {
+        function applyAndRecordPixelOperation(operationFunction, filterNameKey, params = {}) {
             if (!originalImage) {
-                showMessage('まず画像をアップロードしてください。', 3000, true); return;
+                showMessage('errorMustUpload', 3000, true); return;
             }
             const baseForThisOperation = filterHistory.length === 0 ? currentCSSAdjustedImageState : lastAppliedPixelOperationState;
             if (!baseForThisOperation) {
-                showMessage('基本調整の適用中に問題が発生しました。画像を再読み込みしてください。', 3000, true);
-                console.error("baseForThisOperation is null in applyAndRecordPixelOperation"); return;
+                showMessage('errorMustUpload', 3000, true); // Simplified error message
+                console.error("baseForThisOperation is null"); return;
             }
-            showMessage(`${operationName}適用中...`, 1500);
+            const filterDisplayName = (translations[currentLang] && translations[currentLang][filterNameKey]) || filterNameKey;
+            showMessage('infoApplyingFilter', 1500, false, { filterName: filterDisplayName });
+
             setTimeout(async () => {
                 try {
                     const imageDataForOperation = new ImageData(
@@ -594,12 +740,12 @@
                     operationFunction(imageDataForOperation);
                     processedCtx.putImageData(imageDataForOperation, 0, 0);
                     lastAppliedPixelOperationState = processedCtx.getImageData(0, 0, processedCanvas.width, processedCanvas.height);
-                    addFilterToHistory(operationName, params);
+                    addFilterToHistory(filterNameKey, params);
                     drawHistogram();
-                    showMessage(`${operationName}を適用しました。`, 2000);
+                    showMessage('infoFilterApplied', 2000, false, { filterName: filterDisplayName });
                 } catch (error) {
-                    console.error(`${operationName} error:`, error);
-                    showMessage(`${operationName}適用中にエラーが発生しました。`, 3000, true);
+                    console.error(`${filterNameKey} error:`, error);
+                    showMessage('infoErrorDuringFilter', 3000, true, { filterName: filterDisplayName });
                 }
             }, 50);
         }
@@ -629,46 +775,46 @@
 
         // --- Filter Button Event Listeners ---
         grayscaleBtn.addEventListener('click', () => {
-            applyAndRecordPixelOperation((imageData) => {
+            applyAndRecordPixelOperation((imageData) => { /* Grayscale logic */
                 const data = imageData.data;
                 for (let i = 0; i < data.length; i += 4) {
                     const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
                     data[i] = avg; data[i + 1] = avg; data[i + 2] = avg;
                 }
-            }, "グレースケール");
+            }, "grayscaleBtn");
         });
         sharpenBtn.addEventListener('click', () => {
             const strength = parseFloat(sharpenStrengthSlider.value);
-            applyAndRecordPixelOperation((imageData) => {
+            applyAndRecordPixelOperation((imageData) => { /* Sharpen logic */
                 const sharpenKernel = [[0, -1, 0], [-1, strength, -1], [0, -1, 0]];
                 convolve(imageData, sharpenKernel);
-            }, "シャープ化", { strength });
+            }, "sharpenBtn", { strength });
         });
         gaussianBtn.addEventListener('click', () => {
             const kernelSize = parseInt(gaussianKernelSizeSlider.value);
             const sigma = parseFloat(gaussianSigmaSlider.value);
-            applyAndRecordPixelOperation((imageData) => {
+            applyAndRecordPixelOperation((imageData) => { /* Gaussian logic */
                 const gaussianKernel = generateGaussianKernel(kernelSize, sigma);
                 convolve(imageData, gaussianKernel);
-            }, "ガウシアンぼかし", { kernelSize, sigma });
+            }, "gaussianBlurBtn", { kernelSize, sigma });
         });
         sobelBtn.addEventListener('click', () => {
-            applyAndRecordPixelOperation(sobelFilterLogic, "エッジ検出 (Sobel)");
+            applyAndRecordPixelOperation(sobelFilterLogic, "sobelBtn");
         });
         otsuBinarizationBtn.addEventListener('click', () => {
-            applyAndRecordPixelOperation((imageData) => otsuBinarizationLogic(imageData, true), "自動二値化 (大津法)");
+            applyAndRecordPixelOperation((imageData) => otsuBinarizationLogic(imageData, true), "otsuBtn");
         });
         bilateralBtn.addEventListener('click', () => {
             const diameter = parseInt(bilateralDiameterSlider.value);
             const sigmaColor = parseFloat(bilateralSigmaColorSlider.value);
             const sigmaSpace = parseFloat(bilateralSigmaSpaceSlider.value);
-            applyAndRecordPixelOperation((imageData) => {
+            applyAndRecordPixelOperation((imageData) => { /* Bilateral logic */
                 bilateralFilterFn(imageData, diameter, sigmaColor, sigmaSpace);
-            }, "バイラテラルフィルター", { diameter, sigmaColor, sigmaSpace });
+            }, "bilateralBtn", { diameter, sigmaColor, sigmaSpace });
         });
 
         // --- Convolution and Kernel Generation (existing) ---
-        function generateGaussianKernel(size, sigma) {
+        function generateGaussianKernel(size, sigma) { /* ... Same as before ... */
             if (size % 2 === 0) size++;
             const kernel = Array(size).fill(null).map(() => Array(size).fill(0));
             const radius = Math.floor(size / 2); let sum = 0;
@@ -685,7 +831,7 @@
                 }
             } return kernel;
         }
-        function convolve(imageData, kernel) {
+        function convolve(imageData, kernel) { /* ... Same as before ... */
             const srcData = imageData.data; const width = imageData.width; const height = imageData.height;
             const kernelSize = kernel.length; const halfKernel = Math.floor(kernelSize / 2);
             const outData = new Uint8ClampedArray(srcData.length);
@@ -709,7 +855,7 @@
             }
             for(let i=0; i < srcData.length; i++) imageData.data[i] = outData[i];
         }
-        function bilateralFilterFn(imageData, diameter, sigmaColor, sigmaSpace) {
+        function bilateralFilterFn(imageData, diameter, sigmaColor, sigmaSpace) { /* ... Same as before ... */
             const data = imageData.data; const srcData = new Uint8ClampedArray(imageData.data);
             const width = imageData.width; const height = imageData.height;
             const radius = Math.floor(diameter / 2);
@@ -756,7 +902,7 @@
         setupSliderListenerWithValueUpdate(bilateralDiameterSlider, bilateralDiameterValue);
         setupSliderListenerWithValueUpdate(bilateralSigmaColorSlider, bilateralSigmaColorValue);
         setupSliderListenerWithValueUpdate(bilateralSigmaSpaceSlider, bilateralSigmaSpaceValue);
-        setupSliderListenerWithValueUpdate(brightnessSlider, brightnessValue); // Also for basic adjustments
+        setupSliderListenerWithValueUpdate(brightnessSlider, brightnessValue);
         setupSliderListenerWithValueUpdate(contrastSlider, contrastValue);
         setupSliderListenerWithValueUpdate(blurSlider, blurValue);
 
@@ -771,10 +917,8 @@
             bilateralDiameterSlider.value = 5; bilateralDiameterValue.textContent = 5;
             bilateralSigmaColorSlider.value = 50; bilateralSigmaColorValue.textContent = 50;
             bilateralSigmaSpaceSlider.value = 50; bilateralSigmaSpaceValue.textContent = 50;
-
             filterHistory = [];
             updateFilterHistoryDisplay();
-
             if (originalImage) {
                 processedCtx.filter = 'none';
                 currentCSSAdjustedImageState = applyBaseCSSAdjustments();
@@ -782,19 +926,18 @@
                     processedCtx.putImageData(currentCSSAdjustedImageState, 0, 0);
                     lastAppliedPixelOperationState = currentCSSAdjustedImageState;
                     drawHistogram();
-                } else if (originalImage.width > 0 && originalImage.height > 0) { // Fallback if CSS adjustment returns null but image exists
+                } else if (originalImage.width > 0 && originalImage.height > 0) {
                     processedCtx.drawImage(originalImage, 0, 0, processedCanvas.width, processedCanvas.height);
                     lastAppliedPixelOperationState = processedCtx.getImageData(0,0,processedCanvas.width, processedCanvas.height);
-                    currentCSSAdjustedImageState = lastAppliedPixelOperationState; // Treat as base
+                    currentCSSAdjustedImageState = lastAppliedPixelOperationState;
                     drawHistogram();
-                } else { // No valid image dimensions
+                } else {
                      clearAllCanvasesAndStates();
                 }
             } else {
                 clearAllCanvasesAndStates();
             }
         }
-
         function clearAllCanvasesAndStates() {
             originalCtx.clearRect(0, 0, originalCanvas.width, originalCanvas.height);
             processedCtx.clearRect(0, 0, processedCanvas.width, processedCanvas.height);
@@ -802,14 +945,12 @@
             currentCSSAdjustedImageState = null;
             lastAppliedPixelOperationState = null;
         }
-
-
         resetBtn.addEventListener('click', () => {
             if (!originalImage) {
-                showMessage('リセットする画像がありません。', 3000, true); return;
+                showMessage('infoNoImageToReset', 3000, true); return;
             }
             resetAll();
-            showMessage('全ての処理とパラメータをリセットしました。', 2000);
+            showMessage('infoAllReset', 2000);
         });
 
         // --- Histogram Drawing ---
@@ -820,18 +961,18 @@
             try {
                 const imageDataToAnalyze = processedCtx.getImageData(0, 0, processedCanvas.width, processedCanvas.height);
                 const data = imageDataToAnalyze.data;
-                const histogram = new Array(256).fill(0);
+                const histogramData = new Array(256).fill(0); // Renamed to avoid conflict
                 for (let i = 0; i < data.length; i += 4) {
                     const r = data[i], g = data[i + 1], b = data[i + 2];
                     const brightness = Math.round((r + g + b) / 3);
-                    if(brightness >=0 && brightness <=255) histogram[brightness]++;
+                    if(brightness >=0 && brightness <=255) histogramData[brightness]++;
                 }
                 histogramCtx.clearRect(0, 0, histogramCanvas.width, histogramCanvas.height);
-                const maxFreq = Math.max(1, ...histogram);
+                const maxFreq = Math.max(1, ...histogramData);
                 const barWidth = histogramCanvas.width / 256;
                 histogramCtx.fillStyle = '#4b5563'; // slate-600
                 for (let i = 0; i < 256; i++) {
-                    const barHeight = (histogram[i] / maxFreq) * histogramCanvas.height;
+                    const barHeight = (histogramData[i] / maxFreq) * histogramCanvas.height;
                     histogramCtx.fillRect(i * barWidth, histogramCanvas.height - barHeight, barWidth, barHeight);
                 }
             } catch (e) { console.error("Error drawing histogram:", e); }
@@ -839,6 +980,12 @@
 
         // --- Initial Setup ---
         document.addEventListener('DOMContentLoaded', () => {
+            const preferredLang = localStorage.getItem('preferredLang');
+            if (preferredLang && translations[preferredLang]) {
+                updateUIText(preferredLang);
+            } else {
+                updateUIText('ja'); // Default to Japanese
+            }
             resetAll();
             updateFilterHistoryDisplay();
         });
