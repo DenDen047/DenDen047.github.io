@@ -40,7 +40,7 @@
         }
         .controls-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
             gap: 1.5rem;
             margin-bottom: 2rem;
         }
@@ -288,6 +288,23 @@
                     </div>
                 </div>
             </div>
+
+            <h2 class="section-title mt-8" data-translate="segmentationTitle">セグメンテーション</h2>
+            <div class="controls-grid">
+                 <div class="filter-group">
+                    <button id="slicBtn" class="btn btn-secondary w-full" data-translate="slicBtn">スーパーピクセル (SLIC)</button>
+                    <div class="param-slider-group mt-2 space-y-2">
+                        <div>
+                            <label for="slicK"><span data-translate="slicKLabel">スーパーピクセル数 (K)</span>: <span id="slicKValue">200</span></label>
+                            <input type="range" id="slicK" min="50" max="1000" step="50" value="200">
+                        </div>
+                        <div>
+                            <label for="slicM"><span data-translate="slicMLabel">コンパクトさ (m)</span>: <span id="slicMValue">10</span></label>
+                            <input type="range" id="slicM" min="1" max="40" step="1" value="10">
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="my-8 text-center">
@@ -328,6 +345,7 @@
                 'uploadLabel': '画像ファイルを選択:',
                 'basicAdjustmentsTitle': '基本調整',
                 'filtersTitle': 'フィルター処理',
+                'segmentationTitle': 'セグメンテーション', // New Section Title
                 'originalImageTitle': '元画像',
                 'processedImageTitle': '処理後画像',
                 'histogramTitle': '輝度ヒストグラム',
@@ -338,6 +356,7 @@
                 'sobelBtn': 'エッジ検出 (Sobel)',
                 'otsuBtn': '自動二値化 (大津法)',
                 'bilateralBtn': 'バイラテラルフィルター',
+                'slicBtn': 'スーパーピクセル (SLIC)',
                 'resetAllBtn': '全ての処理をリセット',
                 'brightnessLabel': '明るさ',
                 'contrastLabel': 'コントラスト',
@@ -348,6 +367,8 @@
                 'bilateralDiameterLabel': '直径',
                 'bilateralSigmaColorLabel': 'Sigma Color',
                 'bilateralSigmaSpaceLabel': 'Sigma Space',
+                'slicKLabel': 'スーパーピクセル数 (K)',
+                'slicMLabel': 'コンパクトさ (m)',
                 'errorMustUpload': 'まず画像をアップロードしてください。',
                 'errorImageLoadFailed': '画像の読み込みに失敗しました。',
                 'errorFileLoadFailed': 'ファイルの読み込みに失敗しました。',
@@ -360,7 +381,8 @@
                 'infoAllReset': '全ての処理とパラメータをリセットしました。',
                 'historyEmpty': '適用されたフィルターはありません',
                 'paramKSize': 'KSize', 'paramSigma': 'σ', 'paramStrength': 'Str',
-                'paramDiameter': 'Dia', 'paramSigmaColor': 'σCol', 'paramSigmaSpace': 'σSpc'
+                'paramDiameter': 'Dia', 'paramSigmaColor': 'σCol', 'paramSigmaSpace': 'σSpc',
+                'paramK': 'K', 'paramM': 'm'
             },
             'en': {
                 'pageTitle': 'Image Processing Tool',
@@ -369,6 +391,7 @@
                 'uploadLabel': 'Select Image File:',
                 'basicAdjustmentsTitle': 'Basic Adjustments',
                 'filtersTitle': 'Filters',
+                'segmentationTitle': 'Segmentation', // New Section Title
                 'originalImageTitle': 'Original Image',
                 'processedImageTitle': 'Processed Image',
                 'histogramTitle': 'Luminance Histogram',
@@ -379,6 +402,7 @@
                 'sobelBtn': 'Edge Detection (Sobel)',
                 'otsuBtn': 'Otsu Binarization',
                 'bilateralBtn': 'Bilateral Filter',
+                'slicBtn': 'Superpixels (SLIC)',
                 'resetAllBtn': 'Reset All Processing',
                 'brightnessLabel': 'Brightness',
                 'contrastLabel': 'Contrast',
@@ -389,6 +413,8 @@
                 'bilateralDiameterLabel': 'Diameter',
                 'bilateralSigmaColorLabel': 'Sigma Color',
                 'bilateralSigmaSpaceLabel': 'Sigma Space',
+                'slicKLabel': 'Number of Superpixels (K)',
+                'slicMLabel': 'Compactness (m)',
                 'errorMustUpload': 'Please upload an image first.',
                 'errorImageLoadFailed': 'Failed to load the image.',
                 'errorFileLoadFailed': 'Failed to read the file.',
@@ -401,7 +427,8 @@
                 'infoAllReset': 'All processing and parameters have been reset.',
                 'historyEmpty': 'No filters applied yet.',
                 'paramKSize': 'KSize', 'paramSigma': 'σ', 'paramStrength': 'Str',
-                'paramDiameter': 'Dia', 'paramSigmaColor': 'σCol', 'paramSigmaSpace': 'σSpc'
+                'paramDiameter': 'Dia', 'paramSigmaColor': 'σCol', 'paramSigmaSpace': 'σSpc',
+                'paramK': 'K', 'paramM': 'm'
             }
         };
         let currentLang = 'ja'; // Default language
@@ -413,41 +440,23 @@
         function updateUIText(lang) {
             if (!translations[lang]) return;
             currentLang = lang;
-            document.documentElement.lang = lang; // Update HTML lang attribute
-
+            document.documentElement.lang = lang;
             document.querySelectorAll('[data-translate]').forEach(el => {
                 const key = el.getAttribute('data-translate');
                 if (translations[lang][key]) {
                     el.textContent = translations[lang][key];
                 }
             });
-
-            // Update language switcher button active state
             if (lang === 'ja') {
-                langJaBtn.classList.add('active');
-                langEnBtn.classList.remove('active');
-                langJaBtn.classList.replace('bg-slate-300', 'bg-blue-500');
-                langJaBtn.classList.replace('text-slate-700', 'text-white');
-                langEnBtn.classList.replace('bg-blue-500', 'bg-slate-300');
-                langEnBtn.classList.replace('text-white', 'text-slate-700');
+                langJaBtn.classList.add('active'); langEnBtn.classList.remove('active');
             } else {
-                langEnBtn.classList.add('active');
-                langJaBtn.classList.remove('active');
-                langEnBtn.classList.replace('bg-slate-300', 'bg-blue-500');
-                langEnBtn.classList.replace('text-slate-700', 'text-white');
-                langJaBtn.classList.replace('bg-blue-500', 'bg-slate-300');
-                langJaBtn.classList.replace('text-white', 'text-slate-700');
+                langEnBtn.classList.add('active'); langJaBtn.classList.remove('active');
             }
             localStorage.setItem('preferredLang', lang);
-            updateFilterHistoryDisplay(); // Refresh history display with new lang
-            // If an image is loaded, refresh messages that might have been shown
-            // This is complex, better to just have new messages use the new lang.
-            // Reset might need to re-show its message in new lang if it was just clicked.
+            updateFilterHistoryDisplay();
         }
-
         langJaBtn.addEventListener('click', () => updateUIText('ja'));
         langEnBtn.addEventListener('click', () => updateUIText('en'));
-
 
         // --- DOM Elements (rest) ---
         const imageUpload = document.getElementById('imageUpload');
@@ -455,7 +464,6 @@
         const processedCanvas = document.getElementById('processedCanvas');
         const originalCtx = originalCanvas.getContext('2d');
         const processedCtx = processedCanvas.getContext('2d', { willReadFrequently: true });
-
         const histogramCanvas = document.getElementById('histogramCanvas');
         const histogramCtx = histogramCanvas.getContext('2d');
         const filterHistoryList = document.getElementById('filterHistoryList');
@@ -466,6 +474,7 @@
         const sobelBtn = document.getElementById('sobelBtn');
         const otsuBinarizationBtn = document.getElementById('otsuBinarizationBtn');
         const bilateralBtn = document.getElementById('bilateralBtn');
+        const slicBtn = document.getElementById('slicBtn');
         const resetBtn = document.getElementById('resetBtn');
 
         const brightnessSlider = document.getElementById('brightnessSlider');
@@ -487,22 +496,21 @@
         const bilateralSigmaColorValue = document.getElementById('bilateralSigmaColorValue');
         const bilateralSigmaSpaceSlider = document.getElementById('bilateralSigmaSpace');
         const bilateralSigmaSpaceValue = document.getElementById('bilateralSigmaSpaceValue');
+        const slicKSlider = document.getElementById('slicK');
+        const slicKValue = document.getElementById('slicKValue');
+        const slicMSlider = document.getElementById('slicM');
+        const slicMValue = document.getElementById('slicMValue');
         const messageBox = document.getElementById('messageBox');
 
-        // --- Global State ---
         let originalImage = null;
         let currentCSSAdjustedImageState = null;
         let lastAppliedPixelOperationState = null;
         let filterHistory = [];
 
-
-        // --- Utility Functions ---
         function showMessage(translationKey, duration = 3000, isError = false, params = {}) {
             let text = (translations[currentLang] && translations[currentLang][translationKey]) || translationKey;
             if (params) {
-                for (const key in params) {
-                    text = text.replace(`{${key}}`, params[key]);
-                }
+                for (const key in params) text = text.replace(`{${key}}`, params[key]);
             }
             messageBox.textContent = text;
             messageBox.className = 'message-box';
@@ -511,23 +519,18 @@
             setTimeout(() => messageBox.classList.remove('show'), duration);
         }
 
-        // --- Image Loading ---
         imageUpload.addEventListener('change', (event) => {
             const file = event.target.files[0];
             if (file) {
                 if (!file.type.startsWith('image/')) {
-                    showMessage('errorMustBeImage', 3000, true);
-                    imageUpload.value = '';
-                    return;
+                    showMessage('errorMustBeImage', 3000, true); imageUpload.value = ''; return;
                 }
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     originalImage = new Image();
                     originalImage.onload = () => {
-                        originalCanvas.width = originalImage.width;
-                        originalCanvas.height = originalImage.height;
-                        processedCanvas.width = originalImage.width;
-                        processedCanvas.height = originalImage.height;
+                        originalCanvas.width = originalImage.width; originalCanvas.height = originalImage.height;
+                        processedCanvas.width = originalImage.width; processedCanvas.height = originalImage.height;
                         originalCtx.drawImage(originalImage, 0, 0);
                         resetAll();
                     };
@@ -539,7 +542,6 @@
             }
         });
 
-        // --- Update and Display Filter History ---
         function updateFilterHistoryDisplay() {
             if (!filterHistoryList) return;
             filterHistoryList.innerHTML = '';
@@ -547,8 +549,7 @@
                 const li = document.createElement('li');
                 li.textContent = (translations[currentLang] && translations[currentLang]['historyEmpty']) || 'No filters applied yet.';
                 li.className = 'text-slate-500 text-sm italic px-2 py-1';
-                filterHistoryList.appendChild(li);
-                return;
+                filterHistoryList.appendChild(li); return;
             }
             filterHistory.forEach((item, index) => {
                 const li = document.createElement('li');
@@ -558,14 +559,14 @@
                     paramsStr = Object.entries(item.params)
                         .map(([key, value]) => {
                             let displayKey = key;
-                            if (translations[currentLang] && translations[currentLang][`param${key.charAt(0).toUpperCase() + key.slice(1)}`]) {
-                                displayKey = translations[currentLang][`param${key.charAt(0).toUpperCase() + key.slice(1)}`];
-                            } else if (translations[currentLang] && translations[currentLang][`param${key}`]) { // for custom abbr like KSize
+                            const paramKeyTranslation = `param${key.charAt(0).toUpperCase() + key.slice(1)}`;
+                            if (translations[currentLang] && translations[currentLang][paramKeyTranslation]) {
+                                displayKey = translations[currentLang][paramKeyTranslation];
+                            } else if (translations[currentLang] && translations[currentLang][`param${key}`]) {
                                 displayKey = translations[currentLang][`param${key}`];
                             }
                             return `${displayKey}: ${value}`;
-                        })
-                        .join(', ');
+                        }).join(', ');
                 }
                 const filterDisplayName = (translations[currentLang] && translations[currentLang][item.nameKey]) || item.nameKey;
                 li.textContent = `${index + 1}. ${filterDisplayName}${paramsStr ? ` (${paramsStr})` : ''}`;
@@ -573,13 +574,11 @@
             });
         }
 
-        // --- Add to History ---
-        function addFilterToHistory(filterNameKey, params = {}) { // Store key instead of translated name
+        function addFilterToHistory(filterNameKey, params = {}) {
             filterHistory.push({ nameKey: filterNameKey, params: { ...params } });
             updateFilterHistoryDisplay();
         }
 
-        // --- Apply CSS Adjustments and update base state ---
         function applyBaseCSSAdjustments() {
             if (!originalImage) return null;
             const brightness = parseFloat(brightnessSlider.value) / 100;
@@ -589,7 +588,6 @@
             if (brightness !== 1) filterString += `brightness(${brightness}) `;
             if (contrast !== 1) filterString += `contrast(${contrast}) `;
             if (blurCss > 0) filterString += `blur(${blurCss}px) `;
-
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = originalImage.width > 0 ? originalImage.width : 1;
             tempCanvas.height = originalImage.height > 0 ? originalImage.height : 1;
@@ -600,7 +598,6 @@
             return tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
         }
 
-        // --- Re-apply all pixel operation filters from history ---
         async function reapplyAllPixelFilters(baseImageData) {
             if (!baseImageData) return null;
             let currentImageData = new ImageData(
@@ -621,124 +618,58 @@
             return currentImageData;
         }
 
-        // --- Get Operation Function by Name Key (Helper for reapplication) ---
-        function getOperationFunctionByNameKey(nameKey, params) { // Use key
+        function getOperationFunctionByNameKey(nameKey, params) {
             switch (nameKey) {
-                case "grayscaleBtn":
-                    return (imageData) => { /* Grayscale logic */
-                        const data = imageData.data;
-                        for (let i = 0; i < data.length; i += 4) {
-                            const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                            data[i] = avg; data[i + 1] = avg; data[i + 2] = avg;
-                        }
-                    };
-                case "sharpenBtn":
-                    return (imageData) => { /* Sharpen logic */
-                        const strength = params.strength || 5;
-                        const sharpenKernel = [[0, -1, 0], [-1, strength, -1], [0, -1, 0]];
-                        convolve(imageData, sharpenKernel);
-                    };
-                case "gaussianBlurBtn":
-                    return (imageData) => { /* Gaussian logic */
-                        const kernelSize = params.kernelSize || 5;
-                        const sigma = params.sigma || 1.5;
-                        const gaussianKernel = generateGaussianKernel(kernelSize, sigma);
-                        convolve(imageData, gaussianKernel);
-                    };
-                case "sobelBtn":
-                    return (imageData) => sobelFilterLogic(imageData);
-                case "otsuBtn":
-                    return (imageData) => otsuBinarizationLogic(imageData, false);
-                case "bilateralBtn":
-                    return (imageData) => { /* Bilateral logic */
-                        const diameter = params.diameter || 5;
-                        const sigmaColor = params.sigmaColor || 50;
-                        const sigmaSpace = params.sigmaSpace || 50;
-                        bilateralFilterFn(imageData, diameter, sigmaColor, sigmaSpace);
-                    };
+                case "grayscaleBtn": return (imageData) => { const d=imageData.data; for(let i=0;i<d.length;i+=4){const a=(d[i]+d[i+1]+d[i+2])/3;d[i]=a;d[i+1]=a;d[i+2]=a;}};
+                case "sharpenBtn": return (imageData) => { const s=params.strength||5; const k=[[0,-1,0],[-1,s,-1],[0,-1,0]]; convolve(imageData,k);};
+                case "gaussianBlurBtn": return (imageData) => { const ks=params.kernelSize||5; const sig=params.sigma||1.5; const gk=generateGaussianKernel(ks,sig); convolve(imageData,gk);};
+                case "sobelBtn": return (imageData) => sobelFilterLogic(imageData);
+                case "otsuBtn": return (imageData) => otsuBinarizationLogic(imageData, false);
+                case "bilateralBtn": return (imageData) => { const dia=params.diameter||5; const sc=params.sigmaColor||50; const ss=params.sigmaSpace||50; bilateralFilterFn(imageData,dia,sc,ss);};
+                case "slicBtn": return (imageData) => { const k=params.K||200; const m=params.m||10; slicAlgorithm(imageData,k,m); };
                 default: return null;
             }
         }
 
-        function sobelFilterLogic(imageData) { /* ... Same as before ... */
-            const data = imageData.data; const width = imageData.width; const height = imageData.height;
-            const grayDataForSobel = new Uint8ClampedArray(data.length);
-            for (let i = 0; i < data.length; i += 4) {
-                const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                grayDataForSobel[i] = avg; grayDataForSobel[i+1] = avg; grayDataForSobel[i+2] = avg;
-                grayDataForSobel[i+3] = data[i+3];
-            }
-            const sobelXKernel = [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]];
-            const sobelYKernel = [[-1, -2, -1], [0, 0, 0], [1, 2, 1]];
-            const outData = new Uint8ClampedArray(data.length);
-            const inSobelData = new Uint8ClampedArray(grayDataForSobel);
-            for (let y = 0; y < height; y++) {
-                for (let x = 0; x < width; x++) {
-                    let gx = 0, gy = 0;
-                    for (let ky = 0; ky < 3; ky++) {
-                        for (let kx = 0; kx < 3; kx++) {
-                            const imgY = Math.min(height - 1, Math.max(0, y + ky - 1));
-                            const imgX = Math.min(width - 1, Math.max(0, x + kx - 1));
-                            const pixelVal = inSobelData[(imgY * width + imgX) * 4];
-                            gx += pixelVal * sobelXKernel[ky][kx];
-                            gy += pixelVal * sobelYKernel[ky][kx];
-                        }
-                    }
-                    const magnitude = Math.sqrt(gx * gx + gy * gy);
-                    const offset = (y * width + x) * 4;
-                    outData[offset] = magnitude; outData[offset + 1] = magnitude; outData[offset + 2] = magnitude;
-                    outData[offset + 3] = inSobelData[offset+3];
-                }
-            }
-            for(let i=0; i < data.length; i++) data[i] = outData[i];
+        function sobelFilterLogic(imageData) {
+            const data=imageData.data; const w=imageData.width; const h=imageData.height;
+            const g=new Uint8ClampedArray(data.length);
+            for(let i=0;i<data.length;i+=4){const a=(data[i]+data[i+1]+data[i+2])/3; g[i]=a;g[i+1]=a;g[i+2]=a;g[i+3]=data[i+3];}
+            const sx=[[-1,0,1],[-2,0,2],[-1,0,1]]; const sy=[[-1,-2,-1],[0,0,0],[1,2,1]];
+            const o=new Uint8ClampedArray(data.length); const ig=new Uint8ClampedArray(g);
+            for(let y=0;y<h;y++){for(let x=0;x<w;x++){let gx=0,gy=0;
+            for(let ky=0;ky<3;ky++){for(let kx=0;kx<3;kx++){
+                const iy=Math.min(h-1,Math.max(0,y+ky-1)); const ix=Math.min(w-1,Math.max(0,x+kx-1));
+                const pv=ig[(iy*w+ix)*4]; gx+=pv*sx[ky][kx]; gy+=pv*sy[ky][kx];}}
+            const m=Math.sqrt(gx*gx+gy*gy); const off=(y*w+x)*4;
+            o[off]=m;o[off+1]=m;o[off+2]=m;o[off+3]=ig[off+3];}}
+            for(let i=0;i<data.length;i++)data[i]=o[i];
         }
-        function otsuBinarizationLogic(imageData, showMsg = true) { /* ... Same as before ... */
-            const data = imageData.data; const width = imageData.width; const height = imageData.height;
-            const totalPixels = width * height; const grayHistogram = new Array(256).fill(0);
-            for (let i = 0; i < data.length; i += 4) {
-                const avg = Math.round((data[i] + data[i + 1] + data[i + 2]) / 3);
-                grayHistogram[avg]++;
-                data[i] = avg; data[i+1] = avg; data[i+2] = avg;
-            }
-            let sum = 0; for (let i = 0; i < 256; i++) sum += i * grayHistogram[i];
-            let sumB = 0, wB = 0, wF = 0, maxVariance = 0, threshold = 0;
-            for (let t = 0; t < 256; t++) {
-                wB += grayHistogram[t]; if (wB === 0) continue;
-                wF = totalPixels - wB; if (wF === 0) break;
-                sumB += t * grayHistogram[t];
-                const mB = sumB / wB; const mF = (sum - sumB) / wF;
-                const varianceBetween = wB * wF * (mB - mF) * (mB - mF);
-                if (varianceBetween > maxVariance) { maxVariance = varianceBetween; threshold = t; }
-            }
-            if (showMsg) showMessage('infoOtsuThreshold', 2000, false, {threshold});
-            else console.log(`Otsu Threshold (reapply): ${threshold}`);
-            for (let i = 0; i < data.length; i += 4) {
-                const val = data[i]; const binarizedVal = val > threshold ? 255 : 0;
-                data[i] = binarizedVal; data[i + 1] = binarizedVal; data[i + 2] = binarizedVal;
-            }
+        function otsuBinarizationLogic(imageData, showMsg = true) {
+            const d=imageData.data; const w=imageData.width; const h=imageData.height; const tp=w*h;
+            const hist=new Array(256).fill(0);
+            for(let i=0;i<d.length;i+=4){const a=Math.round((d[i]+d[i+1]+d[i+2])/3);hist[a]++;d[i]=a;d[i+1]=a;d[i+2]=a;}
+            let sum=0;for(let i=0;i<256;i++)sum+=i*hist[i];
+            let sumB=0,wB=0,wF=0,maxV=0,thresh=0;
+            for(let t=0;t<256;t++){wB+=hist[t];if(wB===0)continue;wF=tp-wB;if(wF===0)break;sumB+=t*hist[t];
+            const mB=sumB/wB;const mF=(sum-sumB)/wF;const vB=wB*wF*(mB-mF)**2;
+            if(vB>maxV){maxV=vB;thresh=t;}}
+            if(showMsg)showMessage('infoOtsuThreshold',2000,false,{threshold:thresh});
+            for(let i=0;i<d.length;i+=4){const v=d[i];const bv=v>thresh?255:0;d[i]=bv;d[i+1]=bv;d[i+2]=bv;}
         }
 
-        // --- Core Pixel Operation Application ---
         function applyAndRecordPixelOperation(operationFunction, filterNameKey, params = {}) {
-            if (!originalImage) {
-                showMessage('errorMustUpload', 3000, true); return;
-            }
-            const baseForThisOperation = filterHistory.length === 0 ? currentCSSAdjustedImageState : lastAppliedPixelOperationState;
-            if (!baseForThisOperation) {
-                showMessage('errorMustUpload', 3000, true); // Simplified error message
-                console.error("baseForThisOperation is null"); return;
-            }
+            if (!originalImage) { showMessage('errorMustUpload', 3000, true); return; }
+            const base = filterHistory.length === 0 ? currentCSSAdjustedImageState : lastAppliedPixelOperationState;
+            if (!base) { showMessage('errorMustUpload', 3000, true); console.error("Base image state is null for pixel op."); return; }
             const filterDisplayName = (translations[currentLang] && translations[currentLang][filterNameKey]) || filterNameKey;
-            showMessage('infoApplyingFilter', 1500, false, { filterName: filterDisplayName });
+            showMessage('infoApplyingFilter', 2500, false, { filterName: filterDisplayName });
 
             setTimeout(async () => {
                 try {
-                    const imageDataForOperation = new ImageData(
-                        new Uint8ClampedArray(baseForThisOperation.data),
-                        baseForThisOperation.width, baseForThisOperation.height
-                    );
-                    operationFunction(imageDataForOperation);
-                    processedCtx.putImageData(imageDataForOperation, 0, 0);
+                    const imageDataOp = new ImageData(new Uint8ClampedArray(base.data), base.width, base.height);
+                    operationFunction(imageDataOp);
+                    processedCtx.putImageData(imageDataOp, 0, 0);
                     lastAppliedPixelOperationState = processedCtx.getImageData(0, 0, processedCanvas.width, processedCanvas.height);
                     addFilterToHistory(filterNameKey, params);
                     drawHistogram();
@@ -750,14 +681,12 @@
             }, 50);
         }
 
-        // --- Event Listeners for Basic Adjustments ---
         [brightnessSlider, contrastSlider, blurSlider].forEach(slider => {
             slider.addEventListener('input', async () => {
                 if (!originalImage) return;
                 const valueDisplayId = slider.id.replace('Slider', 'Value');
                 const valueDisplayElement = document.getElementById(valueDisplayId);
                 if (valueDisplayElement) valueDisplayElement.textContent = slider.value;
-
                 currentCSSAdjustedImageState = applyBaseCSSAdjustments();
                 if (currentCSSAdjustedImageState) {
                     const finalImageData = await reapplyAllPixelFilters(currentCSSAdjustedImageState);
@@ -773,48 +702,16 @@
             });
         });
 
-        // --- Filter Button Event Listeners ---
-        grayscaleBtn.addEventListener('click', () => {
-            applyAndRecordPixelOperation((imageData) => { /* Grayscale logic */
-                const data = imageData.data;
-                for (let i = 0; i < data.length; i += 4) {
-                    const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                    data[i] = avg; data[i + 1] = avg; data[i + 2] = avg;
-                }
-            }, "grayscaleBtn");
-        });
-        sharpenBtn.addEventListener('click', () => {
-            const strength = parseFloat(sharpenStrengthSlider.value);
-            applyAndRecordPixelOperation((imageData) => { /* Sharpen logic */
-                const sharpenKernel = [[0, -1, 0], [-1, strength, -1], [0, -1, 0]];
-                convolve(imageData, sharpenKernel);
-            }, "sharpenBtn", { strength });
-        });
-        gaussianBtn.addEventListener('click', () => {
-            const kernelSize = parseInt(gaussianKernelSizeSlider.value);
-            const sigma = parseFloat(gaussianSigmaSlider.value);
-            applyAndRecordPixelOperation((imageData) => { /* Gaussian logic */
-                const gaussianKernel = generateGaussianKernel(kernelSize, sigma);
-                convolve(imageData, gaussianKernel);
-            }, "gaussianBlurBtn", { kernelSize, sigma });
-        });
-        sobelBtn.addEventListener('click', () => {
-            applyAndRecordPixelOperation(sobelFilterLogic, "sobelBtn");
-        });
-        otsuBinarizationBtn.addEventListener('click', () => {
-            applyAndRecordPixelOperation((imageData) => otsuBinarizationLogic(imageData, true), "otsuBtn");
-        });
-        bilateralBtn.addEventListener('click', () => {
-            const diameter = parseInt(bilateralDiameterSlider.value);
-            const sigmaColor = parseFloat(bilateralSigmaColorSlider.value);
-            const sigmaSpace = parseFloat(bilateralSigmaSpaceSlider.value);
-            applyAndRecordPixelOperation((imageData) => { /* Bilateral logic */
-                bilateralFilterFn(imageData, diameter, sigmaColor, sigmaSpace);
-            }, "bilateralBtn", { diameter, sigmaColor, sigmaSpace });
-        });
+        grayscaleBtn.addEventListener('click', () => applyAndRecordPixelOperation((imageData) => {const d=imageData.data;for(let i=0;i<d.length;i+=4){const a=(d[i]+d[i+1]+d[i+2])/3;d[i]=a;d[i+1]=a;d[i+2]=a;}}, "grayscaleBtn"));
+        sharpenBtn.addEventListener('click', () => { const str=parseFloat(sharpenStrengthSlider.value); applyAndRecordPixelOperation((imageData) => {const k=[[0,-1,0],[-1,str,-1],[0,-1,0]]; convolve(imageData,k);}, "sharpenBtn", {strength: str});});
+        gaussianBtn.addEventListener('click', () => { const ks=parseInt(gaussianKernelSizeSlider.value); const sig=parseFloat(gaussianSigmaSlider.value); applyAndRecordPixelOperation((imageData) => {const gk=generateGaussianKernel(ks,sig); convolve(imageData,gk);}, "gaussianBlurBtn", {kernelSize: ks, sigma: sig});});
+        sobelBtn.addEventListener('click', () => applyAndRecordPixelOperation(sobelFilterLogic, "sobelBtn"));
+        otsuBinarizationBtn.addEventListener('click', () => applyAndRecordPixelOperation((imageData) => otsuBinarizationLogic(imageData, true), "otsuBtn"));
+        bilateralBtn.addEventListener('click', () => { const dia=parseInt(bilateralDiameterSlider.value); const sc=parseFloat(bilateralSigmaColorSlider.value); const ss=parseFloat(bilateralSigmaSpaceSlider.value); applyAndRecordPixelOperation((imageData) => {bilateralFilterFn(imageData,dia,sc,ss);}, "bilateralBtn", {diameter: dia, sigmaColor: sc, sigmaSpace: ss});});
+        slicBtn.addEventListener('click', () => { const kVal=parseInt(slicKSlider.value); const mVal=parseFloat(slicMSlider.value); applyAndRecordPixelOperation((imageData) => {slicAlgorithm(imageData, kVal, mVal);}, "slicBtn", {K: kVal, m: mVal});});
 
-        // --- Convolution and Kernel Generation (existing) ---
-        function generateGaussianKernel(size, sigma) { /* ... Same as before ... */
+
+        function generateGaussianKernel(size, sigma) {
             if (size % 2 === 0) size++;
             const kernel = Array(size).fill(null).map(() => Array(size).fill(0));
             const radius = Math.floor(size / 2); let sum = 0;
@@ -831,7 +728,7 @@
                 }
             } return kernel;
         }
-        function convolve(imageData, kernel) { /* ... Same as before ... */
+        function convolve(imageData, kernel) {
             const srcData = imageData.data; const width = imageData.width; const height = imageData.height;
             const kernelSize = kernel.length; const halfKernel = Math.floor(kernelSize / 2);
             const outData = new Uint8ClampedArray(srcData.length);
@@ -855,7 +752,7 @@
             }
             for(let i=0; i < srcData.length; i++) imageData.data[i] = outData[i];
         }
-        function bilateralFilterFn(imageData, diameter, sigmaColor, sigmaSpace) { /* ... Same as before ... */
+        function bilateralFilterFn(imageData, diameter, sigmaColor, sigmaSpace) {
             const data = imageData.data; const srcData = new Uint8ClampedArray(imageData.data);
             const width = imageData.width; const height = imageData.height;
             const radius = Math.floor(diameter / 2);
@@ -889,7 +786,90 @@
             }
         }
 
-        // --- Parameter Slider UI Update Listeners ---
+        function slicAlgorithm(imageData, numSuperpixelsK, compactnessM) {
+            const width = imageData.width; const height = imageData.height;
+            const numPixels = width * height; const data = imageData.data;
+            const S = Math.sqrt(numPixels / numSuperpixelsK);
+            let clusters = []; let numClustersY = Math.round(height / S);
+            let numClustersX = Math.round(width / S); let actualK = 0;
+            for (let i = 0; i < numClustersY; i++) {
+                for (let j = 0; j < numClustersX; j++) {
+                    let y = Math.round(i * S + S / 2); let x = Math.round(j * S + S / 2);
+                    if (x < width && y < height) {
+                        let index = (y * width + x) * 4;
+                        clusters.push({ x, y, r: data[index], g: data[index + 1], b: data[index + 2], id: actualK });
+                        actualK++;
+                    }
+                }
+            }
+            numSuperpixelsK = actualK;
+            if (numSuperpixelsK === 0) { console.warn("SLIC: No clusters initialized."); return; }
+            const numIterations = 5;
+            let pixelLabels = new Int32Array(numPixels).fill(-1);
+            let distances = new Float32Array(numPixels).fill(Infinity);
+            for (let iter = 0; iter < numIterations; iter++) {
+                distances.fill(Infinity);
+                for (let k = 0; k < numSuperpixelsK; k++) {
+                    const cluster = clusters[k];
+                    const yMin = Math.max(0, Math.floor(cluster.y - S));
+                    const yMax = Math.min(height, Math.ceil(cluster.y + S +1));
+                    const xMin = Math.max(0, Math.floor(cluster.x - S));
+                    const xMax = Math.min(width, Math.ceil(cluster.x + S +1));
+                    for (let y = yMin; y < yMax; y++) {
+                        for (let x = xMin; x < xMax; x++) {
+                            const pixelIndex = y * width + x;
+                            const rPx = data[pixelIndex * 4], gPx = data[pixelIndex * 4 + 1], bPx = data[pixelIndex * 4 + 2];
+                            const dcSq = (rPx - cluster.r)**2 + (gPx - cluster.g)**2 + (bPx - cluster.b)**2;
+                            const dsSq = (x - cluster.x)**2 + (y - cluster.y)**2;
+                            const distSq = dcSq + (dsSq / (S*S)) * (compactnessM * compactnessM);
+                            if (distSq < distances[pixelIndex]) {
+                                distances[pixelIndex] = distSq; pixelLabels[pixelIndex] = cluster.id;
+                            }
+                        }
+                    }
+                }
+                let newClusters = Array(numSuperpixelsK).fill(null).map((_, idx) => ({ sumX:0,sumY:0,sumR:0,sumG:0,sumB:0,count:0,id:idx }));
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        const pixelIndex = y * width + x; const label = pixelLabels[pixelIndex];
+                        if (label !== -1 && label < numSuperpixelsK) {
+                            newClusters[label].sumX += x; newClusters[label].sumY += y;
+                            newClusters[label].sumR += data[pixelIndex*4]; newClusters[label].sumG += data[pixelIndex*4+1];
+                            newClusters[label].sumB += data[pixelIndex*4+2]; newClusters[label].count++;
+                        }
+                    }
+                }
+                for (let k = 0; k < numSuperpixelsK; k++) {
+                    if (newClusters[k].count > 0) {
+                        clusters[k].x = Math.round(newClusters[k].sumX / newClusters[k].count);
+                        clusters[k].y = Math.round(newClusters[k].sumY / newClusters[k].count);
+                        clusters[k].r = Math.round(newClusters[k].sumR / newClusters[k].count);
+                        clusters[k].g = Math.round(newClusters[k].sumG / newClusters[k].count);
+                        clusters[k].b = Math.round(newClusters[k].sumB / newClusters[k].count);
+                    }
+                }
+            }
+            const outputData = new Uint8ClampedArray(data.length);
+            const boundaryColorR = 0, boundaryColorG = 0, boundaryColorB = 0;
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const pixelIndex = y * width + x; const label = pixelLabels[pixelIndex];
+                    let isBoundary = false;
+                    if (label !== -1) {
+                        if (x < width - 1) { const rightLabel = pixelLabels[pixelIndex + 1]; if (rightLabel !== -1 && rightLabel !== label) isBoundary = true; }
+                        if (!isBoundary && y < height - 1) { const bottomLabel = pixelLabels[pixelIndex + width]; if (bottomLabel !== -1 && bottomLabel !== label) isBoundary = true; }
+                    }
+                    const outOffset = pixelIndex * 4;
+                    if (isBoundary) {
+                        outputData[outOffset]=boundaryColorR; outputData[outOffset+1]=boundaryColorG; outputData[outOffset+2]=boundaryColorB; outputData[outOffset+3]=255;
+                    } else {
+                        outputData[outOffset]=data[outOffset]; outputData[outOffset+1]=data[outOffset+1]; outputData[outOffset+2]=data[outOffset+2]; outputData[outOffset+3]=data[outOffset+3];
+                    }
+                }
+            }
+            for (let i = 0; i < data.length; i++) imageData.data[i] = outputData[i];
+        }
+
         function setupSliderListenerWithValueUpdate(sliderElement, valueElement) {
             if (sliderElement && valueElement) {
                 sliderElement.addEventListener('input', () => valueElement.textContent = sliderElement.value);
@@ -902,11 +882,12 @@
         setupSliderListenerWithValueUpdate(bilateralDiameterSlider, bilateralDiameterValue);
         setupSliderListenerWithValueUpdate(bilateralSigmaColorSlider, bilateralSigmaColorValue);
         setupSliderListenerWithValueUpdate(bilateralSigmaSpaceSlider, bilateralSigmaSpaceValue);
+        setupSliderListenerWithValueUpdate(slicKSlider, slicKValue);
+        setupSliderListenerWithValueUpdate(slicMSlider, slicMValue);
         setupSliderListenerWithValueUpdate(brightnessSlider, brightnessValue);
         setupSliderListenerWithValueUpdate(contrastSlider, contrastValue);
         setupSliderListenerWithValueUpdate(blurSlider, blurValue);
 
-        // --- Reset Functionality ---
         function resetAll() {
             brightnessSlider.value = 100; brightnessValue.textContent = 100;
             contrastSlider.value = 100; contrastValue.textContent = 100;
@@ -917,6 +898,8 @@
             bilateralDiameterSlider.value = 5; bilateralDiameterValue.textContent = 5;
             bilateralSigmaColorSlider.value = 50; bilateralSigmaColorValue.textContent = 50;
             bilateralSigmaSpaceSlider.value = 50; bilateralSigmaSpaceValue.textContent = 50;
+            slicKSlider.value = 200; slicKValue.textContent = 200;
+            slicMSlider.value = 10; slicMValue.textContent = 10;
             filterHistory = [];
             updateFilterHistoryDisplay();
             if (originalImage) {
@@ -946,14 +929,10 @@
             lastAppliedPixelOperationState = null;
         }
         resetBtn.addEventListener('click', () => {
-            if (!originalImage) {
-                showMessage('infoNoImageToReset', 3000, true); return;
-            }
-            resetAll();
-            showMessage('infoAllReset', 2000);
+            if (!originalImage) { showMessage('infoNoImageToReset', 3000, true); return; }
+            resetAll(); showMessage('infoAllReset', 2000);
         });
 
-        // --- Histogram Drawing ---
         function drawHistogram() {
             if (!processedCanvas.width || !processedCanvas.height || !processedCtx ) {
                  histogramCtx.clearRect(0, 0, histogramCanvas.width, histogramCanvas.height); return;
@@ -961,7 +940,7 @@
             try {
                 const imageDataToAnalyze = processedCtx.getImageData(0, 0, processedCanvas.width, processedCanvas.height);
                 const data = imageDataToAnalyze.data;
-                const histogramData = new Array(256).fill(0); // Renamed to avoid conflict
+                const histogramData = new Array(256).fill(0);
                 for (let i = 0; i < data.length; i += 4) {
                     const r = data[i], g = data[i + 1], b = data[i + 2];
                     const brightness = Math.round((r + g + b) / 3);
@@ -970,7 +949,7 @@
                 histogramCtx.clearRect(0, 0, histogramCanvas.width, histogramCanvas.height);
                 const maxFreq = Math.max(1, ...histogramData);
                 const barWidth = histogramCanvas.width / 256;
-                histogramCtx.fillStyle = '#4b5563'; // slate-600
+                histogramCtx.fillStyle = '#4b5563';
                 for (let i = 0; i < 256; i++) {
                     const barHeight = (histogramData[i] / maxFreq) * histogramCanvas.height;
                     histogramCtx.fillRect(i * barWidth, histogramCanvas.height - barHeight, barWidth, barHeight);
@@ -978,13 +957,12 @@
             } catch (e) { console.error("Error drawing histogram:", e); }
         }
 
-        // --- Initial Setup ---
         document.addEventListener('DOMContentLoaded', () => {
             const preferredLang = localStorage.getItem('preferredLang');
             if (preferredLang && translations[preferredLang]) {
                 updateUIText(preferredLang);
             } else {
-                updateUIText('ja'); // Default to Japanese
+                updateUIText('ja');
             }
             resetAll();
             updateFilterHistoryDisplay();
