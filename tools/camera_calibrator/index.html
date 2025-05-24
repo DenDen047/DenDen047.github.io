@@ -679,6 +679,7 @@
                 this.objectPoints = [];
                 this.imagePoints = [];
                 this.calibrationResult = null;
+                window.debugMatricesOnce = true; // Add a flag for one-time matrix logging
 
                 this.setupEventListeners();
                 this.initApp();
@@ -1474,7 +1475,7 @@
 
                     const aspect = container.clientWidth / container.clientHeight;
                     camera3D = new THREE.PerspectiveCamera(50, aspect, 1, 20000); // Near: 1mm, Far: 20000mm (20m)
-                    camera3D.position.set(400, 400, 600); // Initial position in mm (e.g., 40cm x 40cm x 60cm away)
+                    camera3D.position.set(0, 400, 200); // Initial position: in front and above to view XY plane checkerboard
                     console.log('Camera created at position (mm):', camera3D.position);
 
                     // Renderer setup
@@ -1503,7 +1504,7 @@
                     controls3D.screenSpacePanning = false;
                     controls3D.minDistance = 10;    // Min distance 10mm
                     controls3D.maxDistance = 10000; // Max distance 10000mm (10m)
-                    controls3D.zoomSpeed = 3.0; // Increase zoom speed (default is 1.0)
+                    controls3D.zoomSpeed = 5.0; // Further increase zoom speed (default is 1.0)
                     console.log('OrbitControls created (distances in mm)');
                 } catch (error) {
                     console.error('Error setting up OrbitControls:', error);
@@ -1523,10 +1524,11 @@
                 directionalLight2.position.set(-10, -10, 5);
                 scene3D.add(directionalLight2);
 
-                                // Grid and axes with better visibility
+                // Grid in XZ plane (floor) for reference - this is just for visual reference
                 gridHelper3D = new THREE.GridHelper(2000, 20, 0xcccccc, 0x999999); // 2000mm x 2000mm grid (2m x 2m), 20 divisions (100mm spacing)
                 scene3D.add(gridHelper3D);
 
+                // Axes helper at origin
                 axesHelper3D = new THREE.AxesHelper(300); // Axes length 300mm (30cm)
                 scene3D.add(axesHelper3D);
 
@@ -1600,7 +1602,7 @@
 
                 document.getElementById('resetVisualizationView').addEventListener('click', () => {
                     if (camera3D && controls3D) {
-                        camera3D.position.set(400, 400, 600); // Match new mm-based initial position
+                        camera3D.position.set(0, 400, 200); // Reset to view XY plane checkerboard from front and above
                         controls3D.target.set(0, 0, 0);
                         controls3D.update();
                     }
@@ -1641,56 +1643,60 @@
                 const cameraMatrix = result.cameraMatrix || [];
                 const imageSize = result.imageSize || [640, 480];
 
-                if (!rvecs || !tvecs || rvecs.length === 0) {
-                    console.log('No camera poses available for visualization');
-                    return;
-                }
+                // Fetch board parameters for center offset
+                const cols = settings.boardCols || parseInt(document.getElementById('boardCols').value) || 11;
+                const rows = settings.boardRows || parseInt(document.getElementById('boardRows').value) || 7;
+                const squareSizeVal = settings.squareSize || parseFloat(document.getElementById('squareSize').value) || 25;
+                const xOffset = ((cols - 1) * squareSizeVal) / 2;
+                const yOffset = ((rows - 1) * squareSizeVal) / 2; // Corrected: yOffset should be positive for subtraction in OpenCV coords
 
-                console.log(`Visualizing ${rvecs.length} camera poses`);
-                console.log('Settings:', settings);
-
-                // Create checkerboard pattern in 3D space - get values safely
-                const boardCols = settings.boardCols || parseInt(document.getElementById('boardCols').value) || 11;
-                const boardRows = settings.boardRows || parseInt(document.getElementById('boardRows').value) || 7;
-                // --- CRITICAL CHANGE: Use squareSize directly in mm ---
-                const squareSize = (settings.squareSize || parseFloat(document.getElementById('squareSize').value) || 25);
-                console.log(`Using squareSize: ${squareSize} mm for 3D checkerboard`);
-
-                                // Add cameras and checkerboards for each image
                 for (let i = 0; i < rvecs.length; i++) {
-                    try {
-                        const rvec = rvecs[i];
-                        const tvec = tvecs[i];
+                    const rvec = rvecs[i];
+                    const tvec = tvecs[i];
+                    const imageName = this.images[i] ? this.images[i].name : `Image ${i+1}`; // Get image name
 
-                        if (!rvec || !tvec || rvec.length !== 3 || tvec.length !== 3) {
-                            console.warn(`Invalid camera pose data for image ${i}`);
-                            continue;
-                        }
-
-                        console.log(`Processing camera ${i + 1}:`, { rvec, tvec });
-
-                        // Convert rotation vector to rotation matrix
-                        const R = this.rodrigues(rvec);
-
-                        // Camera position in world coordinates
-                        const cameraPos = this.multiplyMatrixVector(this.transposeMatrix(R), this.scaleVector(tvec, -1));
-
-                        console.log(`Camera ${i + 1} position:`, cameraPos);
-
-                        // Create camera representation
-                        this.addCameraVisualization(cameraPos, R, i);
-
-                        // Create checkerboard visualization (only once)
-                        if (i === 0) {
-                            this.addCheckerboardVisualization(boardCols, boardRows, squareSize, i);
-                        }
-
-                        // Create frustum visualization
-                        this.addFrustumVisualization(cameraPos, R, cameraMatrix, imageSize, i);
-                    } catch (error) {
-                        console.error(`Error processing camera ${i + 1}:`, error);
+                    if (!rvec || !tvec || rvec.length !== 3 || tvec.length !== 3) {
+                        console.warn(`Invalid camera pose data for image ${i}`);
                         continue;
                     }
+
+                    console.log(`\n=== Camera ${i + 1} Debug Info ===`);
+                    console.log('rvec:', rvec);
+                    console.log('tvec:', tvec);
+                    console.log('xOffset:', xOffset, 'yOffset:', yOffset);
+
+                    // Convert rotation vector to rotation matrix
+                    const R = this.rodrigues(rvec);
+                    console.log('Rotation matrix R:', R);
+
+                    // Camera position in OpenCV world coordinates (relative to board origin)
+                    let cameraPosOpenCV = this.multiplyMatrixVector(this.transposeMatrix(R), this.scaleVector(tvec, -1));
+                    console.log('Camera position (before recentering):', cameraPosOpenCV);
+
+                    // Recenter to board mesh center at origin (still in OpenCV coordinates)
+                    cameraPosOpenCV[0] -= xOffset;
+                    cameraPosOpenCV[1] -= yOffset; // Now correctly subtracts positive yOffset
+                    console.log('Camera position (after recentering):', cameraPosOpenCV);
+
+                    // Convert to Three.js coordinate system
+                    const cameraPos = this.convertOpenCVToThreeJS(cameraPosOpenCV);
+                    console.log('Camera position (Three.js coords):', cameraPos);
+                    console.log('Expected: Camera should be above ground (Z > 0) and positioned correctly relative to checkerboard');
+
+                    // Additional debug for coordinate conversion
+                    console.log('Coordinate conversion test:');
+                    console.log(`OpenCV(${cameraPosOpenCV[0].toFixed(1)}, ${cameraPosOpenCV[1].toFixed(1)}, ${cameraPosOpenCV[2].toFixed(1)}) -> Three.js(${cameraPos[0].toFixed(1)}, ${cameraPos[1].toFixed(1)}, ${cameraPos[2].toFixed(1)})`);
+
+                    // Create camera representation (pass OpenCV coordinates, rotation matrix, and image name)
+                    this.addCameraVisualization(cameraPosOpenCV, R, imageName, i);
+
+                    // Create checkerboard visualization (only once)
+                    if (i === 0) {
+                        this.addCheckerboardVisualization(cols, rows, squareSizeVal, i);
+                    }
+
+                    // Create frustum visualization (pass OpenCV coordinates and rotation matrix)
+                    this.addFrustumVisualization(cameraPosOpenCV, R, cameraMatrix, imageSize, i);
                 }
 
                 // Adjust camera view to fit all objects
@@ -1699,7 +1705,7 @@
                 console.log('3D visualization update completed successfully');
             }
 
-            addCameraVisualization(position, rotationMatrix, index) {
+            addCameraVisualization(position, rotationMatrix, imageName, index) {
                 try {
                     if (!position || position.length !== 3 || !rotationMatrix) {
                         console.error('Invalid camera visualization data:', { position, rotationMatrix, index });
@@ -1714,59 +1720,61 @@
                     });
                     const cameraMesh = new THREE.Mesh(cameraGeometry, cameraMaterial);
 
-                // Position camera
-                cameraMesh.position.set(position[0], position[1], position[2]);
+                    // Convert position to Three.js coordinate system (OpenCV: Y-down, Three.js: Y-up)
+                    const threejsPosition = this.convertOpenCVToThreeJS(position);
+                    cameraMesh.position.set(threejsPosition[0], threejsPosition[1], threejsPosition[2]);
 
-                // Apply rotation
-                const rotationQuaternion = new THREE.Quaternion().setFromRotationMatrix(
-                    new THREE.Matrix4().fromArray([
-                        rotationMatrix[0][0], rotationMatrix[0][1], rotationMatrix[0][2], 0,
-                        rotationMatrix[1][0], rotationMatrix[1][1], rotationMatrix[1][2], 0,
-                        rotationMatrix[2][0], rotationMatrix[2][1], rotationMatrix[2][2], 0,
-                        0, 0, 0, 1
-                    ])
-                );
-                cameraMesh.setRotationFromQuaternion(rotationQuaternion);
+                    // Restore complex rotation
+                    const transformMatrix = this.createThreeJSMatrixFromOpenCV(rotationMatrix);
+                    cameraMesh.setRotationFromMatrix(transformMatrix);
 
-                camerasGroup.add(cameraMesh);
+                  camerasGroup.add(cameraMesh);
 
-                                // Add camera number label (larger and more visible)
+                  // Add camera label (image name)
                 const canvas = document.createElement('canvas');
                 const context = canvas.getContext('2d');
-                canvas.width = 128; // Larger canvas
-                canvas.height = 64;
-                context.fillStyle = '#FFD700'; // Gold background for better visibility
-                context.fillRect(0, 0, 128, 64);
+                const labelText = imageName.length > 15 ? imageName.substring(0,13) + '...' : imageName; // Truncate if too long
+                const fontSize = 18;
+                context.font = `bold ${fontSize}px Arial`;
+                const textMetrics = context.measureText(labelText);
+                canvas.width = textMetrics.width + 20; // Add padding
+                canvas.height = fontSize + 10;      // Add padding
+
+                // Re-apply font after canvas resize
+                context.font = `bold ${fontSize}px Arial`;
+                context.fillStyle = '#FFD700'; // Gold background
+                context.fillRect(0, 0, canvas.width, canvas.height);
                 context.strokeStyle = '#000000';
                 context.lineWidth = 2;
-                context.strokeRect(2, 2, 124, 60);
+                context.strokeRect(1, 1, canvas.width-2, canvas.height-2);
                 context.fillStyle = '#000000';
-                context.font = 'bold 24px Arial'; // Larger, bold font
                 context.textAlign = 'center';
-                context.fillText((index + 1).toString(), 64, 40);
+                context.textBaseline = 'middle';
+                context.fillText(labelText, canvas.width / 2, canvas.height / 2);
 
                 const texture = new THREE.CanvasTexture(canvas);
                 const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
                 const sprite = new THREE.Sprite(spriteMaterial);
-                sprite.position.set(position[0], position[1], position[2] + 20); // Adjusted offset (20mm above camera)
-                                sprite.scale.set(30, 15, 1); // Scale for label visibility (adjust as needed)
+                sprite.position.set(threejsPosition[0], threejsPosition[1], threejsPosition[2] + 20); // Use converted Three.js position
+                sprite.scale.set(30, 15, 1); // Scale for label visibility (adjust as needed)
 
                 camerasGroup.add(sprite);
-                console.log(`Camera ${index + 1} visualization added successfully`);
+                console.log(`Camera ${index + 1} (${imageName}) visualization added successfully`);
                 } catch (error) {
-                    console.error(`Error adding camera ${index + 1} visualization:`, error);
+                    console.error(`Error adding camera ${index + 1} (${imageName}) visualization:`, error);
                 }
             }
 
                         addCheckerboardVisualization(cols, rows, squareSize, index) {
                 try {
-                    // squareSize is now directly in mm, scaleFactor should represent model scale if any, otherwise 1.
-                    const scaleFactor = 1;
+                    const boardWidth = cols * squareSize;
+                    const boardHeight = rows * squareSize;
+
                     const boardGeometry = new THREE.PlaneGeometry(
-                        cols * squareSize * scaleFactor, // Total width in mm
-                        rows * squareSize * scaleFactor, // Total height in mm
-                        cols,
-                        rows
+                        boardWidth, // Total width in mm
+                        boardHeight, // Total height in mm
+                        cols, // Width segments
+                        rows  // Height segments
                     );
 
                 // Create checkerboard texture
@@ -1792,25 +1800,110 @@
                 }
 
                                 const texture = new THREE.CanvasTexture(canvas);
-                                texture.anisotropy = renderer3D.capabilities.getMaxAnisotropy(); // Improve texture quality at sharp angles
-                                // texture.wrapS = THREE.ClampToEdgeWrapping; // Default is ClampToEdgeWrapping
-                                // texture.wrapT = THREE.ClampToEdgeWrapping;
-                                // No repeat needed if the texture is generated to fit exactly
+                                texture.anisotropy = renderer3D.capabilities.getMaxAnisotropy();
+                                texture.minFilter = THREE.LinearMipmapLinearFilter; // Quality filtering
+                                texture.magFilter = THREE.LinearFilter;         // Quality filtering
+                                // texture.wrapS = THREE.ClampToEdgeWrapping; // Default, should be fine if texture fits UVs
+                                // texture.wrapT = THREE.ClampToEdgeWrapping; // Default, should be fine if texture fits UVs
+                                texture.needsUpdate = true; // Important to apply changes
 
                 const boardMaterial = new THREE.MeshLambertMaterial({
                     map: texture,
-                    transparent: false, // Make more opaque for better visibility
-                    side: THREE.DoubleSide
+                    transparent: false,
+                    side: THREE.FrontSide // Ensure only the front side is rendered by default
                 });
 
                 const boardMesh = new THREE.Mesh(boardGeometry, boardMaterial);
-
-                                // Position at origin (world coordinates) for each checkerboard
-                boardMesh.position.set(0, 0, 0);
+                // Keep checkerboard in XY plane (Z=0) as user specified that ground plane is XY plane
+                // PlaneGeometry default creates in XY plane, normal along +Z.
+                // To make it lie on Three.js XY ground (Z=0) and face +Y (forward):
+                // 1. Rotate -90 deg around X-axis to make it lie on XZ plane (Y=0), facing +Y.
+                // 2. Then rotate -90 deg around new Z-axis to make it lie on XY plane (Z=0), facing +Y.
+                // Simpler: For ground XY plane, texture facing +Z (up)
+                // boardMesh.rotation.x = -Math.PI / 2; // Makes it lie on XZ plane, facing +Y
+                // If ground is XY plane (Z=0) and we want checkerboard on this ground, facing UP (+Z_threejs)
+                // then no initial rotation is needed for the PlaneGeometry itself if its texture is on its +Z face.
+                // However, OpenCV points are on its XY (Z=0). And our Three.js ground is XY (Z=0).
+                // So the checkerboard should be on Z=0, with its pattern facing the cameras (which are typically at Z>0).
+                // Let's assume the texture is on the +Z face of the PlaneGeometry.
+                // And PlaneGeometry is in XY plane (Z=0).
+                // The cameras are expected to be in front (+Y in Three.js) and above (+Z in Three.js).
+                // So the board should be on the ground (Z=0) and its pattern visible to cameras.
+                // If cameras are at +Y (forward), +Z (up), board at Z=0, it should face them.
+                // Default PlaneGeometry is in XY, normal along +Z. This is what we want if Z is up.
+                // So, no rotation for the board itself if Z is up.
+                console.log('\n=== Checkerboard Debug Info ===');
+                console.log('Board size (cols x rows):', cols, 'x', rows);
+                console.log('Square size:', squareSize);
+                console.log('Board dimensions (mm):', boardWidth, 'x', boardHeight);
+                console.log('Board position:', boardMesh.position);
+                console.log('Board rotation:', boardMesh.rotation);
 
                 checkboardsGroup.add(boardMesh);
-                console.log('Checkerboard visualization added successfully');
-                } catch (error) {
+                console.log('Checkerboard 3D model added successfully');
+
+                // --- Add corner points visualization on the 3D checkerboard model ---
+                const pointsGroup = new THREE.Group();
+                boardMesh.add(pointsGroup); // Add points as children of the boardMesh for local coordinates
+
+                const objectPointsForBoard = [];
+                // These are the *inner* corners, so boardCols and boardRows from input are patternSize (e.g., 9x6 for a 10x7 board)
+                const patternCols = parseInt(document.getElementById('boardCols').value);
+                const patternRows = parseInt(document.getElementById('boardRows').value);
+
+                for (let r = 0; r < patternRows; r++) {
+                    for (let c = 0; c < patternCols; c++) {
+                        // Coordinates are relative to the top-left corner of the pattern, Z=0
+                        // The PlaneGeometry is centered, so we need to offset these points.
+                        objectPointsForBoard.push({
+                            x: (c * squareSize) - ( (patternCols-1) * squareSize / 2 ),
+                            y: -(r * squareSize) + ( (patternRows-1) * squareSize / 2 ), // Y is inverted in 3D vs image typically
+                            z: 0.1 // Slightly above the board plane to avoid z-fighting
+                        });
+                    }
+                }
+
+                const pointGeometry = new THREE.SphereGeometry(squareSize * 0.1, 16, 8); // Point size relative to squareSize
+
+                objectPointsForBoard.forEach((p, i) => {
+                    let pointColor;
+                    // Match 2D visualization colors
+                    if (i === 0) {
+                        pointColor = 0xff0000; // First corner: Red
+                    } else if (i === objectPointsForBoard.length - 1) {
+                        pointColor = 0xff00ff; // Last corner: Purple
+                    } else {
+                        pointColor = 0x00ff64; // Other detected corners: Green
+                    }
+                    // Note: Blue for corner boundary is harder to define directly in 3D from these points alone.
+                    // It typically refers to the outer contour of the detected grid in 2D.
+
+                    const pointMaterial = new THREE.MeshBasicMaterial({ color: pointColor });
+                    const pointMesh = new THREE.Mesh(pointGeometry, pointMaterial);
+                    pointMesh.position.set(p.x, p.y, p.z);
+                    pointsGroup.add(pointMesh);
+
+                    // Add number labels (optional, can get very cluttered in 3D)
+                    if (i < 10) { // Only label first 10 points
+                        const labelCanvas = this.createTextCanvas(
+                            (i + 1).toString(),
+                            18,         // Reduced fontSize for 3D labels
+                            '#FFFFFF',  // textColor
+                            'rgba(0,0,0,0.7)', // backgroundColor (semi-transparent black)
+                            2           // Reduced padding
+                        );
+                        const labelTexture = new THREE.CanvasTexture(labelCanvas);
+                        const labelMaterial = new THREE.SpriteMaterial({ map: labelTexture });
+                        const labelSprite = new THREE.Sprite(labelMaterial);
+                        labelSprite.position.set(p.x, p.y, p.z + squareSize * 0.25); // Adjusted Z offset slightly
+                        const baseScale = squareSize * 0.04; // Significantly reduced baseScale for labels
+                        labelSprite.scale.set(labelCanvas.width * baseScale, labelCanvas.height * baseScale, 1.0);
+                        pointsGroup.add(labelSprite);
+                    }
+                });
+                console.log(`Added ${objectPointsForBoard.length} corner points to 3D checkerboard model.`);
+
+            } catch (error) {
                     console.error('Error adding checkerboard visualization:', error);
                 }
             }
@@ -1829,12 +1922,13 @@
                 // Define frustum depth (in mm)
                 const frustumDepth = 100; // Frustum depth 100mm (10cm)
 
-                // Calculate frustum corners at frustum depth
+                // Calculate frustum corners at frustum depth in camera coordinate system
+                // In OpenCV camera coordinates: X(right), Y(down), Z(forward)
                 const corners = [
-                    [(0 - cx) * frustumDepth / fx, (0 - cy) * frustumDepth / fy, frustumDepth],
-                    [(width - cx) * frustumDepth / fx, (0 - cy) * frustumDepth / fy, frustumDepth],
-                    [(width - cx) * frustumDepth / fx, (height - cy) * frustumDepth / fy, frustumDepth],
-                    [(0 - cx) * frustumDepth / fx, (height - cy) * frustumDepth / fy, frustumDepth]
+                    [(0 - cx) * frustumDepth / fx, (0 - cy) * frustumDepth / fy, frustumDepth],         // Top-left
+                    [(width - cx) * frustumDepth / fx, (0 - cy) * frustumDepth / fy, frustumDepth],     // Top-right
+                    [(width - cx) * frustumDepth / fx, (height - cy) * frustumDepth / fy, frustumDepth], // Bottom-right
+                    [(0 - cx) * frustumDepth / fx, (height - cy) * frustumDepth / fy, frustumDepth]      // Bottom-left
                 ];
 
                 // Create frustum lines
@@ -1865,18 +1959,13 @@
 
                 const frustumLines = new THREE.LineSegments(geometry, material);
 
-                // Position and orient frustum
-                frustumLines.position.set(cameraPos[0], cameraPos[1], cameraPos[2]);
+                // Convert position to Three.js coordinate system and apply proper transformation
+                const threejsPosition = this.convertOpenCVToThreeJS(cameraPos);
+                frustumLines.position.set(threejsPosition[0], threejsPosition[1], threejsPosition[2]);
 
-                const rotationQuaternion = new THREE.Quaternion().setFromRotationMatrix(
-                    new THREE.Matrix4().fromArray([
-                        rotationMatrix[0][0], rotationMatrix[0][1], rotationMatrix[0][2], 0,
-                        rotationMatrix[1][0], rotationMatrix[1][1], rotationMatrix[1][2], 0,
-                        rotationMatrix[2][0], rotationMatrix[2][1], rotationMatrix[2][2], 0,
-                        0, 0, 0, 1
-                    ])
-                );
-                                frustumLines.setRotationFromQuaternion(rotationQuaternion);
+                // Restore complex rotation
+                const transformMatrix = this.createThreeJSMatrixFromOpenCV(rotationMatrix);
+                frustumLines.setRotationFromMatrix(transformMatrix);
 
                 frustrumsGroup.add(frustumLines);
                 console.log(`Frustum ${index + 1} visualization added successfully`);
@@ -1911,6 +2000,88 @@
                 camera3D.position.z += cameraDistance;
                 camera3D.lookAt(center);
                 controls3D.update();
+            }
+
+            // Root cause fix: Proper coordinate system conversion functions
+            convertOpenCVToThreeJS(point) {
+                // OpenCV coordinate system: X(right), Y(down), Z(forward)
+                // Three.js coordinate system: X(right), Y(forward), Z(up)
+                // Ground plane in Three.js is XY plane (Z=0)
+                // Camera should be above checkerboard: OpenCV(X, Y, Z) -> Three.js(X, -Z, Y)
+                return [point[0], -point[2], point[1]];
+            }
+
+            createThreeJSMatrixFromOpenCV(opencvRotationMatrix) {
+                // Convert OpenCV rotation matrix to Three.js Matrix4
+                // OpenCV camera: X(right), Y(down), Z(forward/viewing direction)
+                // Three.js world: X(right), Y(forward/depth), Z(up)
+                // Three.js camera object: looks along its local -Z axis, Y is local up.
+
+                const R_cv = opencvRotationMatrix; // R_world_to_cam_cv (transforms points from CV world to CV camera)
+                const R_cv_T = this.transposeMatrix(R_cv); // R_cam_cv_to_world_cv (transforms points from CV camera local to CV world)
+                                                           // Columns of R_cv_T are CV camera's X, Y, Z axes in CV world.
+
+                // R_cv_T_m4 represents the orientation of the CV camera in CV world coordinates
+                const R_cv_T_m4 = new THREE.Matrix4().set(
+                    R_cv_T[0][0], R_cv_T[0][1], R_cv_T[0][2], 0,
+                    R_cv_T[1][0], R_cv_T[1][1], R_cv_T[1][2], 0,
+                    R_cv_T[2][0], R_cv_T[2][1], R_cv_T[2][2], 0,
+                    0,            0,            0,            1
+                );
+
+                // Transformation matrix for converting orientation from CV world to Three.js world.
+                // This corresponds to the point transformation:
+                // X_three =  X_cv
+                // Y_three = -Z_cv  (CV Z-forward maps to Three.js -Y depth)
+                // Z_three =  Y_cv  (CV Y-down maps to Three.js  Z up)
+                const M_cv_world_to_three_world_rot = new THREE.Matrix4().set(
+                    1,  0,  0, 0,
+                    0,  0, -1, 0,
+                    0,  1,  0, 0,
+                    0,  0,  0, 1
+                );
+
+                // R_cv_cam_in_three_world: Orientation of CV camera axes, expressed in Three.js world system.
+                // This matrix transforms vectors from "CV camera local" coordinates to "Three.js world" coordinates.
+                // R_cv_cam_in_three_world = M_cv_world_to_three_world_rot * R_cv_cam_in_cv_world
+                const R_cv_cam_in_three_world = new THREE.Matrix4();
+                R_cv_cam_in_three_world.multiplyMatrices(M_cv_world_to_three_world_rot, R_cv_T_m4);
+
+                // Transformation from CV camera's local coordinate system to
+                // Three.js camera proxy's local coordinate system.
+                // CV Cam Local:      X right, Y down,  Z forward (viewing axis)
+                // Three Cam Local:   X right, Y up,   -Z forward (viewing axis for Three.js camera objects)
+                // To align them:
+                // X_three_local =  X_cv_local
+                // Y_three_local = -Y_cv_local  (flips Y-axis)
+                // Z_three_local = -Z_cv_local  (flips Z-axis, so Three's -Z view aligns with CV's +Z view)
+                const M_cv_cam_local_to_three_cam_local = new THREE.Matrix4().set(
+                    1,  0,  0, 0,
+                    0, -1,  0, 0,
+                    0,  0, -1, 0,
+                    0,  0,  0, 1
+                );
+
+                // Combine the transformations:
+                // R_three_cam_proxy_in_three_world = R_cv_cam_in_three_world * M_cv_cam_local_to_three_cam_local
+                // This means: take the R_cv_cam_in_three_world orientation, and then apply the
+                // M_cv_cam_local_to_three_cam_local rotation *locally* to align the camera model correctly.
+                const finalMatrix = new THREE.Matrix4();
+                finalMatrix.multiplyMatrices(R_cv_cam_in_three_world, M_cv_cam_local_to_three_cam_local);
+
+                if (window.debugMatricesOnce) {
+                    console.log('--- Debugging createThreeJSMatrixFromOpenCV (once per run) ---');
+                    console.log('R_cv (world_to_cam_cv):', opencvRotationMatrix);
+                    console.log('R_cv_T (cam_cv_to_world_cv):', R_cv_T);
+                    // console.log('R_cv_T_m4 elements:', R_cv_T_m4.elements);
+                    // console.log('M_cv_world_to_three_world_rot elements:', M_cv_world_to_three_world_rot.elements);
+                    console.log('R_cv_cam_in_three_world (CV cam axes in Three world) elements:', R_cv_cam_in_three_world.elements);
+                    // console.log('M_cv_cam_local_to_three_cam_local elements:', M_cv_cam_local_to_three_cam_local.elements);
+                    console.log('Final matrix for cameraMesh elements:', finalMatrix.elements);
+                    window.debugMatricesOnce = false; // Clear flag after first log
+                }
+
+                return finalMatrix;
             }
 
             // Helper functions for 3D math
@@ -2009,7 +2180,7 @@
                     };
 
                     const onWheel = (event) => {
-                        spherical.radius += event.deltaY * 0.05; // Increased sensitivity from 0.01 to 0.05
+                        spherical.radius += event.deltaY * 0.1; // Further increased sensitivity to 0.1
                         spherical.radius = Math.max(this.minDistance, Math.min(this.maxDistance, spherical.radius));
                         this.update();
                     };
@@ -2436,6 +2607,37 @@
                 document.getElementById('modalTitle').textContent = title;
                 document.getElementById('modalMessage').textContent = message;
                 document.getElementById('confirmationModal').style.display = 'flex';
+            }
+
+            createTextCanvas(text, fontSize = 16, textColor = '#FFFFFF', backgroundColor = '#000000', padding = 4) {
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                context.font = `bold ${fontSize}px Arial`;
+
+                // Measure text width for canvas sizing
+                const textMetrics = context.measureText(text);
+                const textWidth = textMetrics.width;
+                const textHeight = fontSize; // Approximate height
+
+                canvas.width = textWidth + padding * 2;
+                canvas.height = textHeight + padding * 2;
+
+                // Redraw font after canvas resize (some browsers require this)
+                context.font = `bold ${fontSize}px Arial`;
+                context.textAlign = 'center';
+                context.textBaseline = 'middle';
+
+                // Background
+                if (backgroundColor) {
+                    context.fillStyle = backgroundColor;
+                    context.fillRect(0, 0, canvas.width, canvas.height);
+                }
+
+                // Text
+                context.fillStyle = textColor;
+                context.fillText(text, canvas.width / 2, canvas.height / 2);
+
+                return canvas;
             }
         }
 
