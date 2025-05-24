@@ -1503,6 +1503,7 @@
                     controls3D.screenSpacePanning = false;
                     controls3D.minDistance = 10;    // Min distance 10mm
                     controls3D.maxDistance = 10000; // Max distance 10000mm (10m)
+                    controls3D.zoomSpeed = 3.0; // Increase zoom speed (default is 1.0)
                     console.log('OrbitControls created (distances in mm)');
                 } catch (error) {
                     console.error('Error setting up OrbitControls:', error);
@@ -1771,26 +1772,31 @@
                 // Create checkerboard texture
                 const canvas = document.createElement('canvas');
                 const context = canvas.getContext('2d');
-                const textureSize = 512; // Increased texture size from 256 to 512 for better detail
-                canvas.width = textureSize;
-                canvas.height = textureSize;
+                // Set canvas size to be a power of two for better compatibility, if possible, or ensure it matches pattern aspect ratio
+                // Let's try to make the texture pixels match the checkerboard squares as closely as possible.
+                const pixelsPerSquare = 32; // Quality of each square in the texture
+                canvas.width = cols * pixelsPerSquare;
+                canvas.height = rows * pixelsPerSquare;
 
-                const squarePixels = textureSize / Math.max(cols, rows);
-
-                for (let i = 0; i < cols; i++) {
-                    for (let j = 0; j < rows; j++) {
-                        const isBlack = (i + j) % 2 === 0;
-                        context.fillStyle = isBlack ? '#000000' : '#ffffff';
+                for (let r = 0; r < rows; r++) { // Iterate rows first (y-coordinate)
+                    for (let c = 0; c < cols; c++) { // Iterate columns second (x-coordinate)
+                        const isBlack = (c + r) % 2 === 0;
+                        context.fillStyle = isBlack ? '#333333' : '#cccccc'; // Darker gray and lighter gray
                         context.fillRect(
-                            i * squarePixels,
-                            j * squarePixels,
-                            squarePixels,
-                            squarePixels
+                            c * pixelsPerSquare,
+                            r * pixelsPerSquare,
+                            pixelsPerSquare,
+                            pixelsPerSquare
                         );
                     }
                 }
 
                                 const texture = new THREE.CanvasTexture(canvas);
+                                texture.anisotropy = renderer3D.capabilities.getMaxAnisotropy(); // Improve texture quality at sharp angles
+                                // texture.wrapS = THREE.ClampToEdgeWrapping; // Default is ClampToEdgeWrapping
+                                // texture.wrapT = THREE.ClampToEdgeWrapping;
+                                // No repeat needed if the texture is generated to fit exactly
+
                 const boardMaterial = new THREE.MeshLambertMaterial({
                     map: texture,
                     transparent: false, // Make more opaque for better visibility
@@ -2003,7 +2009,7 @@
                     };
 
                     const onWheel = (event) => {
-                        spherical.radius += event.deltaY * 0.01;
+                        spherical.radius += event.deltaY * 0.05; // Increased sensitivity from 0.01 to 0.05
                         spherical.radius = Math.max(this.minDistance, Math.min(this.maxDistance, spherical.radius));
                         this.update();
                     };
