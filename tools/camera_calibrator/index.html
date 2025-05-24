@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Camera Calibration Toolbox (OpenCV.js)</title>
+    <!-- Three.js CDN for 3D Visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <style>
         * {
             margin: 0;
@@ -421,8 +424,8 @@
                     <div class="input-group">
                         <label>チェッカーボードのサイズ (内側の交点数: 列 × 行):</label>
                         <div style="display: flex; gap: 10px;">
-                            <input type="number" id="boardCols" value="9" min="2" max="20">
-                            <input type="number" id="boardRows" value="6" min="2" max="20">
+                            <input type="number" id="boardCols" value="11" min="2" max="20">
+                            <input type="number" id="boardRows" value="7" min="2" max="20">
                         </div>
                          <small>例: 10x7のチェッカーボードの場合、9x6と入力</small>
                     </div>
@@ -457,6 +460,14 @@
                         • チェッカーボード全体が写るように、様々な角度・距離から撮影してください。<br>
                         • 照明を均一にし、影や反射を避けてください。
                     </div>
+                    <div style="margin-top: 15px; font-size: 0.9em; color: #6c757d; background: #f8f9fa; padding: 10px; border-radius: 5px;">
+                        <strong>🎨 コーナー可視化の色分け:</strong><br>
+                        • <span style="color: #00ff64;">🟢 緑色</span>: 検出されたコーナー<br>
+                        • <span style="color: #0096ff;">🔵 青色</span>: コーナー境界<br>
+                        • <span style="color: #ff0000;">🔴 赤色</span>: 最初のコーナー<br>
+                        • <span style="color: #ff00ff;">🟣 紫色</span>: 最後のコーナー<br>
+                        • <span style="color: #ffffff; background: #333; padding: 2px;">白数字</span>: コーナー番号（1-10）
+                    </div>
                 </div>
             </div>
 
@@ -464,7 +475,7 @@
                 <div class="tabs">
                     <button class="tab active" data-tab="images">📷 画像</button>
                     <button class="tab" data-tab="results">📊 結果</button>
-                    <button class="tab" data-tab="visualization">📈 3D可視化 (将来)</button>
+                    <button class="tab" data-tab="visualization">📈 3D可視化</button>
                 </div>
 
                 <div class="tab-content active" id="images">
@@ -481,8 +492,40 @@
                 </div>
 
                 <div class="tab-content" id="visualization">
-                    <canvas id="visualizationCanvas"></canvas>
-                     <p style="text-align:center; color: #6c757d; padding: 20px;">キャリブレーション結果の3D可視化は将来実装予定です。</p>
+                    <div id="visualization3D" style="width: 100%; height: 600px; border-radius: 10px; overflow: hidden; background: #f0f0f0; position: relative; border: 2px solid #ddd;">
+                        <div id="noVisualizationMessage" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #6c757d; text-align: center;">
+                            <p style="margin: 0; font-size: 1.1em;">キャリブレーション完了後に3D可視化が表示されます</p>
+                            <p style="margin: 10px 0 0 0; font-size: 0.9em;">カメラ位置、チェッカーボード、座標軸を表示</p>
+                        </div>
+                    </div>
+                    <div id="visualizationControls" style="margin-top: 15px; display: none;">
+                        <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                            <div class="input-group" style="margin: 0;">
+                                <label style="margin-bottom: 5px;">カメラ表示:</label>
+                                <div style="display: flex; gap: 10px;">
+                                    <label style="display: flex; align-items: center; gap: 5px; font-weight: normal;">
+                                        <input type="checkbox" id="showCameras" checked> カメラ位置
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 5px; font-weight: normal;">
+                                        <input type="checkbox" id="showFrustums" checked> 視野錐台
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="input-group" style="margin: 0;">
+                                <label style="margin-bottom: 5px;">チェッカーボード:</label>
+                                <label style="display: flex; align-items: center; gap: 5px; font-weight: normal;">
+                                    <input type="checkbox" id="showCheckerboards" checked> 表示
+                                </label>
+                            </div>
+                            <div class="input-group" style="margin: 0;">
+                                <label style="margin-bottom: 5px;">座標軸:</label>
+                                <label style="display: flex; align-items: center; gap: 5px; font-weight: normal;">
+                                    <input type="checkbox" id="showAxes" checked> 表示
+                                </label>
+                            </div>
+                            <button class="btn" id="resetVisualizationView" style="margin: 0;">🎯 視点リセット</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -502,6 +545,12 @@
     <script>
         let calibrationApp;
         let cvReady = false;
+
+        // 3D Visualization variables
+        let scene3D, camera3D, renderer3D, controls3D;
+        let camerasGroup, checkboardsGroup, frustrumsGroup;
+        let axesHelper3D, gridHelper3D;
+        let visualization3DInitialized = false;
 
         // Set up Module before loading OpenCV.js
         var Module = {
@@ -553,8 +602,8 @@
 
 
 
-                                function loadOpenCVWithProgress() {
-            const opencvSrc = "https://docs.opencv.org/4.9.0/opencv.js";
+        function loadOpenCVWithProgress() {
+            const opencvSrc = "../../assets/vendor/opencv/opencv.js";
             const progressBar = document.getElementById('opencvProgressBar');
             const progressContainer = document.getElementById('opencvLoadingProgressContainer');
             const statusMessage = document.getElementById('statusMessage');
@@ -921,7 +970,17 @@
                         }
 
                         let displayMat = src.clone();
-                        cv.drawChessboardCorners(displayMat, patternSize, imageObj.cornersMat, found);
+
+                        // より視認性の良いコーナー描画
+                        if (found) {
+                            // 元の描画（基本の線）
+                            cv.drawChessboardCorners(displayMat, patternSize, imageObj.cornersMat, found);
+
+                            // カスタム描画で強調
+                            this.drawEnhancedCorners(displayMat, imageObj.cornersMat, found);
+                        } else {
+                            // 検出失敗時は元画像のまま
+                        }
 
                         if (imageObj.visualizedCanvas) {
                             const ctx = imageObj.visualizedCanvas.getContext('2d');
@@ -1042,6 +1101,16 @@
                 try {
                     let rms = cv.calibrateCamera(objectPointsVec, imagePointsVec, imageSize, cameraMatrix, distCoeffs, rvecs, tvecs, 0);
 
+                    // Store rotation and translation vectors for 3D visualization
+                    let rvecsArray = [];
+                    let tvecsArray = [];
+                    for (let i = 0; i < rvecs.size(); i++) {
+                        let rvec = rvecs.get(i);
+                        let tvec = tvecs.get(i);
+                        rvecsArray.push([rvec.doubleAt(0,0), rvec.doubleAt(1,0), rvec.doubleAt(2,0)]);
+                        tvecsArray.push([tvec.doubleAt(0,0), tvec.doubleAt(1,0), tvec.doubleAt(2,0)]);
+                    }
+
                     this.calibrationResult = {
                         rms: rms,
                         cameraMatrix: [
@@ -1057,10 +1126,15 @@
                         imageSize: [imageSize.width, imageSize.height],
                         numImages: this.imagePoints.length,
                         settings: { boardCols, boardRows, squareSize },
-                        mode: "OpenCV.js"
+                        mode: "OpenCV.js",
+                        // Store external parameters for 3D visualization
+                        rvecs: rvecsArray,
+                        tvecs: tvecsArray
                     };
 
                     this.displayResults();
+                    this.init3DVisualization();
+                    this.update3DVisualization();
                     this.switchTab('results');
                     this.updateStatus(`カメラキャリブレーション成功！ RMS誤差: ${rms.toFixed(4)}`, 'success');
 
@@ -1215,16 +1289,610 @@
                 ).join('<br>');
             }
 
-            createVisualization() {
-                const canvas = document.getElementById('visualizationCanvas');
-                const ctx = canvas.getContext('2d');
-                canvas.width = Math.min(800, document.querySelector('.content-area').clientWidth - 60);
-                canvas.height = Math.min(600, window.innerHeight * 0.6);
-                ctx.clearRect(0,0, canvas.width, canvas.height);
-                ctx.fillStyle = '#6c757d';
-                ctx.font = '18px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText('3D可視化は将来実装予定です。', canvas.width / 2, canvas.height / 2);
+            drawEnhancedCorners(displayMat, cornersMat, found) {
+                if (!found || !cornersMat || cornersMat.rows === 0) return;
+
+                try {
+                    // Check if required OpenCV functions are available
+                    if (typeof cv.circle !== 'function' || typeof cv.rectangle !== 'function' || typeof cv.putText !== 'function') {
+                        console.warn('Required OpenCV drawing functions not available, skipping enhanced corner drawing');
+                        return;
+                    }
+                    // より明るく目立つ色でコーナーを強調描画
+                    for (let i = 0; i < cornersMat.rows; i++) {
+                        const x = Math.round(cornersMat.floatAt(i, 0));
+                        const y = Math.round(cornersMat.floatAt(i, 1));
+
+                        // 外側の大きな円（白色で縁取り）
+                        cv.circle(displayMat, new cv.Point(x, y), 8, new cv.Scalar(255, 255, 255, 255), 3);
+
+                        // 中間の円（明るい青色）
+                        cv.circle(displayMat, new cv.Point(x, y), 6, new cv.Scalar(0, 150, 255, 255), 2);
+
+                        // 内側の小さな円（明るい緑色）
+                        cv.circle(displayMat, new cv.Point(x, y), 3, new cv.Scalar(0, 255, 100, 255), -1);
+
+                        // 中心点（黒色で明確に）
+                        cv.circle(displayMat, new cv.Point(x, y), 1, new cv.Scalar(0, 0, 0, 255), -1);
+                    }
+
+                    // 最初と最後のコーナーを特別に強調（開始点と終了点の識別）
+                    if (cornersMat.rows >= 2) {
+                        // 最初のコーナー（赤色で強調）
+                        const firstX = Math.round(cornersMat.floatAt(0, 0));
+                        const firstY = Math.round(cornersMat.floatAt(0, 1));
+                        cv.circle(displayMat, new cv.Point(firstX, firstY), 12, new cv.Scalar(0, 0, 255, 255), 3);
+
+                        // 最後のコーナー（マゼンタ色で強調）
+                        const lastX = Math.round(cornersMat.floatAt(cornersMat.rows - 1, 0));
+                        const lastY = Math.round(cornersMat.floatAt(cornersMat.rows - 1, 1));
+                        cv.circle(displayMat, new cv.Point(lastX, lastY), 12, new cv.Scalar(255, 0, 255, 255), 3);
+                    }
+
+                    // コーナー番号表示（最初の10個のコーナーのみ）
+                    const maxNumberedCorners = Math.min(10, cornersMat.rows);
+                    for (let i = 0; i < maxNumberedCorners; i++) {
+                        const x = Math.round(cornersMat.floatAt(i, 0));
+                        const y = Math.round(cornersMat.floatAt(i, 1));
+
+                        // 番号の背景（黒い矩形）- 固定サイズを使用
+                        const textWidth = 16; // 固定幅
+                        const textHeight = 12; // 固定高さ
+
+                        cv.rectangle(displayMat,
+                            new cv.Point(x - textWidth/2 - 3, y - textHeight - 8),
+                            new cv.Point(x + textWidth/2 + 3, y + 5),
+                            new cv.Scalar(0, 0, 0, 200), -1);
+
+                        // 番号テキスト（白色）
+                        try {
+                            cv.putText(displayMat, `${i + 1}`,
+                                new cv.Point(x - textWidth/2, y - 5),
+                                cv.FONT_HERSHEY_SIMPLEX, 0.6,
+                                new cv.Scalar(255, 255, 255, 255), 2);
+                        } catch (textError) {
+                            // putText が失敗した場合は、番号なしで続行
+                            console.warn(`Text drawing failed for corner ${i + 1}:`, textError);
+                        }
+                    }
+
+                } catch (error) {
+                    console.warn('カスタムコーナー描画エラー:', error);
+                    // エラーが発生しても処理を続行
+                    // 基本的なコーナー描画が既に完了しているため、問題なし
+                }
+            }
+
+            init3DVisualization() {
+                if (visualization3DInitialized) return;
+
+                console.log('Initializing 3D visualization...');
+
+                const container = document.getElementById('visualization3D');
+                if (!container) {
+                    console.error('3D container not found');
+                    return;
+                }
+
+                // Check if Three.js is loaded
+                if (typeof THREE === 'undefined') {
+                    console.error('THREE.js is not loaded');
+                    this.updateStatus('Three.jsが読み込まれていません。ページをリロードしてください。', 'error');
+                    return;
+                }
+
+                console.log('THREE.js version:', THREE.REVISION);
+
+                // Hide the "no visualization" message
+                const noMessage = document.getElementById('noVisualizationMessage');
+                if (noMessage) noMessage.style.display = 'none';
+
+                // Show controls
+                const controls = document.getElementById('visualizationControls');
+                if (controls) controls.style.display = 'block';
+
+                                try {
+                    // Scene setup
+                    scene3D = new THREE.Scene();
+                    scene3D.background = new THREE.Color(0xf0f0f0); // Light gray background for better visibility
+                    console.log('Scene created');
+
+                    // Camera setup with better initial position
+                    const aspect = container.clientWidth / container.clientHeight;
+                    camera3D = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
+                    camera3D.position.set(8, 8, 8); // Further back for better overall view
+                    console.log('Camera created at position:', camera3D.position);
+
+                    // Renderer setup
+                    renderer3D = new THREE.WebGLRenderer({ antialias: true });
+                    renderer3D.setSize(container.clientWidth, container.clientHeight);
+                    renderer3D.setClearColor(0xf0f0f0); // Match scene background
+                    container.appendChild(renderer3D.domElement);
+                    console.log('Renderer created, canvas size:', container.clientWidth, 'x', container.clientHeight);
+                } catch (error) {
+                    console.error('Error setting up 3D scene:', error);
+                    this.updateStatus('3Dシーンの初期化に失敗しました: ' + error.message, 'error');
+                    return;
+                }
+
+                // Controls setup
+                try {
+                    controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
+                    controls3D.enableDamping = true;
+                    controls3D.dampingFactor = 0.1;
+                    controls3D.screenSpacePanning = false;
+                    controls3D.minDistance = 0.5;
+                    controls3D.maxDistance = 100;
+                    console.log('OrbitControls created');
+                } catch (error) {
+                    console.error('Error setting up OrbitControls:', error);
+                    this.updateStatus('3Dコントロールの初期化に失敗しました: ' + error.message, 'error');
+                    return;
+                }
+
+                // Enhanced lighting for better visibility
+                const ambientLight = new THREE.AmbientLight(0x606060, 0.8); // Brighter ambient light
+                scene3D.add(ambientLight);
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2); // Stronger directional light
+                directionalLight.position.set(10, 10, 5);
+                scene3D.add(directionalLight);
+
+                // Additional light from different angle
+                const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.6);
+                directionalLight2.position.set(-10, -10, 5);
+                scene3D.add(directionalLight2);
+
+                                // Grid and axes with better visibility
+                gridHelper3D = new THREE.GridHelper(20, 20, 0x888888, 0x666666); // Darker lines for light background
+                scene3D.add(gridHelper3D);
+
+                axesHelper3D = new THREE.AxesHelper(5); // Larger axes for better visibility
+                scene3D.add(axesHelper3D);
+
+                // Groups for different elements
+                camerasGroup = new THREE.Group();
+                scene3D.add(camerasGroup);
+
+                checkboardsGroup = new THREE.Group();
+                scene3D.add(checkboardsGroup);
+
+                                frustrumsGroup = new THREE.Group();
+                scene3D.add(frustrumsGroup);
+
+                // Add a test cube to verify 3D rendering is working
+                this.addTestCube();
+
+                // Event listeners for controls
+                this.setup3DVisualizationEventListeners();
+
+                // Resize handler
+                const resizeHandler = () => {
+                    if (camera3D && renderer3D) {
+                        camera3D.aspect = container.clientWidth / container.clientHeight;
+                        camera3D.updateProjectionMatrix();
+                        renderer3D.setSize(container.clientWidth, container.clientHeight);
+                    }
+                };
+                window.addEventListener('resize', resizeHandler);
+
+                                // Animation loop
+                const animate = () => {
+                    requestAnimationFrame(animate);
+                    if (controls3D) controls3D.update();
+                    if (renderer3D && scene3D && camera3D) {
+                        renderer3D.render(scene3D, camera3D);
+                    }
+                };
+                animate();
+
+                visualization3DInitialized = true;
+                console.log('3D visualization initialized successfully');
+
+                // Update status
+                this.updateStatus('3D可視化が初期化されました', 'success');
+            }
+
+            setup3DVisualizationEventListeners() {
+                document.getElementById('showCameras').addEventListener('change', (e) => {
+                    if (camerasGroup) camerasGroup.visible = e.target.checked;
+                });
+
+                document.getElementById('showFrustums').addEventListener('change', (e) => {
+                    if (frustrumsGroup) frustrumsGroup.visible = e.target.checked;
+                });
+
+                document.getElementById('showCheckerboards').addEventListener('change', (e) => {
+                    if (checkboardsGroup) checkboardsGroup.visible = e.target.checked;
+                });
+
+                document.getElementById('showAxes').addEventListener('change', (e) => {
+                    if (axesHelper3D) axesHelper3D.visible = e.target.checked;
+                    if (gridHelper3D) gridHelper3D.visible = e.target.checked;
+                });
+
+                document.getElementById('resetVisualizationView').addEventListener('click', () => {
+                    if (camera3D && controls3D) {
+                        camera3D.position.set(8, 8, 8); // Match initial position
+                        controls3D.target.set(0, 0, 0);
+                        controls3D.update();
+                    }
+                });
+            }
+
+            update3DVisualization() {
+                if (!visualization3DInitialized || !this.calibrationResult) {
+                    console.log('3D visualization not ready or no calibration result');
+                    return;
+                }
+
+                                console.log('Updating 3D visualization with calibration result:', this.calibrationResult);
+
+                // Clear existing visualization elements
+                if (camerasGroup) camerasGroup.clear();
+                if (checkboardsGroup) checkboardsGroup.clear();
+                if (frustrumsGroup) frustrumsGroup.clear();
+
+                const result = this.calibrationResult;
+                console.log('Calibration result structure:', result);
+
+                // Safe destructuring with fallbacks
+                const rvecs = result.rvecs || [];
+                const tvecs = result.tvecs || [];
+                const settings = result.settings || {};
+                const cameraMatrix = result.cameraMatrix || [];
+                const imageSize = result.imageSize || [640, 480];
+
+                if (!rvecs || !tvecs || rvecs.length === 0) {
+                    console.log('No camera poses available for visualization');
+                    return;
+                }
+
+                console.log(`Visualizing ${rvecs.length} camera poses`);
+                console.log('Settings:', settings);
+
+                // Create checkerboard pattern in 3D space - get values safely
+                const boardCols = settings.boardCols || parseInt(document.getElementById('boardCols').value) || 11;
+                const boardRows = settings.boardRows || parseInt(document.getElementById('boardRows').value) || 7;
+                const squareSize = (settings.squareSize || parseFloat(document.getElementById('squareSize').value) || 25) / 1000; // Convert mm to meters
+
+                                // Add cameras and checkerboards for each image
+                for (let i = 0; i < rvecs.length; i++) {
+                    try {
+                        const rvec = rvecs[i];
+                        const tvec = tvecs[i];
+
+                        if (!rvec || !tvec || rvec.length !== 3 || tvec.length !== 3) {
+                            console.warn(`Invalid camera pose data for image ${i}`);
+                            continue;
+                        }
+
+                        console.log(`Processing camera ${i + 1}:`, { rvec, tvec });
+
+                        // Convert rotation vector to rotation matrix
+                        const R = this.rodrigues(rvec);
+
+                        // Camera position in world coordinates
+                        const cameraPos = this.multiplyMatrixVector(this.transposeMatrix(R), this.scaleVector(tvec, -1));
+
+                        console.log(`Camera ${i + 1} position:`, cameraPos);
+
+                        // Create camera representation
+                        this.addCameraVisualization(cameraPos, R, i);
+
+                        // Create checkerboard visualization (only once)
+                        if (i === 0) {
+                            this.addCheckerboardVisualization(boardCols, boardRows, squareSize, i);
+                        }
+
+                        // Create frustum visualization
+                        this.addFrustumVisualization(cameraPos, R, cameraMatrix, imageSize, i);
+                    } catch (error) {
+                        console.error(`Error processing camera ${i + 1}:`, error);
+                        continue;
+                    }
+                }
+
+                // Adjust camera view to fit all objects
+                this.fitCameraToObjects();
+
+                console.log('3D visualization update completed successfully');
+            }
+
+            addCameraVisualization(position, rotationMatrix, index) {
+                try {
+                    if (!position || position.length !== 3 || !rotationMatrix) {
+                        console.error('Invalid camera visualization data:', { position, rotationMatrix, index });
+                        return;
+                    }
+
+                    // Camera body (larger size for better visibility)
+                    const cameraGeometry = new THREE.BoxGeometry(0.3, 0.18, 0.12); // 3x larger
+                    const cameraMaterial = new THREE.MeshLambertMaterial({
+                        color: 0x1976D2,  // Darker blue for better contrast
+                        transparent: false
+                    });
+                    const cameraMesh = new THREE.Mesh(cameraGeometry, cameraMaterial);
+
+                // Position camera
+                cameraMesh.position.set(position[0], position[1], position[2]);
+
+                // Apply rotation
+                const rotationQuaternion = new THREE.Quaternion().setFromRotationMatrix(
+                    new THREE.Matrix4().fromArray([
+                        rotationMatrix[0][0], rotationMatrix[0][1], rotationMatrix[0][2], 0,
+                        rotationMatrix[1][0], rotationMatrix[1][1], rotationMatrix[1][2], 0,
+                        rotationMatrix[2][0], rotationMatrix[2][1], rotationMatrix[2][2], 0,
+                        0, 0, 0, 1
+                    ])
+                );
+                cameraMesh.setRotationFromQuaternion(rotationQuaternion);
+
+                camerasGroup.add(cameraMesh);
+
+                                // Add camera number label (larger and more visible)
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.width = 128; // Larger canvas
+                canvas.height = 64;
+                context.fillStyle = '#FFD700'; // Gold background for better visibility
+                context.fillRect(0, 0, 128, 64);
+                context.strokeStyle = '#000000';
+                context.lineWidth = 2;
+                context.strokeRect(2, 2, 124, 60);
+                context.fillStyle = '#000000';
+                context.font = 'bold 24px Arial'; // Larger, bold font
+                context.textAlign = 'center';
+                context.fillText((index + 1).toString(), 64, 40);
+
+                const texture = new THREE.CanvasTexture(canvas);
+                const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+                const sprite = new THREE.Sprite(spriteMaterial);
+                sprite.position.set(position[0], position[1], position[2] + 0.4); // Higher above camera
+                                sprite.scale.set(0.6, 0.3, 1); // Larger scale
+
+                camerasGroup.add(sprite);
+                console.log(`Camera ${index + 1} visualization added successfully`);
+                } catch (error) {
+                    console.error(`Error adding camera ${index + 1} visualization:`, error);
+                }
+            }
+
+                        addCheckerboardVisualization(cols, rows, squareSize, index) {
+                try {
+                    // Create larger checkerboard pattern for better visibility
+                    const scaleFactor = 3; // Make checkerboard 3x larger
+                    const boardGeometry = new THREE.PlaneGeometry(
+                        cols * squareSize * scaleFactor,
+                        rows * squareSize * scaleFactor,
+                        cols,
+                        rows
+                    );
+
+                // Create checkerboard texture
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                const textureSize = 256;
+                canvas.width = textureSize;
+                canvas.height = textureSize;
+
+                const squarePixels = textureSize / Math.max(cols, rows);
+
+                for (let i = 0; i < cols; i++) {
+                    for (let j = 0; j < rows; j++) {
+                        const isBlack = (i + j) % 2 === 0;
+                        context.fillStyle = isBlack ? '#000000' : '#ffffff';
+                        context.fillRect(
+                            i * squarePixels,
+                            j * squarePixels,
+                            squarePixels,
+                            squarePixels
+                        );
+                    }
+                }
+
+                                const texture = new THREE.CanvasTexture(canvas);
+                const boardMaterial = new THREE.MeshLambertMaterial({
+                    map: texture,
+                    transparent: false, // Make more opaque for better visibility
+                    side: THREE.DoubleSide
+                });
+
+                const boardMesh = new THREE.Mesh(boardGeometry, boardMaterial);
+
+                                // Position at origin (world coordinates) for each checkerboard
+                boardMesh.position.set(0, 0, 0);
+
+                checkboardsGroup.add(boardMesh);
+                console.log('Checkerboard visualization added successfully');
+                } catch (error) {
+                    console.error('Error adding checkerboard visualization:', error);
+                }
+            }
+
+            addFrustumVisualization(cameraPos, rotationMatrix, cameraMatrix, imageSize, index) {
+                try {
+                    // Extract camera intrinsics
+                    const fx = cameraMatrix[0][0];
+                    const fy = cameraMatrix[1][1];
+                    const cx = cameraMatrix[0][2];
+                    const cy = cameraMatrix[1][2];
+
+                const width = imageSize[0];
+                const height = imageSize[1];
+
+                // Define frustum depth (larger for better visibility)
+                const frustumDepth = 1.5; // 3x larger frustum depth
+
+                // Calculate frustum corners at frustum depth
+                const corners = [
+                    [(0 - cx) * frustumDepth / fx, (0 - cy) * frustumDepth / fy, frustumDepth],
+                    [(width - cx) * frustumDepth / fx, (0 - cy) * frustumDepth / fy, frustumDepth],
+                    [(width - cx) * frustumDepth / fx, (height - cy) * frustumDepth / fy, frustumDepth],
+                    [(0 - cx) * frustumDepth / fx, (height - cy) * frustumDepth / fy, frustumDepth]
+                ];
+
+                // Create frustum lines
+                const geometry = new THREE.BufferGeometry();
+                const vertices = [];
+
+                // Lines from camera center to corners
+                for (let corner of corners) {
+                    vertices.push(0, 0, 0); // Camera center
+                    vertices.push(corner[0], corner[1], corner[2]);
+                }
+
+                // Lines forming the rectangle at frustum depth
+                for (let i = 0; i < 4; i++) {
+                    const current = corners[i];
+                    const next = corners[(i + 1) % 4];
+                    vertices.push(current[0], current[1], current[2]);
+                    vertices.push(next[0], next[1], next[2]);
+                }
+
+                geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+
+                                const material = new THREE.LineBasicMaterial({
+                    color: 0xFF5722, // More vibrant orange-red
+                    transparent: false,
+                    linewidth: 3 // Thicker lines for better visibility
+                });
+
+                const frustumLines = new THREE.LineSegments(geometry, material);
+
+                // Position and orient frustum
+                frustumLines.position.set(cameraPos[0], cameraPos[1], cameraPos[2]);
+
+                const rotationQuaternion = new THREE.Quaternion().setFromRotationMatrix(
+                    new THREE.Matrix4().fromArray([
+                        rotationMatrix[0][0], rotationMatrix[0][1], rotationMatrix[0][2], 0,
+                        rotationMatrix[1][0], rotationMatrix[1][1], rotationMatrix[1][2], 0,
+                        rotationMatrix[2][0], rotationMatrix[2][1], rotationMatrix[2][2], 0,
+                        0, 0, 0, 1
+                    ])
+                );
+                                frustumLines.setRotationFromQuaternion(rotationQuaternion);
+
+                frustrumsGroup.add(frustumLines);
+                console.log(`Frustum ${index + 1} visualization added successfully`);
+                } catch (error) {
+                    console.error(`Error adding frustum ${index + 1} visualization:`, error);
+                }
+            }
+
+            fitCameraToObjects() {
+                if (!scene3D || !camera3D || !controls3D) return;
+
+                // Calculate bounding box of all objects
+                const box = new THREE.Box3();
+
+                scene3D.traverse((object) => {
+                    if (object.type === 'Mesh' || object.type === 'LineSegments') {
+                        box.expandByObject(object);
+                    }
+                });
+
+                if (box.isEmpty()) return;
+
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+
+                const maxDim = Math.max(size.x, size.y, size.z);
+                const fov = camera3D.fov * (Math.PI / 180);
+                const cameraDistance = Math.abs(maxDim / Math.sin(fov / 2)) * 1.2;
+
+                controls3D.target.copy(center);
+                camera3D.position.copy(center);
+                camera3D.position.z += cameraDistance;
+                camera3D.lookAt(center);
+                controls3D.update();
+            }
+
+            // Helper functions for 3D math
+            rodrigues(rvec) {
+                const theta = Math.sqrt(rvec[0] * rvec[0] + rvec[1] * rvec[1] + rvec[2] * rvec[2]);
+                if (theta < 1e-10) {
+                    return [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+                }
+
+                const k = [rvec[0] / theta, rvec[1] / theta, rvec[2] / theta];
+                const cos_theta = Math.cos(theta);
+                const sin_theta = Math.sin(theta);
+
+                const K = [
+                    [0, -k[2], k[1]],
+                    [k[2], 0, -k[0]],
+                    [-k[1], k[0], 0]
+                ];
+
+                const R = [];
+                for (let i = 0; i < 3; i++) {
+                    R[i] = [];
+                    for (let j = 0; j < 3; j++) {
+                        R[i][j] = (i === j ? 1 : 0) * cos_theta + K[i][j] * sin_theta +
+                                 k[i] * k[j] * (1 - cos_theta);
+                    }
+                }
+
+                return R;
+            }
+
+            transposeMatrix(matrix) {
+                const result = [];
+                for (let i = 0; i < matrix[0].length; i++) {
+                    result[i] = [];
+                    for (let j = 0; j < matrix.length; j++) {
+                        result[i][j] = matrix[j][i];
+                    }
+                }
+                return result;
+            }
+
+            multiplyMatrixVector(matrix, vector) {
+                const result = [];
+                for (let i = 0; i < matrix.length; i++) {
+                    result[i] = 0;
+                    for (let j = 0; j < vector.length; j++) {
+                        result[i] += matrix[i][j] * vector[j];
+                    }
+                }
+                return result;
+            }
+
+            scaleVector(vector, scale) {
+                return vector.map(v => v * scale);
+            }
+
+            addTestCube() {
+                // Add a simple test cube to verify 3D rendering is working
+                const geometry = new THREE.BoxGeometry(1, 1, 1);
+                const material = new THREE.MeshLambertMaterial({
+                    color: 0x00ff00,
+                    transparent: false
+                });
+                const testCube = new THREE.Mesh(geometry, material);
+                testCube.position.set(0, 0, 0.5); // Place it slightly above the ground
+                scene3D.add(testCube);
+                console.log('Test cube added at position:', testCube.position);
+
+                // Add a small text label
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.width = 128;
+                canvas.height = 64;
+                context.fillStyle = '#ffffff';
+                context.fillRect(0, 0, 128, 64);
+                context.fillStyle = '#000000';
+                context.font = 'bold 16px Arial';
+                context.textAlign = 'center';
+                context.fillText('TEST', 64, 40);
+
+                const texture = new THREE.CanvasTexture(canvas);
+                const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+                const sprite = new THREE.Sprite(spriteMaterial);
+                sprite.position.set(0, 0, 1.5);
+                sprite.scale.set(1, 0.5, 1);
+                scene3D.add(sprite);
+                console.log('Test label added');
             }
 
 
@@ -1522,10 +2190,20 @@
                 this.updateStats();
                 document.getElementById('calibrationResults').innerHTML = '';
 
-                const canvas = document.getElementById('visualizationCanvas');
-                const ctx = canvas.getContext('2d');
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                this.createVisualization();
+                // Reset 3D visualization
+                if (visualization3DInitialized) {
+                    camerasGroup.clear();
+                    checkboardsGroup.clear();
+                    frustrumsGroup.clear();
+
+                    // Show no visualization message
+                    const noMessage = document.getElementById('noVisualizationMessage');
+                    if (noMessage) noMessage.style.display = 'block';
+
+                    // Hide controls
+                    const controls = document.getElementById('visualizationControls');
+                    if (controls) controls.style.display = 'none';
+                }
 
                 this.updateStatus('全てのデータを正常にクリアしました', 'info');
                 this.switchTab('images');
