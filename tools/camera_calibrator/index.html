@@ -1472,11 +1472,10 @@
                     scene3D.background = new THREE.Color(0xf0f0f0); // Light gray background for better visibility
                     console.log('Scene created');
 
-                    // Camera setup with better initial position
                     const aspect = container.clientWidth / container.clientHeight;
-                    camera3D = new THREE.PerspectiveCamera(50, aspect, 0.1, 10000); // Adjusted FOV, Increased far plane significantly
-                    camera3D.position.set(100, 100, 100); // Significantly further back
-                    console.log('Camera created at position:', camera3D.position);
+                    camera3D = new THREE.PerspectiveCamera(50, aspect, 1, 20000); // Near: 1mm, Far: 20000mm (20m)
+                    camera3D.position.set(400, 400, 600); // Initial position in mm (e.g., 40cm x 40cm x 60cm away)
+                    console.log('Camera created at position (mm):', camera3D.position);
 
                     // Renderer setup
                     renderer3D = new THREE.WebGLRenderer({ antialias: true });
@@ -1484,6 +1483,12 @@
                     renderer3D.setClearColor(0xf0f0f0); // Match scene background
                     container.appendChild(renderer3D.domElement);
                     console.log('Renderer created, canvas size:', container.clientWidth, 'x', container.clientHeight);
+
+                    // Prevent page scroll when mouse wheel is used over the 3D canvas
+                    renderer3D.domElement.addEventListener('wheel', function(event) {
+                        event.preventDefault();
+                    }, { passive: false });
+
                 } catch (error) {
                     console.error('Error setting up 3D scene:', error);
                     this.updateStatus('3Dシーンの初期化に失敗しました: ' + error.message, 'error');
@@ -1496,9 +1501,9 @@
                     controls3D.enableDamping = true;
                     controls3D.dampingFactor = 0.1;
                     controls3D.screenSpacePanning = false;
-                    controls3D.minDistance = 1; // Min distance might need adjustment for larger scenes
-                    controls3D.maxDistance = 2000; // Significantly increased max distance
-                    console.log('OrbitControls created');
+                    controls3D.minDistance = 10;    // Min distance 10mm
+                    controls3D.maxDistance = 10000; // Max distance 10000mm (10m)
+                    console.log('OrbitControls created (distances in mm)');
                 } catch (error) {
                     console.error('Error setting up OrbitControls:', error);
                     this.updateStatus('3Dコントロールの初期化に失敗しました: ' + error.message, 'error');
@@ -1518,10 +1523,10 @@
                 scene3D.add(directionalLight2);
 
                                 // Grid and axes with better visibility
-                gridHelper3D = new THREE.GridHelper(1000, 100, 0xbbbbbb, 0x888888); // 1000x1000 grid, 100 divisions, adjusted colors
+                gridHelper3D = new THREE.GridHelper(2000, 20, 0xcccccc, 0x999999); // 2000mm x 2000mm grid (2m x 2m), 20 divisions (100mm spacing)
                 scene3D.add(gridHelper3D);
 
-                axesHelper3D = new THREE.AxesHelper(50); // Axes length 50 units
+                axesHelper3D = new THREE.AxesHelper(300); // Axes length 300mm (30cm)
                 scene3D.add(axesHelper3D);
 
                 // Groups for different elements
@@ -1594,7 +1599,7 @@
 
                 document.getElementById('resetVisualizationView').addEventListener('click', () => {
                     if (camera3D && controls3D) {
-                        camera3D.position.set(100, 100, 100); // Match new initial large-scale position
+                        camera3D.position.set(400, 400, 600); // Match new mm-based initial position
                         controls3D.target.set(0, 0, 0);
                         controls3D.update();
                     }
@@ -1646,7 +1651,9 @@
                 // Create checkerboard pattern in 3D space - get values safely
                 const boardCols = settings.boardCols || parseInt(document.getElementById('boardCols').value) || 11;
                 const boardRows = settings.boardRows || parseInt(document.getElementById('boardRows').value) || 7;
-                const squareSize = (settings.squareSize || parseFloat(document.getElementById('squareSize').value) || 25) / 1000; // Convert mm to meters
+                // --- CRITICAL CHANGE: Use squareSize directly in mm ---
+                const squareSize = (settings.squareSize || parseFloat(document.getElementById('squareSize').value) || 25);
+                console.log(`Using squareSize: ${squareSize} mm for 3D checkerboard`);
 
                                 // Add cameras and checkerboards for each image
                 for (let i = 0; i < rvecs.length; i++) {
@@ -1698,8 +1705,8 @@
                         return;
                     }
 
-                    // Camera body (larger size for better visibility)
-                    const cameraGeometry = new THREE.BoxGeometry(0.6, 0.36, 0.24); // Increased size slightly for new scale
+                    // Camera body (sizes in mm)
+                    const cameraGeometry = new THREE.BoxGeometry(30, 18, 12); // e.g., 3cm x 1.8cm x 1.2cm
                     const cameraMaterial = new THREE.MeshLambertMaterial({
                         color: 0x1976D2,  // Darker blue for better contrast
                         transparent: false
@@ -1740,8 +1747,8 @@
                 const texture = new THREE.CanvasTexture(canvas);
                 const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
                 const sprite = new THREE.Sprite(spriteMaterial);
-                sprite.position.set(position[0], position[1], position[2] + 0.8); // Adjusted offset for larger camera
-                                sprite.scale.set(1.2, 0.6, 1); // Slightly larger scale for labels
+                sprite.position.set(position[0], position[1], position[2] + 20); // Adjusted offset (20mm above camera)
+                                sprite.scale.set(30, 15, 1); // Scale for label visibility (adjust as needed)
 
                 camerasGroup.add(sprite);
                 console.log(`Camera ${index + 1} visualization added successfully`);
@@ -1752,11 +1759,11 @@
 
                         addCheckerboardVisualization(cols, rows, squareSize, index) {
                 try {
-                    // Create larger checkerboard pattern for better visibility
-                    const scaleFactor = 5; // Increased scaleFactor from 3 to 5
+                    // squareSize is now directly in mm, scaleFactor should represent model scale if any, otherwise 1.
+                    const scaleFactor = 1;
                     const boardGeometry = new THREE.PlaneGeometry(
-                        cols * squareSize * scaleFactor,
-                        rows * squareSize * scaleFactor,
+                        cols * squareSize * scaleFactor, // Total width in mm
+                        rows * squareSize * scaleFactor, // Total height in mm
                         cols,
                         rows
                     );
@@ -1813,8 +1820,8 @@
                 const width = imageSize[0];
                 const height = imageSize[1];
 
-                // Define frustum depth (larger for better visibility)
-                const frustumDepth = 3.0; // Increased frustum depth from 1.5 to 3.0 for new scale
+                // Define frustum depth (in mm)
+                const frustumDepth = 100; // Frustum depth 100mm (10cm)
 
                 // Calculate frustum corners at frustum depth
                 const corners = [
@@ -1891,7 +1898,7 @@
 
                 const maxDim = Math.max(size.x, size.y, size.z);
                 const fov = camera3D.fov * (Math.PI / 180);
-                const cameraDistance = Math.abs(maxDim / Math.sin(fov / 2)) * 2.5; // Increased margin from 1.5 to 2.5
+                const cameraDistance = Math.abs(maxDim / Math.sin(fov / 2)) * 1.8; // Adjusted margin for mm scale
 
                 controls3D.target.copy(center);
                 camera3D.position.copy(center);
