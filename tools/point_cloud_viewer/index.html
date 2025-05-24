@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>点群ビューア</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body { margin: 0; font-family: 'Inter', sans-serif; overflow: hidden; }
+        #container { width: 100vw; height: 100vh; display: block; }
+        #loader {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border: 8px solid #f3f3f3; /* Light grey */
+            border-top: 8px solid #3498db; /* Blue */
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            z-index: 100;
+            display: none; /* Initially hidden */
+        }
+        @keyframes spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        /* Custom modal for alerts */
+        .custom-modal {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .custom-modal.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .custom-modal-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 90%;
+            width: 400px;
+        }
+        .custom-modal-content h2 {
+            margin-top: 0;
+            font-size: 1.25rem;
+            color: #333;
+        }
+        .custom-modal-content p {
+            margin-bottom: 20px;
+            color: #555;
+        }
+        .custom-modal-content button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background-color: #3498db;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        .custom-modal-content button:hover {
+            background-color: #2980b9;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+    <div id="container"></div>
+
+    <div id="loader"></div>
+
+    <div id="customAlert" class="custom-modal">
+        <div class="custom-modal-content bg-gray-800 text-white rounded-lg">
+            <h2 id="customAlertTitle" class="text-xl font-semibold mb-2">通知</h2>
+            <p id="customAlertMessage" class="mb-4">メッセージ</p>
+            <button id="customAlertClose" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">閉じる</button>
+        </div>
+    </div>
+
+    <div class="absolute top-0 left-0 p-4 space-y-2 bg-gray-800 bg-opacity-80 rounded-br-lg shadow-lg max-w-xs md:max-w-sm">
+        <div>
+            <label for="fileInput" class="block text-sm font-medium text-gray-300">.bin ファイルを選択:</label>
+            <input type="file" id="fileInput" accept=".bin" class="mt-1 block w-full text-sm text-gray-400
+                file:mr-4 file:py-2 file:px-4
+                file:rounded-md file:border-0
+                file:text-sm file:font-semibold
+                file:bg-blue-500 file:text-white
+                hover:file:bg-blue-600 cursor-pointer"/>
+        </div>
+         <p class="text-xs text-gray-400 mt-1">座標系: X:奥(赤), Y:左(緑), Z:上(青)</p>
+        <div id="pointCount" class="text-sm text-gray-300">点群数: 0 (表示中: 0)</div>
+        <div class="flex items-center space-x-2">
+            <label for="pointSize" class="block text-sm font-medium text-gray-300">点のサイズ:</label>
+            <input type="range" id="pointSize" min="0.01" max="0.50" step="0.01" value="0.05" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+            <span id="pointSizeValue" class="text-sm text-gray-300 w-10 text-right">0.05</span>
+        </div>
+
+        <div class="space-y-1 pt-2 border-t border-gray-700">
+            <label class="block text-sm font-medium text-gray-300">強度フィルタ:</label>
+            <div class="flex items-center space-x-2">
+                <label for="minIntensitySlider" class="text-xs text-gray-400 w-10">最小:</label>
+                <input type="range" id="minIntensitySlider" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" disabled>
+                <span id="minIntensityValue" class="text-xs text-gray-300 w-12 text-right">N/A</span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <label for="maxIntensitySlider" class="text-xs text-gray-400 w-10">最大:</label>
+                <input type="range" id="maxIntensitySlider" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" disabled>
+                <span id="maxIntensityValue" class="text-xs text-gray-300 w-12 text-right">N/A</span>
+            </div>
+        </div>
+
+        <div class="pt-2 border-t border-gray-700">
+            <label for="colorMapSelect" class="block text-sm font-medium text-gray-300">カラーマップ:</label>
+            <select id="colorMapSelect" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-gray-700 text-gray-200 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                <option value="whiteRed">白-赤 (デフォルト)</option>
+                <option value="grayscale">グレースケール</option>
+                <option value="rainbow">虹色</option>
+                <option value="blueYellowRed">青-黄-赤</option>
+            </select>
+        </div>
+
+        <div class="space-y-1 pt-2 border-t border-gray-700">
+            <label class="block text-sm font-medium text-gray-300">ボクセル化 (Voxel Grid):</label>
+            <div class="flex items-center space-x-2">
+                <input type="checkbox" id="voxelizeCheckbox" class="h-4 w-4 text-indigo-600 border-gray-500 rounded focus:ring-indigo-500">
+                <label for="voxelizeCheckbox" class="text-xs text-gray-400">有効にする</label>
+            </div>
+            <div class="flex items-center space-x-2 mt-1">
+                <label for="voxelSizeInput" class="text-xs text-gray-400 w-16">サイズ:</label>
+                <input type="number" id="voxelSizeInput" value="0.1" step="0.01" min="0.01" class="w-full text-xs bg-gray-700 text-gray-200 border-gray-600 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 p-1" disabled>
+            </div>
+            <div class="flex items-center space-x-2 mt-1">
+                <input type="checkbox" id="displayVoxelsAsCubesCheckbox" class="h-4 w-4 text-indigo-600 border-gray-500 rounded focus:ring-indigo-500" disabled>
+                <label for="displayVoxelsAsCubesCheckbox" class="text-xs text-gray-400">ボクセルを立方体で表示</label>
+            </div>
+        </div>
+
+        <div class="space-y-1 pt-2 border-t border-gray-700">
+            <label class="block text-sm font-medium text-gray-300">Octree化 (Region Octree):</label>
+            <div class="flex items-center space-x-2">
+                <input type="checkbox" id="octreeCheckbox" class="h-4 w-4 text-indigo-600 border-gray-500 rounded focus:ring-indigo-500">
+                <label for="octreeCheckbox" class="text-xs text-gray-400">有効 (代表点:重心)</label>
+            </div>
+            <div class="flex items-center space-x-2 mt-1">
+                <label for="octreeDepthInput" class="text-xs text-gray-400 w-16">深さ:</label>
+                <input type="number" id="octreeDepthInput" value="4" step="1" min="1" max="10" class="w-full text-xs bg-gray-700 text-gray-200 border-gray-600 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 p-1" disabled>
+            </div>
+            <div class="flex items-center space-x-2 mt-1">
+                <input type="checkbox" id="displayOctreeBoundsCheckbox" class="h-4 w-4 text-indigo-600 border-gray-500 rounded focus:ring-indigo-500" disabled>
+                <label for="displayOctreeBoundsCheckbox" class="text-xs text-gray-400">境界ボックス (実範囲)</label>
+            </div>
+        </div>
+
+    </div>
+
+    <script type="module">
+        let scene, camera, renderer, controls;
+        let pointCloudObject = null;
+        let octreeBoundsGroup = null;
+        let originalPointsData = null;
+        let gridHelper, axesHelper;
+        let dynamicGridHelper = null;
+
+        let minIntensityGlobal = 0;
+        let maxIntensityGlobal = 1;
+        let currentMinIntensityFilter = 0;
+        let currentMaxIntensityFilter = 1;
+        let performCameraAdjustmentOnFileLoad = false;
+
+        let currentColorMap = 'whiteRed';
+
+        let voxelizeEnabled = false;
+        let voxelSize = 0.1;
+        let displayVoxelsAsCubes = false;
+
+        let octreeEnabled = false;
+        let octreeMaxDepth = 4;
+        let displayOctreeBounds = false;
+
+
+        const container = document.getElementById('container');
+        const fileInput = document.getElementById('fileInput');
+        const pointCountDisplay = document.getElementById('pointCount');
+        const pointSizeSlider = document.getElementById('pointSize');
+        const pointSizeValueDisplay = document.getElementById('pointSizeValue');
+        const loader = document.getElementById('loader');
+
+        const minIntensitySlider = document.getElementById('minIntensitySlider');
+        const minIntensityValueDisplay = document.getElementById('minIntensityValue');
+        const maxIntensitySlider = document.getElementById('maxIntensitySlider');
+        const maxIntensityValueDisplay = document.getElementById('maxIntensityValue');
+        const colorMapSelect = document.getElementById('colorMapSelect');
+
+        const voxelizeCheckbox = document.getElementById('voxelizeCheckbox');
+        const voxelSizeInput = document.getElementById('voxelSizeInput');
+        const displayVoxelsAsCubesCheckbox = document.getElementById('displayVoxelsAsCubesCheckbox');
+
+        const octreeCheckbox = document.getElementById('octreeCheckbox');
+        const octreeDepthInput = document.getElementById('octreeDepthInput');
+        const displayOctreeBoundsCheckbox = document.getElementById('displayOctreeBoundsCheckbox');
+
+
+        const customAlert = document.getElementById('customAlert');
+        const customAlertTitle = document.getElementById('customAlertTitle');
+        const customAlertMessage = document.getElementById('customAlertMessage');
+        const customAlertClose = document.getElementById('customAlertClose');
+
+        function showAlert(title, message) {
+            customAlertTitle.textContent = title;
+            customAlertMessage.textContent = message;
+            customAlert.classList.add('show');
+        }
+        customAlertClose.addEventListener('click', () => customAlert.classList.remove('show'));
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x111827);
+
+            camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.up.set(0, 0, 1);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.075;
+            controls.screenSpacePanning = true;
+            controls.minDistance = 0.01;
+            controls.maxDistance = 1000;
+            controls.rotateSpeed = 0.7;
+            controls.panSpeed = 0.7;
+            controls.zoomSpeed = 0.9;
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            directionalLight.position.set(5, -5, 10);
+            scene.add(directionalLight);
+
+            gridHelper = new THREE.GridHelper(100, 100, 0x555555, 0x444444);
+            gridHelper.rotation.x = Math.PI / 2;
+            scene.add(gridHelper);
+
+            axesHelper = new THREE.AxesHelper(5);
+            scene.add(axesHelper);
+
+            octreeBoundsGroup = new THREE.Group();
+            scene.add(octreeBoundsGroup);
+
+            controls.target.set(0,0,0);
+            camera.position.set(10, -10, 10);
+            camera.lookAt(controls.target);
+            controls.update();
+
+            window.addEventListener('resize', onWindowResize, false);
+            animate();
+            setupEventListeners();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        function applyColorMap(normalizedIntensity, mapType) {
+            let r, g, b;
+            const v = Math.max(0, Math.min(1, normalizedIntensity));
+
+            switch (mapType) {
+                case 'grayscale':
+                    r = v; g = v; b = v;
+                    break;
+                case 'rainbow':
+                    if (v < 0.25) {
+                        r = 0; g = 4 * v; b = 1;
+                    } else if (v < 0.5) {
+                        r = 0; g = 1; b = 1 - 4 * (v - 0.25);
+                    } else if (v < 0.75) {
+                        r = 4 * (v - 0.5); g = 1; b = 0;
+                    } else {
+                        r = 1; g = 1 - 4 * (v - 0.75); b = 0;
+                    }
+                    break;
+                case 'blueYellowRed':
+                    if (v < 0.5) {
+                        r = v * 2.0;
+                        g = v * 2.0;
+                        b = (0.5 - v) * 2.0;
+                    } else {
+                        r = 1.0;
+                        g = (1.0 - v) * 2.0;
+                        b = 0.0;
+                    }
+                    break;
+                case 'whiteRed':
+                default:
+                    r = 1.0;
+                    g = 1.0 - v;
+                    b = 1.0 - v;
+                    break;
+            }
+            return new THREE.Color(
+                Math.max(0, Math.min(1, r)),
+                Math.max(0, Math.min(1, g)),
+                Math.max(0, Math.min(1, b))
+            );
+        }
+
+        function updateDynamicGridHelper(overallBoundingBox) {
+            if (dynamicGridHelper) {
+                scene.remove(dynamicGridHelper);
+                if (dynamicGridHelper.geometry) dynamicGridHelper.geometry.dispose();
+                if (dynamicGridHelper.material) dynamicGridHelper.material.dispose();
+                dynamicGridHelper = null;
+            }
+
+            if (voxelizeEnabled && displayVoxelsAsCubes && overallBoundingBox && !overallBoundingBox.isEmpty()) {
+                const sizeVec = new THREE.Vector3();
+                overallBoundingBox.getSize(sizeVec);
+
+                const min = overallBoundingBox.min;
+                const max = overallBoundingBox.max;
+
+                const gridMinX = Math.floor(min.x / voxelSize) * voxelSize - voxelSize;
+                const gridMaxX = Math.ceil(max.x / voxelSize) * voxelSize + voxelSize;
+                const gridSizeX = gridMaxX - gridMinX;
+                const divisionsX = Math.round(gridSizeX / voxelSize);
+
+                const gridMinY = Math.floor(min.y / voxelSize) * voxelSize - voxelSize;
+                const gridMaxY = Math.ceil(max.y / voxelSize) * voxelSize + voxelSize;
+                const gridSizeY = gridMaxY - gridMinY;
+                const divisionsY = Math.round(gridSizeY / voxelSize);
+
+                const finalGridSize = Math.max(gridSizeX, gridSizeY, voxelSize);
+                const finalDivisions = Math.round(finalGridSize / voxelSize);
+
+                dynamicGridHelper = new THREE.GridHelper(finalGridSize, finalDivisions, 0x666666, 0x555555);
+                dynamicGridHelper.rotation.x = Math.PI / 2;
+                dynamicGridHelper.position.set(0, 0, 0);
+
+                scene.add(dynamicGridHelper);
+                gridHelper.visible = false;
+            } else {
+                gridHelper.visible = true;
+            }
+        }
+
+
+        function setupEventListeners() {
+            fileInput.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (file) {
+                    if (file.name.endsWith('.bin')) {
+                        loader.style.display = 'block';
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            try {
+                                originalPointsData = new Float32Array(e.target.result);
+                                performCameraAdjustmentOnFileLoad = true;
+                                processAndDisplayPointCloud();
+                            } catch (error) {
+                                console.error("Error processing file:", error);
+                                showAlert('処理エラー', `ファイルの処理中にエラーが発生しました: ${error.message}`);
+                                originalPointsData = null;
+                            } finally {
+                                loader.style.display = 'none';
+                            }
+                        };
+                        reader.onerror = (error) => {
+                            console.error("Error reading file:", error);
+                            showAlert('ファイル読み込みエラー', `ファイルの読み込み中にエラーが発生しました: ${error.message}`);
+                            loader.style.display = 'none';
+                            originalPointsData = null;
+                        };
+                        reader.readAsArrayBuffer(file);
+                    } else {
+                        showAlert('ファイルエラー', '無効なファイル形式です。.bin ファイルを選択してください。');
+                        fileInput.value = '';
+                        originalPointsData = null;
+                    }
+                }
+            });
+
+            pointSizeSlider.addEventListener('input', (event) => {
+                const newSize = parseFloat(event.target.value);
+                pointSizeValueDisplay.textContent = newSize.toFixed(2);
+                if (pointCloudObject && pointCloudObject.type === 'Points') {
+                    pointCloudObject.material.size = newSize;
+                }
+            });
+
+            minIntensitySlider.addEventListener('input', () => {
+                currentMinIntensityFilter = parseFloat(minIntensitySlider.value);
+                if (currentMinIntensityFilter > currentMaxIntensityFilter) {
+                    currentMaxIntensityFilter = currentMinIntensityFilter;
+                    maxIntensitySlider.value = currentMaxIntensityFilter;
+                    maxIntensityValueDisplay.textContent = currentMaxIntensityFilter.toFixed(2);
+                }
+                minIntensityValueDisplay.textContent = currentMinIntensityFilter.toFixed(2);
+                if (originalPointsData) {
+                    performCameraAdjustmentOnFileLoad = false;
+                    processAndDisplayPointCloud();
+                }
+            });
+
+            maxIntensitySlider.addEventListener('input', () => {
+                currentMaxIntensityFilter = parseFloat(maxIntensitySlider.value);
+                if (currentMaxIntensityFilter < currentMinIntensityFilter) {
+                    currentMinIntensityFilter = currentMaxIntensityFilter;
+                    minIntensitySlider.value = currentMinIntensityFilter;
+                    minIntensityValueDisplay.textContent = currentMinIntensityFilter.toFixed(2);
+                }
+                maxIntensityValueDisplay.textContent = currentMaxIntensityFilter.toFixed(2);
+                if (originalPointsData) {
+                    performCameraAdjustmentOnFileLoad = false;
+                    processAndDisplayPointCloud();
+                }
+            });
+
+            colorMapSelect.addEventListener('change', (event) => {
+                currentColorMap = event.target.value;
+                if (originalPointsData) {
+                    performCameraAdjustmentOnFileLoad = false;
+                    processAndDisplayPointCloud();
+                }
+            });
+
+            voxelizeCheckbox.addEventListener('change', (event) => {
+                voxelizeEnabled = event.target.checked;
+                voxelSizeInput.disabled = !voxelizeEnabled;
+                displayVoxelsAsCubesCheckbox.disabled = !voxelizeEnabled;
+                pointSizeSlider.disabled = voxelizeEnabled && displayVoxelsAsCubes;
+                if (voxelizeEnabled) {
+                    octreeCheckbox.checked = false;
+                    octreeEnabled = false;
+                    octreeDepthInput.disabled = true;
+                    displayOctreeBoundsCheckbox.disabled = true;
+                    displayOctreeBoundsCheckbox.checked = false;
+                }
+
+                if (originalPointsData) {
+                    performCameraAdjustmentOnFileLoad = false;
+                    processAndDisplayPointCloud();
+                } else {
+                    updateDynamicGridHelper(null);
+                }
+            });
+
+            voxelSizeInput.addEventListener('change', (event) => {
+                const newSize = parseFloat(event.target.value);
+                if (newSize > 0) {
+                    voxelSize = newSize;
+                    if (originalPointsData && voxelizeEnabled) {
+                        performCameraAdjustmentOnFileLoad = false;
+                        processAndDisplayPointCloud();
+                    }
+                } else {
+                    showAlert("入力エラー", "ボクセルサイズは0より大きい値を入力してください。");
+                    voxelSizeInput.value = voxelSize;
+                }
+            });
+
+            displayVoxelsAsCubesCheckbox.addEventListener('change', (event) => {
+                displayVoxelsAsCubes = event.target.checked;
+                pointSizeSlider.disabled = voxelizeEnabled && displayVoxelsAsCubes;
+                if (originalPointsData) {
+                    performCameraAdjustmentOnFileLoad = false;
+                    processAndDisplayPointCloud();
+                } else {
+                     updateDynamicGridHelper(null);
+                }
+            });
+
+            octreeCheckbox.addEventListener('change', (event) => {
+                octreeEnabled = event.target.checked;
+                octreeDepthInput.disabled = !octreeEnabled;
+                displayOctreeBoundsCheckbox.disabled = !octreeEnabled;
+
+                if (octreeEnabled) {
+                    voxelizeCheckbox.checked = false;
+                    voxelizeEnabled = false;
+                    voxelSizeInput.disabled = true;
+                    displayVoxelsAsCubesCheckbox.disabled = true;
+                    displayVoxelsAsCubesCheckbox.checked = false;
+                    pointSizeSlider.disabled = false;
+                }
+                if (originalPointsData) {
+                    performCameraAdjustmentOnFileLoad = false;
+                    processAndDisplayPointCloud();
+                } else {
+                    clearOctreeBounds();
+                }
+            });
+            octreeDepthInput.addEventListener('change', (event) => {
+                const newDepth = parseInt(event.target.value, 10);
+                if (newDepth >= 1 && newDepth <=10) {
+                    octreeMaxDepth = newDepth;
+                    if (originalPointsData && octreeEnabled) {
+                        performCameraAdjustmentOnFileLoad = false;
+                        processAndDisplayPointCloud();
+                    }
+                } else {
+                    showAlert("入力エラー", "Octreeの深さは1から10の間で入力してください。");
+                    octreeDepthInput.value = octreeMaxDepth;
+                }
+            });
+            displayOctreeBoundsCheckbox.addEventListener('change', (event) => {
+                displayOctreeBounds = event.target.checked;
+                 if (originalPointsData && octreeEnabled) {
+                    performCameraAdjustmentOnFileLoad = false;
+                    processAndDisplayPointCloud();
+                } else if (!octreeEnabled || !originalPointsData) {
+                    clearOctreeBounds();
+                }
+            });
+        }
+
+        function clearPointCloudObject() {
+            if (pointCloudObject) {
+                if (pointCloudObject.type === 'Group') {
+                    pointCloudObject.children.forEach(child => {
+                        if (child.geometry) child.geometry.dispose();
+                        if (child.material) child.material.dispose();
+                    });
+                    pointCloudObject.clear();
+                } else {
+                    if (pointCloudObject.geometry) pointCloudObject.geometry.dispose();
+                    if (pointCloudObject.material) pointCloudObject.material.dispose();
+                }
+                scene.remove(pointCloudObject);
+                pointCloudObject = null;
+            }
+        }
+        function clearOctreeBounds() {
+            if (octreeBoundsGroup) {
+                octreeBoundsGroup.children.forEach(child => {
+                    if (child.geometry) child.geometry.dispose();
+                    if (child.material) child.material.dispose();
+                });
+                octreeBoundsGroup.clear();
+            }
+        }
+
+
+        // --- Octree Node Class and Build Function ---
+        // Implements a standard Region Octree where each node stores points
+        // and can be subdivided. Representative points are centroids of leaf nodes.
+        // Actual bounds are also tracked for tighter bounding box visualization.
+        class OctreeNode {
+            constructor(bounds, depth) {
+                this.bounds = bounds; // THREE.Box3, theoretical extent of this node
+                this.actualBounds = new THREE.Box3(); // Tight bounding box of points *within* this node and its children
+                this.depth = depth;
+                // this.pointsData = []; // No longer storing raw points in each node to save memory for deep trees
+                this.children = null;
+
+                // For representative point calculation (centroid and average intensity)
+                this.sumX = 0; this.sumY = 0; this.sumZ = 0;
+                this.sumIntensity = 0; this.pointCount = 0;
+            }
+
+            subdivide() {
+                this.children = [];
+                const min = this.bounds.min;
+                const max = this.bounds.max;
+                const mid = new THREE.Vector3().addVectors(min, max).multiplyScalar(0.5);
+
+                // Order: ---, +--, -+-, ++-, --+, +-+, -++, +++ (X, Y, Z)
+                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(min.x, min.y, min.z), new THREE.Vector3(mid.x, mid.y, mid.z)), this.depth + 1)); // 000
+                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(mid.x, min.y, min.z), new THREE.Vector3(max.x, mid.y, mid.z)), this.depth + 1)); // 100
+                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(min.x, mid.y, min.z), new THREE.Vector3(mid.x, max.y, mid.z)), this.depth + 1)); // 010
+                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(mid.x, mid.y, min.z), new THREE.Vector3(max.x, max.y, mid.z)), this.depth + 1)); // 110
+                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(min.x, min.y, mid.z), new THREE.Vector3(mid.x, mid.y, max.z)), this.depth + 1)); // 001
+                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(mid.x, min.y, mid.z), new THREE.Vector3(max.x, mid.y, max.z)), this.depth + 1)); // 101
+                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(min.x, mid.y, mid.z), new THREE.Vector3(mid.x, max.y, max.z)), this.depth + 1)); // 011
+                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(mid.x, mid.y, mid.z), new THREE.Vector3(max.x, max.y, max.z)), this.depth + 1)); // 111
+            }
+
+            insert(point) {
+                // Update actualBounds for this node (and recursively for its parents via call stack)
+                this.actualBounds.expandByPoint(new THREE.Vector3(point.x, point.y, point.z));
+
+                // Accumulate sums for centroid/average intensity calculation
+                this.sumX += point.x; this.sumY += point.y; this.sumZ += point.z;
+                this.sumIntensity += point.intensity; this.pointCount++;
+
+                if (this.depth < octreeMaxDepth) {
+                    if (this.children === null) {
+                        this.subdivide();
+                    }
+                    const pointVec = new THREE.Vector3(point.x, point.y, point.z);
+                    let insertedInChildren = false;
+                    for (let i = 0; i < 8; i++) {
+                        if (this.children[i].bounds.containsPoint(pointVec)) {
+                            this.children[i].insert(point);
+                            insertedInChildren = true;
+                            break;
+                        }
+                    }
+                    // If a point is exactly on a boundary, it might not be strictly contained by any child.
+                    // In such rare cases, it contributes to the current node's average.
+                }
+                // If max depth is reached, point contributes to this leaf node's average.
+            }
+
+            getLeafRepresentativePoints(representatives) {
+                if (this.depth === octreeMaxDepth || this.children === null) {
+                    if (this.pointCount > 0) {
+                        representatives.push({
+                            x: this.sumX / this.pointCount,
+                            y: this.sumY / this.pointCount,
+                            z: this.sumZ / this.pointCount,
+                            intensity: this.sumIntensity / this.pointCount,
+                        });
+                    }
+                } else {
+                    for (let i = 0; i < 8; i++) {
+                        if (this.children[i].pointCount > 0) {
+                           this.children[i].getLeafRepresentativePoints(representatives);
+                        }
+                    }
+                }
+            }
+
+            // Gets actual bounding boxes of leaf nodes (or nodes at maxDepth) that contain points
+            getDisplayableNodeActualBounds(boundsList) {
+                if (this.pointCount > 0) {
+                    if (this.depth === octreeMaxDepth || this.children === null) {
+                        if (!this.actualBounds.isEmpty()) {
+                            boundsList.push(this.actualBounds);
+                        }
+                    } else if (this.children !== null) {
+                        for (let i = 0; i < 8; i++) {
+                             this.children[i].getDisplayableNodeActualBounds(boundsList);
+                        }
+                    }
+                }
+            }
+        }
+
+
+        function processAndDisplayPointCloud() {
+            if (!originalPointsData) {
+                pointCountDisplay.textContent = `点群数: 0 (表示中: 0)`;
+                minIntensitySlider.disabled = true; maxIntensitySlider.disabled = true;
+                minIntensityValueDisplay.textContent = "N/A"; maxIntensityValueDisplay.textContent = "N/A";
+                voxelizeCheckbox.disabled = true; voxelizeCheckbox.checked = false;
+                voxelSizeInput.disabled = true;
+                displayVoxelsAsCubesCheckbox.disabled = true; displayVoxelsAsCubesCheckbox.checked = false;
+                octreeCheckbox.disabled = true; octreeCheckbox.checked = false;
+                octreeDepthInput.disabled = true;
+                displayOctreeBoundsCheckbox.disabled = true; displayOctreeBoundsCheckbox.checked = false;
+                pointSizeSlider.disabled = false;
+                voxelizeEnabled = false; displayVoxelsAsCubes = false; octreeEnabled = false; displayOctreeBounds = false;
+
+                clearPointCloudObject();
+                clearOctreeBounds();
+                updateDynamicGridHelper(null);
+                controls.target.set(0,0,0);
+                camera.position.set(10, -10, 10);
+                camera.lookAt(controls.target);
+                controls.update();
+                return;
+            }
+
+            loader.style.display = 'block';
+            camera.up.set(0,0,1);
+            // UI Enable/Disable Logic
+            voxelizeCheckbox.disabled = octreeEnabled;
+            voxelSizeInput.disabled = !voxelizeEnabled || octreeEnabled;
+            displayVoxelsAsCubesCheckbox.disabled = !voxelizeEnabled || octreeEnabled;
+            octreeCheckbox.disabled = voxelizeEnabled;
+            octreeDepthInput.disabled = !octreeEnabled || voxelizeEnabled;
+            displayOctreeBoundsCheckbox.disabled = !octreeEnabled || voxelizeEnabled;
+            pointSizeSlider.disabled = (voxelizeEnabled && displayVoxelsAsCubes);
+
+
+            const float32Array = originalPointsData;
+            if (float32Array.length % 4 !== 0) {
+                showAlert('ファイルエラー', 'ファイルのデータ形式が正しくありません。');
+                loader.style.display = 'none';
+                return;
+            }
+
+            const totalNumPoints = float32Array.length / 4;
+
+            if (performCameraAdjustmentOnFileLoad) {
+                minIntensityGlobal = Infinity;
+                maxIntensityGlobal = -Infinity;
+                for (let i = 0; i < totalNumPoints; i++) {
+                    const intensityVal = float32Array[i * 4 + 3];
+                    if (intensityVal < minIntensityGlobal) minIntensityGlobal = intensityVal;
+                    if (intensityVal > maxIntensityGlobal) maxIntensityGlobal = intensityVal;
+                }
+                if (totalNumPoints === 0) {
+                    minIntensityGlobal = 0;
+                    maxIntensityGlobal = 1;
+                } else if (minIntensityGlobal === maxIntensityGlobal) {
+                     maxIntensityGlobal = minIntensityGlobal + (minIntensityGlobal === 0 ? 1.0 : Math.abs(minIntensityGlobal * 0.1) + 0.1);
+                     if (minIntensityGlobal === maxIntensityGlobal) maxIntensityGlobal +=1.0;
+                }
+
+                minIntensitySlider.min = minIntensityGlobal.toFixed(2);
+                minIntensitySlider.max = maxIntensityGlobal.toFixed(2);
+                minIntensitySlider.value = minIntensityGlobal.toFixed(2);
+                minIntensitySlider.disabled = false;
+                minIntensityValueDisplay.textContent = minIntensityGlobal.toFixed(2);
+                currentMinIntensityFilter = minIntensityGlobal;
+
+                maxIntensitySlider.min = minIntensityGlobal.toFixed(2);
+                maxIntensitySlider.max = maxIntensityGlobal.toFixed(2);
+                maxIntensitySlider.value = maxIntensityGlobal.toFixed(2);
+                maxIntensitySlider.disabled = false;
+                maxIntensityValueDisplay.textContent = maxIntensityGlobal.toFixed(2);
+                currentMaxIntensityFilter = maxIntensityGlobal;
+
+                const stepValue = Math.max(0.01, (maxIntensityGlobal - minIntensityGlobal) / 100);
+                minIntensitySlider.step = stepValue.toFixed(4);
+                maxIntensitySlider.step = stepValue.toFixed(4);
+            }
+
+            let pointsToProcess = [];
+            for (let i = 0; i < totalNumPoints; i++) {
+                const intensityVal = float32Array[i * 4 + 3];
+                if (intensityVal >= currentMinIntensityFilter && intensityVal <= currentMaxIntensityFilter) {
+                    pointsToProcess.push({
+                        x: float32Array[i * 4 + 0],
+                        y: float32Array[i * 4 + 1],
+                        z: float32Array[i * 4 + 2],
+                        intensity: intensityVal
+                    });
+                }
+            }
+
+            let finalPositionsArray = [];
+            let finalIntensitiesArray = [];
+            let voxelGridData = [];
+            let rootNodeForOctree = null;
+
+            clearOctreeBounds();
+
+            if (octreeEnabled && pointsToProcess.length > 0) {
+                const overallBounds = new THREE.Box3();
+                // Calculate initial overall bounds from *filtered* points
+                pointsToProcess.forEach(p => overallBounds.expandByPoint(new THREE.Vector3(p.x, p.y, p.z)));
+
+                if (!overallBounds.isEmpty()) {
+                    rootNodeForOctree = new OctreeNode(overallBounds.clone(), 0);
+                    pointsToProcess.forEach(p => rootNodeForOctree.insert(p));
+
+                    const representativePoints = [];
+                    rootNodeForOctree.getLeafRepresentativePoints(representativePoints);
+
+                    representativePoints.forEach(rp => {
+                        finalPositionsArray.push(rp.x, rp.y, rp.z);
+                        finalIntensitiesArray.push(rp.intensity);
+                    });
+
+                    if (displayOctreeBounds) {
+                        const boundsToDisplay = [];
+                        rootNodeForOctree.getDisplayableNodeActualBounds(boundsToDisplay);
+                        boundsToDisplay.forEach(box => {
+                            if (!box.isEmpty()){
+                                const helper = new THREE.Box3Helper(box, 0xcccccc);
+                                octreeBoundsGroup.add(helper);
+                            }
+                        });
+                    }
+                }
+
+
+            } else if (voxelizeEnabled && pointsToProcess.length > 0) {
+                const voxels = new Map();
+                const invVoxelSize = 1.0 / voxelSize;
+
+                pointsToProcess.forEach(p => {
+                    const voxelXIndex = Math.floor(p.x * invVoxelSize);
+                    const voxelYIndex = Math.floor(p.y * invVoxelSize);
+                    const voxelZIndex = Math.floor(p.z * invVoxelSize);
+                    const voxelKey = `${voxelXIndex}_${voxelYIndex}_${voxelZIndex}`;
+
+                    if (!voxels.has(voxelKey)) {
+                        voxels.set(voxelKey, { sumIntensity: 0, count: 0, voxelXIndex, voxelYIndex, voxelZIndex });
+                    }
+                    const voxelEntry = voxels.get(voxelKey);
+                    voxelEntry.sumIntensity += p.intensity;
+                    voxelEntry.count++;
+                });
+
+                voxels.forEach(voxelEntry => {
+                    const avgIntensity = voxelEntry.sumIntensity / voxelEntry.count;
+                    const cubeCenterX = (voxelEntry.voxelXIndex + 0.5) * voxelSize;
+                    const cubeCenterY = (voxelEntry.voxelYIndex + 0.5) * voxelSize;
+                    const cubeCenterZ = (voxelEntry.voxelZIndex + 0.5) * voxelSize;
+
+                    if (displayVoxelsAsCubes) {
+                        voxelGridData.push({ x: cubeCenterX, y: cubeCenterY, z: cubeCenterZ, intensity: avgIntensity });
+                    } else {
+                        finalPositionsArray.push(cubeCenterX, cubeCenterY, cubeCenterZ);
+                        finalIntensitiesArray.push(avgIntensity);
+                    }
+                });
+            } else {
+                pointsToProcess.forEach(p => {
+                    finalPositionsArray.push(p.x, p.y, p.z);
+                    finalIntensitiesArray.push(p.intensity);
+                });
+            }
+
+            const numVisibleElements = (voxelizeEnabled && displayVoxelsAsCubes) ? voxelGridData.length : finalPositionsArray.length / 3;
+            pointCountDisplay.textContent = `点群数: ${totalNumPoints.toLocaleString()} (表示中: ${numVisibleElements.toLocaleString()})`;
+
+            clearPointCloudObject();
+
+            if (numVisibleElements === 0 && !(octreeEnabled && displayOctreeBounds && octreeBoundsGroup.children.length > 0)) {
+                updateDynamicGridHelper(null);
+                loader.style.display = 'none';
+                controls.update();
+                return;
+            }
+
+            let geometry;
+            let overallBoundingBox = new THREE.Box3();
+
+            if (voxelizeEnabled && displayVoxelsAsCubes) {
+                pointCloudObject = new THREE.Group();
+                const cubeGeometry = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
+
+                voxelGridData.forEach(voxel => {
+                    const normIntensity = Math.max(0, Math.min(1, (voxel.intensity - minIntensityGlobal) / (maxIntensityGlobal - minIntensityGlobal || 1)));
+                    const color = applyColorMap(normIntensity, currentColorMap);
+
+                    const cubeMaterial = new THREE.MeshStandardMaterial({
+                        color: color,
+                        roughness: 0.8,
+                        metalness: 0.0,
+                    });
+                    const cubeMesh = new THREE.Mesh(cubeGeometry, cubeMaterial);
+                    cubeMesh.position.set(voxel.x, voxel.y, voxel.z);
+                    pointCloudObject.add(cubeMesh);
+                    overallBoundingBox.expandByObject(cubeMesh);
+                });
+                scene.add(pointCloudObject);
+
+                if (pointCloudObject.children.length > 0 && !overallBoundingBox.isEmpty()) {
+                     geometry = { boundingSphere: new THREE.Sphere() };
+                     overallBoundingBox.getBoundingSphere(geometry.boundingSphere);
+                } else {
+                    geometry = null;
+                }
+
+            } else if (finalPositionsArray.length > 0) {
+                const finalPositions = new Float32Array(finalPositionsArray);
+                const finalColors = new Float32Array(numVisibleElements * 3);
+
+                let normMin = minIntensityGlobal;
+                let normMax = maxIntensityGlobal;
+                if (normMin === normMax) {
+                     normMax = normMin + (normMin === 0 ? 1.0 : Math.abs(normMin * 0.1) + 0.1);
+                     if (normMin === normMax) normMax +=1.0;
+                }
+
+                for (let i = 0; i < numVisibleElements; i++) {
+                    const normIntensity = Math.max(0, Math.min(1, (finalIntensitiesArray[i] - normMin) / (normMax - normMin)));
+                    const color = applyColorMap(normIntensity, currentColorMap);
+                    finalColors[i * 3 + 0] = color.r;
+                    finalColors[i * 3 + 1] = color.g;
+                    finalColors[i * 3 + 2] = color.b;
+                }
+
+                geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', new THREE.BufferAttribute(finalPositions, 3));
+                geometry.setAttribute('color', new THREE.BufferAttribute(finalColors, 3));
+
+                if (numVisibleElements > 0) {
+                    geometry.computeBoundingBox();
+                    overallBoundingBox.copy(geometry.boundingBox);
+                    geometry.computeBoundingSphere();
+                }
+
+                const material = new THREE.PointsMaterial({
+                    size: parseFloat(pointSizeSlider.value),
+                    vertexColors: true,
+                    sizeAttenuation: true
+                });
+
+                pointCloudObject = new THREE.Points(geometry, material);
+                scene.add(pointCloudObject);
+            }
+
+            if (octreeEnabled && displayOctreeBounds && rootNodeForOctree) {
+                 const octreeOverallBounds = new THREE.Box3();
+                 octreeBoundsGroup.children.forEach(helper => {
+                    // Box3Helper's box property holds the Box3 it represents
+                    if (helper.box) octreeOverallBounds.union(helper.box);
+                 });
+                 if(!octreeOverallBounds.isEmpty()){
+                    overallBoundingBox.union(octreeOverallBounds);
+                 } else if (rootNodeForOctree.actualBounds && !rootNodeForOctree.actualBounds.isEmpty() && overallBoundingBox.isEmpty()) {
+                     // If no helpers were added but root has actual bounds (e.g. depth 0)
+                    overallBoundingBox.copy(rootNodeForOctree.actualBounds);
+                 } else if (rootNodeForOctree.bounds && !rootNodeForOctree.bounds.isEmpty() && overallBoundingBox.isEmpty()) {
+                    overallBoundingBox.copy(rootNodeForOctree.bounds);
+                 }
+
+                 if ((!pointCloudObject || pointCloudObject.children && pointCloudObject.children.length === 0) && !overallBoundingBox.isEmpty()) {
+                    geometry = { boundingSphere: new THREE.Sphere() };
+                    overallBoundingBox.getBoundingSphere(geometry.boundingSphere);
+                 }
+            }
+
+
+            updateDynamicGridHelper(overallBoundingBox);
+
+            if (performCameraAdjustmentOnFileLoad && geometry && geometry.boundingSphere && (numVisibleElements > 0 || (octreeEnabled && displayOctreeBounds && octreeBoundsGroup.children.length > 0)) && !geometry.boundingSphere.isEmpty()) {
+                const center = geometry.boundingSphere.center;
+                const radius = geometry.boundingSphere.radius;
+
+                controls.target.copy(center);
+                const fov = camera.fov * (Math.PI / 180);
+                let camDistance = Math.max(
+                    radius / Math.sin(fov / 2) * 1.1,
+                    radius + controls.minDistance + 0.2,
+                    0.5
+                );
+                if (radius < 0.1 && camDistance < 1.0) {
+                    camDistance = Math.max(camDistance, 1.0);
+                }
+
+                const offsetFactor = camDistance * 0.5;
+                camera.position.set(
+                    center.x + offsetFactor,
+                    center.y - offsetFactor,
+                    center.z + offsetFactor
+                );
+
+                if (camera.position.distanceTo(center) < radius * 1.05 || totalNumPoints === 1 && radius < 0.1) {
+                    const fallbackDist = Math.max(radius * 1.5, 0.5);
+                    camera.position.set(center.x + fallbackDist, center.y - fallbackDist, center.z + fallbackDist);
+                }
+                camera.lookAt(controls.target);
+                performCameraAdjustmentOnFileLoad = false;
+            } else if (performCameraAdjustmentOnFileLoad && (numVisibleElements === 0 || (geometry && geometry.boundingSphere && geometry.boundingSphere.isEmpty()))) {
+                 controls.target.set(0,0,0);
+                 camera.position.set(10, -10, 10);
+                 camera.lookAt(controls.target);
+                 performCameraAdjustmentOnFileLoad = false;
+            }
+            controls.update();
+            loader.style.display = 'none';
+        }
+        init();
+    </script>
+</body>
+</html>
