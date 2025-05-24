@@ -794,13 +794,12 @@
 
             test3DVisualization() {
                 console.log("=== 3D Visualization Test ===");
+
+                // First, switch to the visualization tab to ensure the container is visible and sized
+                this.switchTab('visualization');
+
                 console.log("THREE defined:", typeof THREE !== 'undefined');
                 console.log("THREE.OrbitControls defined:", typeof THREE !== 'undefined' && typeof THREE.OrbitControls !== 'undefined');
-                console.log("visualization3DInitialized:", visualization3DInitialized);
-                console.log("scene3D exists:", !!scene3D);
-                console.log("camera3D exists:", !!camera3D);
-                console.log("renderer3D exists:", !!renderer3D);
-                console.log("controls3D exists:", !!controls3D);
 
                 if (typeof THREE === 'undefined') {
                     this.updateStatus("❌ Three.js が読み込まれていません", 'error');
@@ -811,18 +810,30 @@
 
                 if (typeof THREE.OrbitControls === 'undefined') {
                     this.updateStatus("⚠️ OrbitControls が読み込まれていません。基本版を使用します。", 'warning');
-                    this.implementBasicOrbitControls();
+                    this.implementBasicOrbitControls(); // Ensure this is defined or handled
                 }
 
                 try {
+                    // init3DVisualization should be called by switchTab if not already initialized
+                    // or if it failed previously due to zero dimensions.
+                    // We explicitly call it here as well to ensure it runs if switchTab didn't trigger it.
                     if (!visualization3DInitialized) {
-                        this.init3DVisualization();
+                         console.log("test3DVisualization: Attempting init as not yet initialized.");
+                         this.init3DVisualization();
                     }
 
-                    // Switch to 3D tab to show the result
-                    this.switchTab('visualization');
-
-                    this.updateStatus("✅ 3D可視化テスト成功: 3Dタブに緑色のテストキューブが表示されます", 'success');
+                    if (visualization3DInitialized) {
+                        // Add a test cube if visualization is successfully initialized
+                        this.addTestCube(); // This now handles removing previous test cubes.
+                        this.updateStatus("✅ 3D可視化テスト成功: 3Dタブに緑色のテストキューブが表示されます", 'success');
+                        console.log("scene3D exists:", !!scene3D);
+                        console.log("camera3D exists:", !!camera3D);
+                        console.log("renderer3D exists:", !!renderer3D);
+                        console.log("controls3D exists:", !!controls3D);
+                    } else {
+                        this.updateStatus("⚠️ 3D可視化の初期化に失敗しました。コンテナサイズを確認してください。", 'warning');
+                        console.warn("3D visualization still not initialized after test attempt. Container might be hidden or zero-sized.");
+                    }
                 } catch (error) {
                     console.error("3D visualization test error:", error);
                     this.updateStatus(`❌ 3D可視化テストエラー: ${error.message}`, 'error');
@@ -1420,8 +1431,11 @@
                 console.log('Initializing 3D visualization...');
 
                 const container = document.getElementById('visualization3D');
+                const noMessage = document.getElementById('noVisualizationMessage');
+
                 if (!container) {
                     console.error('3D container not found');
+                    if (noMessage) noMessage.style.display = 'block'; // Ensure placeholder is visible
                     return;
                 }
 
@@ -1429,10 +1443,22 @@
                 if (typeof THREE === 'undefined') {
                     console.error('THREE.js is not loaded');
                     this.updateStatus('Three.jsが読み込まれていません。ページをリロードしてください。', 'error');
+                    if (noMessage) noMessage.style.display = 'block'; // Ensure placeholder is visible
                     return;
                 }
+                 console.log('THREE.js version:', THREE.REVISION);
 
-                console.log('THREE.js version:', THREE.REVISION);
+                // Check container dimensions BEFORE hiding noMessage or proceeding with WebGL setup
+                if (container.clientWidth === 0 || container.clientHeight === 0) {
+                    console.warn("3D visualization container has zero dimensions. Tab might be hidden. Full 3D initialization deferred.");
+                    if (noMessage) noMessage.style.display = 'block'; // Ensure placeholder is visible
+                    // Do NOT set visualization3DInitialized = true yet
+                    return; // Exit early, wait for tab to become visible
+                }
+
+                // Dimensions are valid, proceed with full initialization
+                if (noMessage) noMessage.style.display = 'none'; // Hide placeholder
+
 
                 // Add basic OrbitControls if not available
                 if (typeof THREE.OrbitControls === 'undefined') {
@@ -1440,15 +1466,7 @@
                     this.implementBasicOrbitControls();
                 }
 
-                // Hide the "no visualization" message
-                const noMessage = document.getElementById('noVisualizationMessage');
-                if (noMessage) noMessage.style.display = 'none';
-
-                // Show controls
-                const controls = document.getElementById('visualizationControls');
-                if (controls) controls.style.display = 'block';
-
-                                try {
+                try {
                     // Scene setup
                     scene3D = new THREE.Scene();
                     scene3D.background = new THREE.Color(0xf0f0f0); // Light gray background for better visibility
@@ -1545,10 +1563,12 @@
                 visualization3DInitialized = true;
                 console.log('3D visualization initialized successfully');
 
-                // Remove test cube if it exists
-                setTimeout(() => {
+                // Remove test cube if it exists (moved from test3DVisualization to ensure it's tied to init)
+                // It's added by this.addTestCube() called earlier in this function.
+                if (this.testCubeRemoveTimeout) clearTimeout(this.testCubeRemoveTimeout);
+                this.testCubeRemoveTimeout = setTimeout(() => {
                     this.removeTestCube();
-                }, 2000);
+                }, 3000); // Show test cube for 3s after init
 
                 // Update status
                 this.updateStatus('3D可視化が初期化されました。カメラキャリブレーション後に表示されます。', 'success');
@@ -1999,6 +2019,13 @@
             }
 
             addTestCube() {
+                if (!scene3D) {
+                    console.warn('Cannot add test cube: scene3D is not initialized.');
+                    return;
+                }
+                // Remove existing test objects first to avoid duplicates
+                this.removeTestCube();
+
                 // Add a simple test cube to verify 3D rendering is working
                 const geometry = new THREE.BoxGeometry(1, 1, 1);
                 const material = new THREE.MeshLambertMaterial({
@@ -2327,6 +2354,32 @@
                 document.querySelectorAll('.tab-content').forEach(content => {
                     content.classList.toggle('active', content.id === tabName);
                 });
+
+                if (tabName === 'visualization') {
+                    const container = document.getElementById('visualization3D');
+                    if (!visualization3DInitialized) {
+                        console.log("Visualization tab activated, attempting to initialize 3D scene.");
+                        this.init3DVisualization(); // Attempt initialization
+                    } else if (renderer3D && camera3D && container) {
+                        // If already initialized, ensure renderer size is updated
+                        // This handles cases where the browser was resized while the tab was hidden
+                        camera3D.aspect = container.clientWidth / container.clientHeight;
+                        camera3D.updateProjectionMatrix();
+                        renderer3D.setSize(container.clientWidth, container.clientHeight);
+                        console.log("Visualization tab activated, renderer resized.");
+                    }
+                     // Show controls when 3D tab is active and initialized
+                    const controlsPanel = document.getElementById('visualizationControls');
+                    if (controlsPanel && visualization3DInitialized) {
+                        controlsPanel.style.display = 'block';
+                    }
+                } else {
+                    // Hide controls when other tabs are active
+                    const controlsPanel = document.getElementById('visualizationControls');
+                    if (controlsPanel) {
+                        controlsPanel.style.display = 'none';
+                    }
+                }
             }
 
             clearAll() {
