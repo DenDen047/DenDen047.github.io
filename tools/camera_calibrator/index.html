@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Camera Calibration Toolbox (OpenCV.js)</title>
     <!-- Three.js CDN for 3D Visualization -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://threejs.org/examples/js/controls/OrbitControls.js"></script>
+
     <style>
         * {
             margin: 0;
@@ -436,6 +437,7 @@
                     <button class="btn" id="detectCornersBtn" disabled>🔍 コーナー検出 (OpenCV.js)</button>
                     <button class="btn btn-success" id="calibrateBtn" disabled>📐 カメラキャリブレーション (OpenCV.js)</button>
                     <button class="btn btn-warning" id="testOpenCVBtn">🧪 OpenCV状態テスト</button>
+                    <button class="btn btn-warning" id="test3DBtn">🎯 3D可視化テスト</button>
                     <button class="btn btn-danger" id="clearBtn">🗑️ 全てクリア</button>
                 </div>
 
@@ -722,6 +724,7 @@
                 document.getElementById('detectCornersBtn').addEventListener('click', this.detectAllCornersOpenCV.bind(this));
                 document.getElementById('calibrateBtn').addEventListener('click', this.calibrateCameraOpenCV.bind(this));
                 document.getElementById('testOpenCVBtn').addEventListener('click', this.testOpenCVStatus.bind(this));
+                document.getElementById('test3DBtn').addEventListener('click', this.test3DVisualization.bind(this));
                 document.getElementById('clearBtn').addEventListener('click', this.showClearConfirmation.bind(this));
 
                 document.querySelectorAll('.tab').forEach(tab => {
@@ -787,6 +790,44 @@
                     this.updateStatus("OpenCV テストエラー: cv オブジェクトが定義されていません", 'error');
                 }
                 console.log("=== End OpenCV Test ===");
+            }
+
+            test3DVisualization() {
+                console.log("=== 3D Visualization Test ===");
+                console.log("THREE defined:", typeof THREE !== 'undefined');
+                console.log("THREE.OrbitControls defined:", typeof THREE !== 'undefined' && typeof THREE.OrbitControls !== 'undefined');
+                console.log("visualization3DInitialized:", visualization3DInitialized);
+                console.log("scene3D exists:", !!scene3D);
+                console.log("camera3D exists:", !!camera3D);
+                console.log("renderer3D exists:", !!renderer3D);
+                console.log("controls3D exists:", !!controls3D);
+
+                if (typeof THREE === 'undefined') {
+                    this.updateStatus("❌ Three.js が読み込まれていません", 'error');
+                    return;
+                }
+
+                console.log("THREE.js version:", THREE.REVISION);
+
+                if (typeof THREE.OrbitControls === 'undefined') {
+                    this.updateStatus("⚠️ OrbitControls が読み込まれていません。基本版を使用します。", 'warning');
+                    this.implementBasicOrbitControls();
+                }
+
+                try {
+                    if (!visualization3DInitialized) {
+                        this.init3DVisualization();
+                    }
+
+                    // Switch to 3D tab to show the result
+                    this.switchTab('visualization');
+
+                    this.updateStatus("✅ 3D可視化テスト成功: 3Dタブに緑色のテストキューブが表示されます", 'success');
+                } catch (error) {
+                    console.error("3D visualization test error:", error);
+                    this.updateStatus(`❌ 3D可視化テストエラー: ${error.message}`, 'error');
+                }
+                console.log("=== End 3D Test ===");
             }
 
                         showClearConfirmation() {
@@ -1133,10 +1174,20 @@
                     };
 
                     this.displayResults();
-                    this.init3DVisualization();
-                    this.update3DVisualization();
+
+                    // Initialize and update 3D visualization
+                    try {
+                        this.init3DVisualization();
+                        console.log('3D visualization initialized, now updating...');
+                        this.update3DVisualization();
+                        console.log('3D visualization updated successfully');
+                    } catch (viz3dError) {
+                        console.error('3D visualization error:', viz3dError);
+                        this.updateStatus('3D可視化でエラーが発生しましたが、キャリブレーションは成功しました。', 'warning');
+                    }
+
                     this.switchTab('results');
-                    this.updateStatus(`カメラキャリブレーション成功！ RMS誤差: ${rms.toFixed(4)}`, 'success');
+                    this.updateStatus(`カメラキャリブレーション成功！ RMS誤差: ${rms.toFixed(4)} (3D可視化タブでカメラ位置を確認可能)`, 'success');
 
                 } catch (e) {
                     console.error("OpenCV Calibration Error:", e);
@@ -1383,6 +1434,12 @@
 
                 console.log('THREE.js version:', THREE.REVISION);
 
+                // Add basic OrbitControls if not available
+                if (typeof THREE.OrbitControls === 'undefined') {
+                    console.warn('OrbitControls not found, implementing basic version...');
+                    this.implementBasicOrbitControls();
+                }
+
                 // Hide the "no visualization" message
                 const noMessage = document.getElementById('noVisualizationMessage');
                 if (noMessage) noMessage.style.display = 'none';
@@ -1415,7 +1472,7 @@
                     return;
                 }
 
-                // Controls setup
+                                // Controls setup
                 try {
                     controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
                     controls3D.enableDamping = true;
@@ -1423,7 +1480,7 @@
                     controls3D.screenSpacePanning = false;
                     controls3D.minDistance = 0.5;
                     controls3D.maxDistance = 100;
-                    console.log('OrbitControls created');
+                    console.log('OrbitControls created successfully');
                 } catch (error) {
                     console.error('Error setting up OrbitControls:', error);
                     this.updateStatus('3Dコントロールの初期化に失敗しました: ' + error.message, 'error');
@@ -1488,8 +1545,13 @@
                 visualization3DInitialized = true;
                 console.log('3D visualization initialized successfully');
 
+                // Remove test cube if it exists
+                setTimeout(() => {
+                    this.removeTestCube();
+                }, 2000);
+
                 // Update status
-                this.updateStatus('3D可視化が初期化されました', 'success');
+                this.updateStatus('3D可視化が初期化されました。カメラキャリブレーション後に表示されます。', 'success');
             }
 
             setup3DVisualizationEventListeners() {
@@ -1520,12 +1582,23 @@
             }
 
             update3DVisualization() {
+                console.log('update3DVisualization called');
+                console.log('visualization3DInitialized:', visualization3DInitialized);
+                console.log('calibrationResult exists:', !!this.calibrationResult);
+                console.log('scene3D exists:', !!scene3D);
+                console.log('camerasGroup exists:', !!camerasGroup);
+
                 if (!visualization3DInitialized || !this.calibrationResult) {
                     console.log('3D visualization not ready or no calibration result');
                     return;
                 }
 
-                                console.log('Updating 3D visualization with calibration result:', this.calibrationResult);
+                if (!scene3D || !camerasGroup || !checkboardsGroup || !frustrumsGroup) {
+                    console.error('3D scene components not initialized properly');
+                    return;
+                }
+
+                console.log('Updating 3D visualization with calibration result:', this.calibrationResult);
 
                 // Clear existing visualization elements
                 if (camerasGroup) camerasGroup.clear();
@@ -1862,6 +1935,69 @@
                 return vector.map(v => v * scale);
             }
 
+            implementBasicOrbitControls() {
+                // Basic OrbitControls implementation as fallback
+                THREE.OrbitControls = function(camera, domElement) {
+                    this.camera = camera;
+                    this.domElement = domElement;
+                    this.target = new THREE.Vector3(0, 0, 0);
+                    this.enableDamping = true;
+                    this.dampingFactor = 0.1;
+                    this.screenSpacePanning = false;
+                    this.minDistance = 0.5;
+                    this.maxDistance = 100;
+
+                    let isMouseDown = false;
+                    let previousMousePosition = { x: 0, y: 0 };
+                    let spherical = new THREE.Spherical();
+                    spherical.setFromVector3(camera.position.clone().sub(this.target));
+
+                    const onMouseDown = (event) => {
+                        isMouseDown = true;
+                        previousMousePosition = { x: event.clientX, y: event.clientY };
+                    };
+
+                    const onMouseUp = () => {
+                        isMouseDown = false;
+                    };
+
+                    const onMouseMove = (event) => {
+                        if (!isMouseDown) return;
+
+                        const deltaX = event.clientX - previousMousePosition.x;
+                        const deltaY = event.clientY - previousMousePosition.y;
+
+                        spherical.theta -= deltaX * 0.01;
+                        spherical.phi += deltaY * 0.01;
+                        spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
+
+                        previousMousePosition = { x: event.clientX, y: event.clientY };
+                        this.update();
+                    };
+
+                    const onWheel = (event) => {
+                        spherical.radius += event.deltaY * 0.01;
+                        spherical.radius = Math.max(this.minDistance, Math.min(this.maxDistance, spherical.radius));
+                        this.update();
+                    };
+
+                    this.domElement.addEventListener('mousedown', onMouseDown);
+                    this.domElement.addEventListener('mouseup', onMouseUp);
+                    this.domElement.addEventListener('mousemove', onMouseMove);
+                    this.domElement.addEventListener('wheel', onWheel);
+
+                    this.update = () => {
+                        const position = new THREE.Vector3();
+                        position.setFromSpherical(spherical);
+                        position.add(this.target);
+                        this.camera.position.copy(position);
+                        this.camera.lookAt(this.target);
+                    };
+                };
+
+                console.log('Basic OrbitControls implemented');
+            }
+
             addTestCube() {
                 // Add a simple test cube to verify 3D rendering is working
                 const geometry = new THREE.BoxGeometry(1, 1, 1);
@@ -1871,6 +2007,7 @@
                 });
                 const testCube = new THREE.Mesh(geometry, material);
                 testCube.position.set(0, 0, 0.5); // Place it slightly above the ground
+                testCube.name = 'testCube'; // Add name for easy removal
                 scene3D.add(testCube);
                 console.log('Test cube added at position:', testCube.position);
 
@@ -1891,8 +2028,27 @@
                 const sprite = new THREE.Sprite(spriteMaterial);
                 sprite.position.set(0, 0, 1.5);
                 sprite.scale.set(1, 0.5, 1);
+                sprite.name = 'testSprite'; // Add name for easy removal
                 scene3D.add(sprite);
                 console.log('Test label added');
+            }
+
+            removeTestCube() {
+                if (!scene3D) return;
+
+                // Remove test objects
+                const testCube = scene3D.getObjectByName('testCube');
+                const testSprite = scene3D.getObjectByName('testSprite');
+
+                if (testCube) {
+                    scene3D.remove(testCube);
+                    console.log('Test cube removed');
+                }
+
+                if (testSprite) {
+                    scene3D.remove(testSprite);
+                    console.log('Test sprite removed');
+                }
             }
 
 
