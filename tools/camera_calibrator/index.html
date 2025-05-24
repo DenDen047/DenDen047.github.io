@@ -1,0 +1,1605 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Calibration Toolbox (OpenCV.js)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: flex;
+            min-height: 600px;
+        }
+
+        .sidebar {
+            width: 350px;
+            background: #f8f9fa;
+            border-right: 1px solid #e9ecef;
+            padding: 30px;
+            overflow-y: auto;
+        }
+
+        .content-area {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        .section h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 5px;
+        }
+
+        .file-upload {
+            border: 2px dashed #3498db;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            background: #f8f9fa;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .file-upload:hover {
+            border-color: #2980b9;
+            background: #e8f4f8;
+            transform: translateY(-2px);
+        }
+
+        .file-upload.dragover {
+            border-color: #27ae60;
+            background: #e8f8f5;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+            margin: 5px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(52, 152, 219, 0.4);
+        }
+
+        .btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+            box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+            box-shadow: 0 4px 15px rgba(243, 156, 18, 0.3);
+        }
+
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s ease;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .image-item {
+            position: relative;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .image-item:hover {
+            transform: scale(1.05);
+        }
+
+        .image-item img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            display: block;
+        }
+
+        .image-item .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .image-item:hover .overlay {
+            opacity: 1;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            font-weight: 600;
+            text-align: center;
+            margin: 15px 0;
+            border: 1px solid transparent;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border-color: #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border-color: #f5c6cb;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border-color: #bee5eb;
+        }
+         .status.warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border-color: #ffeeba;
+        }
+
+
+        .results {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .results h4 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+
+        .matrix {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            border: 1px solid #e9ecef;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+
+        .progress {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #3498db, #2980b9);
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+        /* OpenCV Loading Progress Specific Style */
+        #opencvLoadingProgressContainer {
+            margin-bottom: 10px;
+        }
+        #opencvProgressBar {
+             background: linear-gradient(90deg, #27ae60, #229954); /* Green gradient for OpenCV loading */
+        }
+
+
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #e9ecef;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 15px 25px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 1em;
+            color: #6c757d;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .tab.active {
+            color: #3498db;
+            border-bottom: 3px solid #3498db;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        canvas#visualizationCanvas {
+            max-width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            background-color: #fff;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.6);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 30px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 500px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+
+        .modal-content h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+
+        .modal-buttons {
+            margin-top: 25px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📷 Camera Calibration Toolbox (OpenCV.js)</h1>
+            <p>実際の画像からコーナーを検出し、カメラパラメータを計算します。</p>
+        </div>
+
+        <div class="main-content">
+            <div class="sidebar">
+                <div class="section">
+                    <h3>📁 画像アップロード</h3>
+                    <div class="file-upload" id="fileUploadArea"> <div>
+                            <p>📷 キャリブレーション画像をここにドロップ</p>
+                            <p style="font-size: 0.9em; color: #6c757d; margin-top: 10px;">
+                                またはクリックしてファイルを選択
+                            </p>
+                        </div>
+                        <input type="file" id="fileInput" multiple accept="image/*" style="display: none;">
+                    </div>
+                    <div id="uploadStatus"></div>
+                </div>
+
+                <div class="section">
+                    <h3>⚙️ キャリブレーション設定</h3>
+                    <div class="input-group">
+                        <label>チェッカーボードのサイズ (内側の交点数: 列 × 行):</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="number" id="boardCols" value="9" min="2" max="20">
+                            <input type="number" id="boardRows" value="6" min="2" max="20">
+                        </div>
+                         <small>例: 10x7のチェッカーボードの場合、9x6と入力</small>
+                    </div>
+                    <div class="input-group">
+                        <label>正方形のサイズ (mm):</label>
+                        <input type="number" id="squareSize" value="25" min="1" step="0.1">
+                    </div>
+                    <button class="btn" id="detectCornersBtn" disabled>🔍 コーナー検出 (OpenCV.js)</button>
+                    <button class="btn btn-success" id="calibrateBtn" disabled>📐 カメラキャリブレーション (OpenCV.js)</button>
+                    <button class="btn btn-warning" id="testOpenCVBtn">🧪 OpenCV状態テスト</button>
+                    <button class="btn btn-danger" id="clearBtn">🗑️ 全てクリア</button>
+                </div>
+
+                <div class="section">
+                    <h3>📊 ステータス</h3>
+                    <div id="opencvLoadingProgressContainer">
+                        <div class="progress" id="opencvProgress">
+                            <div class="progress-bar" id="opencvProgressBar" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                    <div id="imageCount">画像数: 0</div>
+                    <div id="detectedCount">有効検出画像: 0</div>
+                    <div class="progress" id="imageProcessingProgressContainer" style="display: none;">
+                        <div class="progress-bar" id="progressBar"></div>
+                    </div>
+                    <div id="statusMessage" class="status info">
+                        OpenCV.jsを読み込み中...
+                    </div>
+                    <div style="margin-top: 15px; font-size: 0.9em; color: #6c757d;">
+                        <strong>💡 ヒント:</strong><br>
+                        • 高品質で歪みの少ないチェッカーボード画像を使用してください。<br>
+                        • チェッカーボード全体が写るように、様々な角度・距離から撮影してください。<br>
+                        • 照明を均一にし、影や反射を避けてください。
+                    </div>
+                </div>
+            </div>
+
+            <div class="content-area">
+                <div class="tabs">
+                    <button class="tab active" data-tab="images">📷 画像</button>
+                    <button class="tab" data-tab="results">📊 結果</button>
+                    <button class="tab" data-tab="visualization">📈 3D可視化 (将来)</button>
+                </div>
+
+                <div class="tab-content active" id="images">
+                    <div class="image-grid" id="imageGrid">
+                        </div>
+                    <div class="loading" id="loadingIndicator"> <div class="spinner"></div>
+                        <p>画像を処理中...</p>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="results">
+                    <div id="calibrationResults">
+                        </div>
+                </div>
+
+                <div class="tab-content" id="visualization">
+                    <canvas id="visualizationCanvas"></canvas>
+                     <p style="text-align:center; color: #6c757d; padding: 20px;">キャリブレーション結果の3D可視化は将来実装予定です。</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="confirmationModal" class="modal">
+        <div class="modal-content">
+            <h3 id="modalTitle">確認</h3>
+            <p id="modalMessage">本当にすべての画像と結果をクリアしますか？</p>
+            <div class="modal-buttons">
+                <button id="confirmYesBtn" class="btn btn-danger">はい</button>
+                <button id="confirmNoBtn" class="btn btn-warning">いいえ</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let calibrationApp;
+        let cvReady = false;
+
+        // Set up Module before loading OpenCV.js
+        var Module = {
+            onRuntimeInitialized: function() {
+                console.log("OpenCV.js is ready (Module.onRuntimeInitialized).");
+
+                // Double-check that cv object is actually available
+                if (typeof cv !== 'undefined' && typeof cv.Size === 'function') {
+                    console.log("✅ cv object confirmed available with Size constructor");
+                    cvReady = true;
+
+                    const statusMsg = document.getElementById('statusMessage');
+                    if (statusMsg) {
+                        statusMsg.className = 'status success';
+                        statusMsg.innerHTML = 'OpenCV.js 準備完了。画像を選択してください。';
+                    }
+
+                    const progressContainer = document.getElementById('opencvLoadingProgressContainer');
+                    if(progressContainer) {
+                        progressContainer.style.display = 'none';
+                    }
+
+                    if (calibrationApp) {
+                        calibrationApp.enableControls();
+                    }
+                } else {
+                    console.log("⚠️ Module.onRuntimeInitialized called but cv object not ready, will retry...");
+                    // Retry after a short delay
+                    setTimeout(() => {
+                        if (typeof cv !== 'undefined' && typeof cv.Size === 'function') {
+                            cvReady = true;
+                            const statusMsg = document.getElementById('statusMessage');
+                            if (statusMsg) {
+                                statusMsg.className = 'status success';
+                                statusMsg.innerHTML = 'OpenCV.js 準備完了。画像を選択してください。';
+                            }
+                            const progressContainer = document.getElementById('opencvLoadingProgressContainer');
+                            if(progressContainer) {
+                                progressContainer.style.display = 'none';
+                            }
+                            if (calibrationApp) {
+                                calibrationApp.enableControls();
+                            }
+                        }
+                    }, 500);
+                }
+            }
+        };
+
+
+
+                                function loadOpenCVWithProgress() {
+            const opencvSrc = "https://docs.opencv.org/4.9.0/opencv.js";
+            const progressBar = document.getElementById('opencvProgressBar');
+            const progressContainer = document.getElementById('opencvLoadingProgressContainer');
+            const statusMessage = document.getElementById('statusMessage');
+
+            progressContainer.style.display = 'block';
+            progressBar.style.width = '30%';
+            progressBar.style.background = 'repeating-linear-gradient(45deg, #27ae60, #27ae60 10px, #229954 10px, #229954 20px)';
+            statusMessage.innerHTML = 'OpenCV.js をダウンロード中...';
+            statusMessage.className = 'status info';
+
+            const script = document.createElement('script');
+            script.type = 'text/javascript';
+            script.src = opencvSrc;
+
+            script.onload = function() {
+                console.log("✅ OpenCV.js script loaded successfully");
+                statusMessage.innerHTML = 'OpenCV.js を初期化中...';
+                progressBar.style.width = '60%';
+
+                // Simple polling approach with shorter timeout
+                let attempts = 0;
+                const maxAttempts = 50; // 5 seconds max
+
+                function checkReady() {
+                    attempts++;
+                    console.log(`Checking OpenCV readiness... attempt ${attempts}/${maxAttempts}`);
+
+                    if (typeof cv !== 'undefined' && cv.Size && cvReady) {
+                        console.log("✅ OpenCV.js fully ready!");
+                        progressBar.style.width = '100%';
+                        progressBar.style.background = 'linear-gradient(90deg, #27ae60, #229954)';
+                        statusMessage.className = 'status success';
+                        statusMessage.innerHTML = 'OpenCV.js 準備完了。画像を選択してください。';
+                        progressContainer.style.display = 'none';
+                        if (calibrationApp) {
+                            calibrationApp.enableControls();
+                        }
+                    } else if (attempts >= maxAttempts) {
+                        console.error("❌ OpenCV.js initialization timeout after", attempts * 100, "ms");
+                        statusMessage.innerHTML = 'OpenCV.js の初期化がタイムアウトしました。ページをリロードしてください。';
+                        statusMessage.className = 'status error';
+                        progressBar.style.width = '0%';
+                        progressContainer.style.display = 'none';
+                    } else {
+                        progressBar.style.width = (60 + (attempts / maxAttempts) * 30) + '%';
+                        setTimeout(checkReady, 100);
+                    }
+                }
+
+                // Start checking after a brief delay
+                setTimeout(checkReady, 200);
+            };
+
+            script.onerror = function() {
+                console.error("❌ Failed to load OpenCV.js script");
+                statusMessage.innerHTML = `OpenCV.js の読み込みに失敗しました。ネットワーク接続を確認してください。URL: ${opencvSrc}`;
+                statusMessage.className = 'status error';
+                progressBar.style.width = '0%';
+                progressContainer.style.display = 'none';
+            };
+
+            document.head.appendChild(script);
+        }
+
+        loadOpenCVWithProgress();
+
+
+        class CameraCalibration {
+            constructor() {
+                this.images = [];
+                this.objectPoints = [];
+                this.imagePoints = [];
+                this.calibrationResult = null;
+
+                this.setupEventListeners();
+                this.initApp();
+            }
+
+            initApp() {
+                if (cvReady) {
+                    this.updateStatus('OpenCV.js 準備完了。画像を選択してください。', 'success');
+                    this.enableControls();
+                } else {
+                    this.updateStatus('OpenCV.jsを読み込み中...', 'info', 0);
+                }
+                document.querySelector('.header p').innerHTML =
+                    '実際の画像からコーナーを検出し、カメラの内部パラメータを計算します。';
+            }
+
+            enableControls() {
+                const hasImages = this.images.length > 0;
+                const cvFullyReady = cvReady && typeof cv !== 'undefined' && cv.Size;
+
+                const detectBtn = document.getElementById('detectCornersBtn');
+                if (detectBtn) {
+                    detectBtn.disabled = !cvFullyReady || !hasImages;
+                }
+
+                const calibrateBtn = document.getElementById('calibrateBtn');
+                if (calibrateBtn) {
+                    const hasEnoughDetections = this.imagePoints && this.imagePoints.length >=3;
+                    calibrateBtn.disabled = !cvFullyReady || !hasEnoughDetections;
+                }
+            }
+
+            setupEventListeners() {
+                const fileUploadArea = document.getElementById('fileUploadArea');
+                const fileInput = document.getElementById('fileInput');
+
+                fileUploadArea.addEventListener('click', () => fileInput.click());
+                fileUploadArea.addEventListener('dragover', this.handleDragOver.bind(this));
+                fileUploadArea.addEventListener('dragleave', (e) => e.currentTarget.classList.remove('dragover'));
+                fileUploadArea.addEventListener('drop', this.handleDrop.bind(this));
+                fileInput.addEventListener('change', this.handleFileSelect.bind(this));
+
+                document.getElementById('detectCornersBtn').addEventListener('click', this.detectAllCornersOpenCV.bind(this));
+                document.getElementById('calibrateBtn').addEventListener('click', this.calibrateCameraOpenCV.bind(this));
+                document.getElementById('testOpenCVBtn').addEventListener('click', this.testOpenCVStatus.bind(this));
+                document.getElementById('clearBtn').addEventListener('click', this.showClearConfirmation.bind(this));
+
+                document.querySelectorAll('.tab').forEach(tab => {
+                    tab.addEventListener('click', (e) => this.switchTab(e.target.dataset.tab));
+                });
+
+                document.getElementById('confirmYesBtn').addEventListener('click', this.clearAll.bind(this));
+                document.getElementById('confirmNoBtn').addEventListener('click', this.closeModal.bind(this));
+            }
+
+            testOpenCVStatus() {
+                console.log("=== OpenCV Status Test ===");
+                console.log("cvReady:", cvReady);
+                console.log("typeof cv:", typeof cv);
+                console.log("cv defined:", typeof cv !== 'undefined');
+
+                if (typeof cv !== 'undefined') {
+                    console.log("cv.Size type:", typeof cv.Size);
+                    console.log("cv.Size:", cv.Size);
+                    console.log("Available cv methods (first 20):", Object.keys(cv).slice(0, 20));
+
+                    // Test camera calibration specific functions
+                    const calibFunctions = [
+                        'findChessboardCorners',
+                        'drawChessboardCorners',
+                        'calibrateCamera',
+                        'CALIB_CB_ADAPTIVE_THRESH',
+                        'CALIB_CB_NORMALIZE_IMAGE',
+                        'CALIB_CB_FAST_CHECK'
+                    ];
+
+                    console.log("=== Camera Calibration Functions Test ===");
+                    let allCalibFunctionsAvailable = true;
+                    calibFunctions.forEach(func => {
+                        const available = typeof cv[func] !== 'undefined';
+                        console.log(`${func}: ${available ? '✅ Available' : '❌ Missing'}`);
+                        if (!available) allCalibFunctionsAvailable = false;
+                    });
+
+                    // Try to create a simple Size object
+                    try {
+                        const testSize = new cv.Size(100, 200);
+                        console.log("✅ Successfully created cv.Size(100, 200):", testSize);
+                        console.log("Size properties:", { width: testSize.width, height: testSize.height });
+
+                        // Test other common OpenCV functions
+                        console.log("Testing cv.Mat creation...");
+                        const testMat = new cv.Mat();
+                        console.log("✅ cv.Mat created successfully");
+                        testMat.delete(); // Mat objects DO need to be deleted
+
+                        if (allCalibFunctionsAvailable) {
+                            this.updateStatus("✅ OpenCV テスト成功: カメラキャリブレーション機能が利用可能です", 'success');
+                        } else {
+                            this.updateStatus("⚠️ OpenCV読み込み済みですが、カメラキャリブレーション機能が不足しています。別のOpenCVビルドが必要です。", 'warning');
+                        }
+                    } catch (error) {
+                        console.error("❌ Failed to create cv objects:", error);
+                        this.updateStatus(`OpenCV テストエラー: ${error.message}`, 'error');
+                    }
+                } else {
+                    console.log("❌ cv object is not defined");
+                    this.updateStatus("OpenCV テストエラー: cv オブジェクトが定義されていません", 'error');
+                }
+                console.log("=== End OpenCV Test ===");
+            }
+
+                        showClearConfirmation() {
+                document.getElementById('modalTitle').textContent = '確認';
+                document.getElementById('modalMessage').textContent = '本当にすべての画像と結果をクリアしますか？';
+                document.getElementById('confirmationModal').style.display = 'flex';
+            }
+
+            closeModal() {
+                document.getElementById('confirmationModal').style.display = 'none';
+            }
+
+
+            handleDragOver(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.currentTarget.classList.add('dragover');
+            }
+
+            handleDrop(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.currentTarget.classList.remove('dragover');
+                const files = Array.from(e.dataTransfer.files);
+                this.loadImages(files);
+            }
+
+            handleFileSelect(e) {
+                const files = Array.from(e.target.files);
+                this.loadImages(files);
+            }
+
+            async loadImages(files) {
+                if (!cvReady) {
+                    this.updateStatus('OpenCV.js がまだ準備できていません。しばらくお待ちください。', 'error', 0);
+                    return;
+                }
+                this.showLoading(true, '画像読み込み中...');
+                document.getElementById('imageProcessingProgressContainer').style.display = 'block';
+
+                const imageFiles = files.filter(file => file.type.startsWith('image/'));
+
+                if (imageFiles.length === 0) {
+                    this.updateStatus('有効な画像ファイルが選択されていません', 'error');
+                    this.showLoading(false);
+                    document.getElementById('imageProcessingProgressContainer').style.display = 'none';
+                    return;
+                }
+
+                let loadedCount = 0;
+                const newImageObjects = [];
+                const imageProgressBar = document.getElementById('progressBar');
+
+                for (const file of imageFiles) {
+                    try {
+                        const imageData = await this.loadImageFile(file);
+                        newImageObjects.push({
+                            name: file.name,
+                            data: imageData,
+                            opencvMat: null,
+                            cornersDetected: false,
+                            cornersMat: null,
+                            visualizedCanvas: null,
+                            detectionAttempted: false
+                        });
+                        loadedCount++;
+
+                        const progress = (loadedCount / imageFiles.length) * 100;
+                        imageProgressBar.style.width = progress + '%';
+
+                    } catch (error) {
+                        console.error('画像読み込みエラー:', file.name, error);
+                        this.updateStatus(`画像 ${file.name} の読み込みに失敗しました。`, 'error');
+                    }
+                }
+
+                this.images.push(...newImageObjects);
+                this.updateImageGrid();
+                this.updateStats();
+                this.enableControls();
+                this.showLoading(false);
+                 document.getElementById('imageProcessingProgressContainer').style.display = 'none';
+                imageProgressBar.style.width = '0%';
+
+                if (loadedCount > 0) {
+                    this.updateStatus(`${loadedCount} 枚の画像を読み込みました。「コーナー検出」を実行してください。`, 'success');
+                } else if (this.images.length === 0) {
+                    this.updateStatus('画像の読み込みに失敗しました。もう一度お試しください。', 'error');
+                }
+                 document.getElementById('fileInput').value = '';
+            }
+
+            loadImageFile(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            canvas.width = img.width;
+                            canvas.height = img.height;
+                            ctx.drawImage(img, 0, 0);
+                            resolve({
+                                element: img,
+                                canvas: canvas,
+                                width: img.width,
+                                height: img.height,
+                                url: e.target.result
+                            });
+                        };
+                        img.onerror = (err) => {
+                            console.error("Image load error in loadImageFile:", err);
+                            reject(new Error(`画像 "${file.name}" の読み込み中にエラーが発生しました。`));
+                        };
+                        img.src = e.target.result;
+                    };
+                    reader.onerror = (err) => {
+                        console.error("FileReader error:", err);
+                        reject(new Error(`ファイル "${file.name}" の読み取り中にエラーが発生しました。`));
+                    };
+                    reader.readAsDataURL(file);
+                });
+            }
+
+                        async detectAllCornersOpenCV() {
+                if (!cvReady || typeof cv === 'undefined' || !cv.Size) {
+                    this.updateStatus('OpenCV.js の準備ができていません。初期化を待ってから再試行してください。', 'error', 0);
+                    return;
+                }
+
+                // Check if camera calibration functions are available
+                if (typeof cv.findChessboardCorners !== 'function') {
+                    this.updateStatus('❌ カメラキャリブレーション機能が利用できません。使用中のOpenCV.jsビルドにcalib3dモジュールが含まれていません。ページをリロードして別のOpenCVビルドを試してください。', 'error');
+                    console.error('Missing OpenCV functions - Current OpenCV build does not include calib3d module');
+                    console.log('Available cv functions:', Object.keys(cv).sort());
+                    return;
+                }
+
+                if (this.images.length === 0) {
+                    this.updateStatus('最初に画像をアップロードしてください。', 'error');
+                    return;
+                }
+
+                this.showLoading(true, 'コーナー検出中...');
+                document.getElementById('imageProcessingProgressContainer').style.display = 'block';
+                const imageProgressBar = document.getElementById('progressBar');
+
+                const boardCols = parseInt(document.getElementById('boardCols').value);
+                const boardRows = parseInt(document.getElementById('boardRows').value);
+                const patternSize = new cv.Size(boardCols, boardRows);
+
+                let imagesWithCornersSuccessfullyDetected = 0;
+                this.imagePoints = [];
+
+                for (let i = 0; i < this.images.length; i++) {
+                    const imageObj = this.images[i];
+                    imageObj.cornersDetected = false;
+                    imageObj.detectionAttempted = true;
+                    if (imageObj.cornersMat) {
+                        imageObj.cornersMat.delete();
+                        imageObj.cornersMat = null;
+                    }
+                    imageObj.cornersMat = new cv.Mat();
+
+                    let src;
+                    let gray;
+                    try {
+                        src = cv.imread(imageObj.data.element);
+                        gray = new cv.Mat();
+                        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+                        let found = cv.findChessboardCorners(gray, patternSize, imageObj.cornersMat,
+                                                            cv.CALIB_CB_ADAPTIVE_THRESH + cv.CALIB_CB_NORMALIZE_IMAGE + cv.CALIB_CB_FAST_CHECK);
+
+                        imageObj.cornersDetected = found;
+
+                        if (found) {
+                            imagesWithCornersSuccessfullyDetected++;
+                            this.imagePoints.push(imageObj.cornersMat.clone());
+                        }
+
+                        let displayMat = src.clone();
+                        cv.drawChessboardCorners(displayMat, patternSize, imageObj.cornersMat, found);
+
+                        if (imageObj.visualizedCanvas) {
+                            const ctx = imageObj.visualizedCanvas.getContext('2d');
+                            ctx.clearRect(0,0, imageObj.visualizedCanvas.width, imageObj.visualizedCanvas.height);
+                            imageObj.visualizedCanvas.width = displayMat.cols;
+                            imageObj.visualizedCanvas.height = displayMat.rows;
+                        } else {
+                            imageObj.visualizedCanvas = document.createElement('canvas');
+                            imageObj.visualizedCanvas.width = displayMat.cols;
+                            imageObj.visualizedCanvas.height = displayMat.rows;
+                        }
+                        cv.imshow(imageObj.visualizedCanvas, displayMat);
+                        displayMat.delete();
+
+                    } catch (e) {
+                        console.error(`Error processing image ${imageObj.name}:`, e);
+                        imageObj.cornersDetected = false;
+                        if (!imageObj.visualizedCanvas) {
+                            imageObj.visualizedCanvas = document.createElement('canvas');
+                            imageObj.visualizedCanvas.width = imageObj.data.width;
+                            imageObj.visualizedCanvas.height = imageObj.data.height;
+                        }
+                        const errCtx = imageObj.visualizedCanvas.getContext('2d');
+                        errCtx.fillStyle = "rgba(255, 100, 100, 0.7)";
+                        errCtx.fillRect(0, 0, imageObj.visualizedCanvas.width, imageObj.visualizedCanvas.height);
+                        errCtx.fillStyle = "white";
+                        errCtx.font = "bold 16px Arial";
+                        errCtx.textAlign = "center";
+                        errCtx.fillText("処理エラー", imageObj.visualizedCanvas.width / 2, imageObj.visualizedCanvas.height / 2);
+
+                    } finally {
+                        if (src) src.delete();
+                        if (gray) gray.delete();
+                        if (!imageObj.cornersDetected && imageObj.cornersMat) {
+                             imageObj.cornersMat.delete();
+                             imageObj.cornersMat = null;
+                        }
+                    }
+
+                    const progress = ((i + 1) / this.images.length) * 100;
+                    imageProgressBar.style.width = progress + '%';
+                }
+
+                this.updateImageGrid();
+                this.updateStatsOpenCV();
+                this.showLoading(false);
+                document.getElementById('imageProcessingProgressContainer').style.display = 'none';
+                imageProgressBar.style.width = '0%';
+
+                if (imagesWithCornersSuccessfullyDetected > 0) {
+                    this.updateStatus(`コーナー検出完了。${imagesWithCornersSuccessfullyDetected} 枚の画像でコーナーが見つかりました。`, 'success');
+                    document.getElementById('calibrateBtn').disabled = imagesWithCornersSuccessfullyDetected < 3;
+                    if (imagesWithCornersSuccessfullyDetected < 3) {
+                         this.updateStatus(`キャリブレーションには最低3枚の有効な検出画像が必要です (現在 ${imagesWithCornersSuccessfullyDetected} 枚)`, 'warning');
+                    }
+                } else {
+                    this.updateStatus('どの画像からもコーナーが見つかりませんでした。設定や画像を確認してください。', 'error');
+                    document.getElementById('calibrateBtn').disabled = true;
+                }
+            }
+
+                        async calibrateCameraOpenCV() {
+                if (!cvReady || typeof cv === 'undefined' || !cv.Size) {
+                    this.updateStatus('OpenCV.js が準備できていません。初期化を待ってから再試行してください。', 'error', 0);
+                    return;
+                }
+
+                if (this.imagePoints.length < 3) {
+                     this.updateStatus('キャリブレーションには最低3枚の有効なコーナー検出画像が必要です。', 'error');
+                    return;
+                }
+                this.showLoading(true, 'キャリブレーション中...');
+
+                const boardCols = parseInt(document.getElementById('boardCols').value);
+                const boardRows = parseInt(document.getElementById('boardRows').value);
+                const squareSize = parseFloat(document.getElementById('squareSize').value);
+
+                let singleObjP_JS = [];
+                for (let i = 0; i < boardRows; i++) {
+                    for (let j = 0; j < boardCols; j++) {
+                        singleObjP_JS.push(j * squareSize, i * squareSize, 0);
+                    }
+                }
+                let objectPointsVec = new cv.MatVector();
+                let singleObjectPointsMat = cv.matFromArray(boardRows * boardCols, 1, cv.CV_32FC3, singleObjP_JS);
+                for(let i=0; i < this.imagePoints.length; ++i) {
+                    objectPointsVec.push_back(singleObjectPointsMat);
+                }
+
+
+                let cameraMatrix = cv.Mat.eye(3, 3, cv.CV_64F);
+                let distCoeffs = cv.Mat.zeros(1, 5, cv.CV_64F);
+                let rvecs = new cv.MatVector();
+                let tvecs = new cv.MatVector();
+
+                let referenceImageForSize;
+                for(const img of this.images){
+                    if(img.cornersDetected && img.data){
+                        referenceImageForSize = img.data;
+                        break;
+                    }
+                }
+                if (!referenceImageForSize) {
+                     referenceImageForSize = this.images[0] ? this.images[0].data : {width: 640, height: 480};
+                     if (!this.images[0]) {
+                        this.updateStatus('キャリブレーション用の画像サイズが取得できませんでした。', 'error');
+                        this.showLoading(false);
+                        cameraMatrix.delete(); distCoeffs.delete(); rvecs.delete(); tvecs.delete(); singleObjectPointsMat.delete(); objectPointsVec.delete();
+                        return;
+                     }
+                }
+                const imageSize = new cv.Size(referenceImageForSize.width, referenceImageForSize.height);
+
+                let imagePointsVec = new cv.MatVector();
+                this.imagePoints.forEach(mat => imagePointsVec.push_back(mat));
+
+
+                try {
+                    let rms = cv.calibrateCamera(objectPointsVec, imagePointsVec, imageSize, cameraMatrix, distCoeffs, rvecs, tvecs, 0);
+
+                    this.calibrationResult = {
+                        rms: rms,
+                        cameraMatrix: [
+                            [cameraMatrix.doubleAt(0,0), cameraMatrix.doubleAt(0,1), cameraMatrix.doubleAt(0,2)],
+                            [cameraMatrix.doubleAt(1,0), cameraMatrix.doubleAt(1,1), cameraMatrix.doubleAt(1,2)],
+                            [cameraMatrix.doubleAt(2,0), cameraMatrix.doubleAt(2,1), cameraMatrix.doubleAt(2,2)]
+                        ],
+                        distCoeffs: [
+                            [distCoeffs.doubleAt(0,0)], [distCoeffs.doubleAt(0,1)],
+                            [distCoeffs.doubleAt(0,2)], [distCoeffs.doubleAt(0,3)],
+                            [distCoeffs.doubleAt(0,4)]
+                        ],
+                        imageSize: [imageSize.width, imageSize.height],
+                        numImages: this.imagePoints.length,
+                        settings: { boardCols, boardRows, squareSize },
+                        mode: "OpenCV.js"
+                    };
+
+                    this.displayResults();
+                    this.switchTab('results');
+                    this.updateStatus(`カメラキャリブレーション成功！ RMS誤差: ${rms.toFixed(4)}`, 'success');
+
+                } catch (e) {
+                    console.error("OpenCV Calibration Error:", e);
+                    this.updateStatus(`キャリブレーションエラー: ${e.message || e}`, 'error');
+                } finally {
+                    cameraMatrix.delete();
+                    distCoeffs.delete();
+                    rvecs.delete();
+                    tvecs.delete();
+                    singleObjectPointsMat.delete();
+                    objectPointsVec.delete();
+                    imagePointsVec.delete();
+                    this.showLoading(false);
+                }
+            }
+
+            displayResults() {
+                if (!this.calibrationResult) {
+                    console.warn('表示するキャリブレーション結果がありません');
+                    document.getElementById('calibrationResults').innerHTML =
+                        '<div class="status info">キャリブレーション結果はまだありません。</div>';
+                    return;
+                }
+
+                const resultsDiv = document.getElementById('calibrationResults');
+                const result = this.calibrationResult;
+
+                try {
+                    const avgFocalLength = (result.cameraMatrix[0][0] + result.cameraMatrix[1][1]) / 2;
+                    const principalPointOffset = {
+                        x: result.cameraMatrix[0][2] - result.imageSize[0]/2,
+                        y: result.cameraMatrix[1][2] - result.imageSize[1]/2
+                    };
+
+                    resultsDiv.innerHTML = `
+                        <div class="results">
+                            <h4>📊 カメラキャリブレーション結果 (${result.mode})</h4>
+
+                            <div class="status success">
+                                <strong>✅ キャリブレーション完了!</strong><br>
+                                RMS 再投影誤差: ${result.rms.toFixed(6)} ピクセル<br>
+                                処理画像数: ${result.numImages} 枚<br>
+                                画像解像度: ${result.imageSize[0]} × ${result.imageSize[1]} ピクセル
+                            </div>
+
+                            <div style="margin-top: 25px;">
+                                <h4>🎯 カメラ行列 (内部パラメータ)</h4>
+                                <div class="matrix">
+                                    ${this.formatMatrix(result.cameraMatrix)}
+                                </div>
+
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-top: 20px;">
+                                    <div>
+                                        <h4>📐 焦点距離</h4>
+                                        <div class="matrix">
+                                            fx = ${result.cameraMatrix[0][0].toFixed(2)} ピクセル<br>
+                                            fy = ${result.cameraMatrix[1][1].toFixed(2)} ピクセル<br>
+                                            <strong>平均: ${avgFocalLength.toFixed(2)} ピクセル</strong>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <h4>� 主点</h4>
+                                        <div class="matrix">
+                                            cx = ${result.cameraMatrix[0][2].toFixed(2)} ピクセル<br>
+                                            cy = ${result.cameraMatrix[1][2].toFixed(2)} ピクセル<br>
+                                            <strong>中心からのオフセット:</strong><br>
+                                            Δx: ${principalPointOffset.x.toFixed(1)}px, Δy: ${principalPointOffset.y.toFixed(1)}px
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <h4>🌀 歪み係数</h4>
+                                <div class="matrix">
+                                    k1 = ${result.distCoeffs[0][0].toFixed(6)}<br>
+                                    k2 = ${result.distCoeffs[1][0].toFixed(6)}<br>
+                                    p1 = ${result.distCoeffs[2][0].toFixed(6)}<br>
+                                    p2 = ${result.distCoeffs[3][0].toFixed(6)}<br>
+                                    ${result.distCoeffs.length > 4 ? `k3 = ${result.distCoeffs[4][0].toFixed(6)}<br>` : ''}
+                                </div>
+
+                                <h4>⚙️ キャリブレーション設定</h4>
+                                <div class="matrix">
+                                    チェッカーボード: ${result.settings.boardCols} × ${result.settings.boardRows}<br>
+                                    正方形サイズ: ${result.settings.squareSize} mm
+                                </div>
+
+                                <div style="margin-top: 25px; text-align: center;">
+                                    <button class="btn btn-success" onclick="window.calibrationApp.downloadResults()" style="margin-right: 10px;">
+                                        💾 結果をJSONでダウンロード
+                                    </button>
+                                    <button class="btn" onclick="window.print()">
+                                        🖨️ レポートを印刷
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } catch (error) {
+                    console.error('結果表示エラー:', error);
+                    resultsDiv.innerHTML = `<div class="status error"><strong>結果表示エラー</strong><br>再度キャリブレーションをお試しください。</div>`;
+                }
+            }
+
+            downloadResults() {
+                if (!this.calibrationResult) {
+                    this.showCustomAlert('ダウンロードするキャリブレーション結果がありません。', 'error');
+                    return;
+                }
+
+                try {
+                    const result = {...this.calibrationResult};
+
+                    const data = {
+                        calibrationDate: new Date().toISOString(),
+                        mode: result.mode,
+                        rmsError: result.rms,
+                        cameraMatrix: result.cameraMatrix,
+                        distortionCoefficients: result.distCoeffs,
+                        imageSize: result.imageSize,
+                        numImages: result.numImages,
+                        settings: result.settings,
+                        qualityAssessment: result.rms < 0.5 ? 'Excellent' :
+                                           result.rms < 1.0 ? 'Good' :
+                                           result.rms < 2.0 ? 'Fair' : 'Poor'
+                    };
+
+                    const jsonString = JSON.stringify(data, null, 2);
+                    const blob = new Blob([jsonString], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `camera_calibration_results_${new Date().toISOString().split('T')[0]}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+
+                    this.updateStatus('📄 結果を正常にダウンロードしました！', 'success');
+                } catch (error) {
+                    console.error('ダウンロードエラー:', error);
+                    this.showCustomAlert('結果のダウンロードに失敗しました。もう一度お試しください。', 'error');
+                }
+            }
+
+            formatMatrix(matrix) {
+                return matrix.map(row =>
+                    '[' + row.map(val => val.toFixed(4).padStart(10)).join(', ') + ']'
+                ).join('<br>');
+            }
+
+            createVisualization() {
+                const canvas = document.getElementById('visualizationCanvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = Math.min(800, document.querySelector('.content-area').clientWidth - 60);
+                canvas.height = Math.min(600, window.innerHeight * 0.6);
+                ctx.clearRect(0,0, canvas.width, canvas.height);
+                ctx.fillStyle = '#6c757d';
+                ctx.font = '18px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('3D可視化は将来実装予定です。', canvas.width / 2, canvas.height / 2);
+            }
+
+
+            updateImageGrid() {
+                const grid = document.getElementById('imageGrid');
+                grid.innerHTML = '';
+
+                this.images.forEach((imageObj, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'image-item';
+
+                    const imgElement = document.createElement('img');
+
+                    if (imageObj.visualizedCanvas) {
+                        imgElement.src = imageObj.visualizedCanvas.toDataURL();
+                        imgElement.alt = `${imageObj.name} (コーナー検出済み)`;
+                    } else {
+                        imgElement.src = imageObj.data.url;
+                        imgElement.alt = imageObj.name;
+                    }
+
+                    const overlay = document.createElement('div');
+                    overlay.className = 'overlay';
+
+                    let statusText = imageObj.cornersDetected ? '✅ コーナー検出成功' : (imageObj.detectionAttempted ? '⚠️ 検出失敗/なし' : '❓ 未処理');
+                    let statusColor = imageObj.cornersDetected ? '#27ae60' : (imageObj.detectionAttempted ? '#e67e22' : '#6c757d');
+                    let cornerInfo = imageObj.cornersDetected && imageObj.cornersMat ? `${imageObj.cornersMat.rows} コーナー` : '---';
+                     if (imageObj.detectionAttempted && !imageObj.cornersDetected) {
+                        statusText = '⚠️ 検出失敗/なし';
+                        statusColor = '#e67e22';
+                     }
+
+
+                    overlay.innerHTML = `
+                        <div style="color: ${statusColor}; font-size: 1.1em; margin-bottom: 5px; font-weight: bold;">
+                            ${statusText}
+                        </div>
+                        <div style="font-size: 0.9em; margin-bottom: 5px;">${cornerInfo}</div>
+                        <div style="font-size: 0.9em; margin-top: 8px; word-break: break-all;">
+                           📁 ${imageObj.name.length > 20 ? imageObj.name.substring(0,18)+'...' : imageObj.name}
+                        </div>
+                        ${imageObj.visualizedCanvas ? `
+                            <div style="font-size: 0.8em; margin-top: 8px; color: #3498db; font-weight: bold;">
+                                クリックで拡大表示
+                            </div>
+                        ` : ''}
+                    `;
+
+                    if (imageObj.visualizedCanvas) {
+                        item.style.cursor = 'pointer';
+                        item.addEventListener('click', () => {
+                            this.showFullSizeCornerVisualization(imageObj, index);
+                        });
+                    }
+
+                    item.appendChild(imgElement);
+                    item.appendChild(overlay);
+                    grid.appendChild(item);
+                });
+
+                if (this.images.length === 0) {
+                    grid.innerHTML = '<p style="text-align:center; color: #6c757d; padding: 20px;">画像がありません。アップロードしてください。</p>';
+                }
+            }
+
+            showFullSizeCornerVisualization(imageObj, index) {
+                const modalId = 'fullImageModal';
+                let existingModal = document.getElementById(modalId);
+                if (existingModal) existingModal.remove();
+
+                const modal = document.createElement('div');
+                modal.id = modalId;
+                modal.style.cssText = `
+                    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                    background: rgba(0,0,0,0.9); display: flex; align-items: center;
+                    justify-content: center; z-index: 1050; cursor: pointer; padding: 20px;
+                `;
+
+                const container = document.createElement('div');
+                container.style.cssText = `
+                    max-width: 90vw; max-height: 90vh; background: white; border-radius: 15px;
+                    padding: 20px; text-align: center; cursor: default;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.5); display: flex; flex-direction: column;
+                `;
+
+                const title = document.createElement('h2');
+                title.textContent = `🔍 コーナー検出結果 - ${imageObj.name}`;
+                title.style.cssText = `margin-bottom: 15px; color: #2c3e50; font-size: 1.4em;`;
+
+                const imageContainer = document.createElement('div');
+                imageContainer.style.cssText = `position: relative; margin-bottom: 15px; flex-grow: 1; overflow: auto;`;
+
+                const img = document.createElement('img');
+                img.src = imageObj.visualizedCanvas ? imageObj.visualizedCanvas.toDataURL() : imageObj.data.url;
+                img.style.cssText = `
+                    max-width: 100%; max-height: 65vh; border-radius: 10px;
+                    box-shadow: 0 8px 25px rgba(0,0,0,0.3); border: 3px solid #3498db;
+                    object-fit: contain; transition: transform 0.2s ease-out;
+                `;
+
+                let isZoomed = false;
+                img.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    isZoomed = !isZoomed;
+                    img.style.transform = isZoomed ? 'scale(1.8)' : 'scale(1)';
+                    img.style.cursor = isZoomed ? 'zoom-out' : 'zoom-in';
+                });
+                img.style.cursor = 'zoom-in';
+
+                const zoomHint = document.createElement('div');
+                zoomHint.textContent = '🔍 画像クリックでズーム';
+                zoomHint.style.cssText = `
+                    position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7);
+                    color: white; padding: 5px 10px; border-radius: 15px; font-size: 0.8em;
+                `;
+
+                imageContainer.appendChild(img);
+                imageContainer.appendChild(zoomHint);
+
+                const infoPanel = document.createElement('div');
+                infoPanel.style.cssText = 'margin-bottom: 15px; font-size: 0.9em;';
+                const boardCols = parseInt(document.getElementById('boardCols').value);
+                const boardRows = parseInt(document.getElementById('boardRows').value);
+                const expectedCorners = boardCols * boardRows;
+                const detectedInThisImage = imageObj.cornersDetected && imageObj.cornersMat ? imageObj.cornersMat.rows : 0;
+                const successRate = expectedCorners > 0 ? Math.round((detectedInThisImage / expectedCorners) * 100) : 0;
+
+                let qualityText = imageObj.cornersDetected ? `検出成功 (${successRate}%)` : (imageObj.detectionAttempted ? '検出失敗/なし' : '未処理');
+                let qualityColor = imageObj.cornersDetected ? '#27ae60' : (imageObj.detectionAttempted ? '#e67e22' : '#6c757d');
+
+
+                infoPanel.innerHTML = `
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px;">
+                        <div style="background: #e8f4f8; padding: 10px; border-radius: 8px; border: 1px solid #3498db;">
+                            <h4 style="color: #2c3e50; margin-bottom: 8px;">検出統計</h4>
+                            <div>期待コーナー数: ${expectedCorners}</div>
+                            <div>検出コーナー数: ${detectedInThisImage}</div>
+                            <div style="font-weight: bold; color: ${qualityColor}; margin-top: 5px;">${qualityText}</div>
+                        </div>
+                        <div style="background: #f0f8e8; padding: 10px; border-radius: 8px; border: 1px solid #27ae60;">
+                            <h4 style="color: #2c3e50; margin-bottom: 8px;">ボード設定</h4>
+                            <div>グリッド: ${boardCols}×${boardRows}</div>
+                            <div>正方形サイズ: ${document.getElementById('squareSize').value}mm</div>
+                        </div>
+                    </div>`;
+
+
+                const buttonContainer = document.createElement('div');
+                buttonContainer.style.cssText = 'display: flex; gap: 10px; justify-content: center; align-items: center; flex-shrink: 0;';
+
+                const prevImage = index > 0 ? this.images[index-1] : null;
+                const validPrevImage = prevImage && prevImage.visualizedCanvas;
+
+                if (validPrevImage) {
+                    const prevButton = this.createModalButton('⬅️ 前へ', 'btn-warning', () => {
+                        modal.remove(); this.showFullSizeCornerVisualization(prevImage, index - 1);
+                    });
+                    buttonContainer.appendChild(prevButton);
+                }
+
+                const closeButton = this.createModalButton('❌ 閉じる (Esc)', 'btn-danger', () => modal.remove());
+                buttonContainer.appendChild(closeButton);
+
+                const nextImage = index < this.images.length - 1 ? this.images[index+1] : null;
+                const validNextImage = nextImage && nextImage.visualizedCanvas;
+
+                if (validNextImage) {
+                    const nextButton = this.createModalButton('次へ ➡️', 'btn-success', () => {
+                        modal.remove(); this.showFullSizeCornerVisualization(nextImage, index + 1);
+                    });
+                    buttonContainer.appendChild(nextButton);
+                }
+
+                modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+                container.onclick = (e) => e.stopPropagation();
+
+                container.appendChild(title);
+                container.appendChild(imageContainer);
+                container.appendChild(infoPanel);
+                container.appendChild(buttonContainer);
+                modal.appendChild(container);
+                document.body.appendChild(modal);
+
+                const handleKeydown = (e) => {
+                    if (!document.getElementById(modalId)) {
+                        document.removeEventListener('keydown', handleKeydown);
+                        return;
+                    }
+                    if (e.key === 'Escape') {
+                        modal.remove();
+                    } else if (e.key === 'ArrowLeft' && validPrevImage) {
+                        modal.remove(); this.showFullSizeCornerVisualization(prevImage, index - 1);
+                    } else if (e.key === 'ArrowRight' && validNextImage) {
+                        modal.remove(); this.showFullSizeCornerVisualization(nextImage, index + 1);
+                    }
+                };
+                document.addEventListener('keydown', handleKeydown);
+                const originalRemove = modal.remove;
+                modal.remove = () => {
+                    document.removeEventListener('keydown', handleKeydown);
+                    originalRemove.call(modal);
+                }
+            }
+
+            createModalButton(text, className, onClick) {
+                const button = document.createElement('button');
+                button.innerHTML = text;
+                button.className = `btn ${className}`;
+                button.style.padding = '8px 15px';
+                button.style.fontSize = '0.9em';
+                button.onclick = onClick;
+                return button;
+            }
+
+            updateStatsOpenCV() {
+                document.getElementById('imageCount').textContent = `画像数: ${this.images.length}`;
+                const validDetections = this.images.filter(img => img.cornersDetected).length;
+                document.getElementById('detectedCount').textContent = `有効検出画像: ${validDetections}`;
+                document.getElementById('calibrateBtn').disabled = !cvReady || validDetections < 3;
+
+                if (this.images.length > 0) {
+                    const processedCount = this.images.filter(img => img.detectionAttempted).length;
+                    const progress = this.images.length > 0 ? (processedCount / this.images.length) * 100 : 0;
+                    const imageProgressBarElem = document.getElementById('progressBar');
+                    if (document.getElementById('imageProcessingProgressContainer').style.display === 'block') {
+                        imageProgressBarElem.style.width = progress + '%';
+                    }
+                } else {
+                     document.getElementById('progressBar').style.width = '0%';
+                }
+            }
+            updateStats() {
+                this.updateStatsOpenCV();
+            }
+
+
+            updateStatus(message, type = 'info', duration = 8000) {
+                const statusDiv = document.getElementById('statusMessage');
+                statusDiv.className = `status ${type}`;
+                statusDiv.innerHTML = message;
+
+                if (this.statusTimeout) clearTimeout(this.statusTimeout);
+
+                if ((type === 'success' || type === 'info') && duration > 0) {
+                    this.statusTimeout = setTimeout(() => {
+                        if (statusDiv.innerHTML === message) {
+                           statusDiv.innerHTML = cvReady ? '準備完了' : 'OpenCV.jsを読み込み中...';
+                           statusDiv.className = cvReady ? 'status info' : 'status warning';
+                        }
+                    }, duration);
+                }
+            }
+
+            showLoading(show, message = '処理中...') {
+                const loadingIndicator = document.getElementById('loadingIndicator');
+                const loadingMessage = loadingIndicator.querySelector('p');
+                if (loadingMessage) loadingMessage.textContent = message;
+
+                loadingIndicator.style.display = show ? 'block' : 'none';
+
+                const hasImages = this.images.length > 0;
+                const hasEnoughDetections = this.imagePoints && this.imagePoints.length >= 3;
+
+
+                const detectBtn = document.getElementById('detectCornersBtn');
+                if(detectBtn) detectBtn.disabled = show || !cvReady || !hasImages;
+
+                const calibrateBtn = document.getElementById('calibrateBtn');
+                if(calibrateBtn) calibrateBtn.disabled = show || !cvReady || !hasEnoughDetections;
+            }
+
+            switchTab(tabName) {
+                document.querySelectorAll('.tab').forEach(tab => {
+                    tab.classList.toggle('active', tab.dataset.tab === tabName);
+                });
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.classList.toggle('active', content.id === tabName);
+                });
+            }
+
+            clearAll() {
+                this.closeModal();
+
+                this.images.forEach(imageObj => {
+                    if (imageObj.cornersMat) imageObj.cornersMat.delete();
+                });
+
+                this.images = [];
+                this.objectPoints = [];
+                this.imagePoints.forEach(mat => mat.delete());
+                this.imagePoints = [];
+                this.calibrationResult = null;
+
+                this.updateImageGrid();
+                this.updateStats();
+                document.getElementById('calibrationResults').innerHTML = '';
+
+                const canvas = document.getElementById('visualizationCanvas');
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                this.createVisualization();
+
+                this.updateStatus('全てのデータを正常にクリアしました', 'info');
+                this.switchTab('images');
+                this.enableControls();
+            }
+
+            showCustomAlert(message, type = 'info', title = '通知') {
+                document.getElementById('modalTitle').textContent = title;
+                document.getElementById('modalMessage').textContent = message;
+                document.getElementById('confirmationModal').style.display = 'flex';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            calibrationApp = new CameraCalibration();
+            window.calibrationApp = calibrationApp;
+        });
+
+        window.addEventListener('error', (event) => {
+            console.error('アプリケーションエラー:', event.error, event.message, event.filename, event.lineno);
+            const statusDiv = document.getElementById('statusMessage');
+            if (statusDiv) {
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = '予期せぬエラーが発生しました。ページをリフレッシュするか、コンソールを確認してください。';
+            }
+        });
+        window.addEventListener('unhandledrejection', function(event) {
+            console.error('ハンドルされないPromise rejection:', event.reason);
+            const statusDiv = document.getElementById('statusMessage');
+            if (statusDiv) {
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = '非同期処理でエラーが発生しました。コンソールを確認してください。';
+            }
+        });
+
+
+        document.addEventListener('keydown', (e) => {
+            if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+                return;
+            }
+
+            if (document.getElementById('confirmationModal').style.display === 'flex' ||
+                document.getElementById('fullImageModal')) {
+                return;
+            }
+
+            if (e.ctrlKey || e.metaKey) {
+                switch (e.key.toLowerCase()) {
+                    case 'o':
+                        e.preventDefault();
+                        document.getElementById('fileInput').click();
+                        break;
+                    case 'd':
+                        e.preventDefault();
+                        if (!document.getElementById('detectCornersBtn').disabled) {
+                           document.getElementById('detectCornersBtn').click();
+                        }
+                        break;
+                    case 'enter':
+                        e.preventDefault();
+                        if (!document.getElementById('calibrateBtn').disabled) {
+                            document.getElementById('calibrateBtn').click();
+                        }
+                        break;
+                    case 's':
+                        e.preventDefault();
+                        if (calibrationApp && calibrationApp.calibrationResult) {
+                            calibrationApp.downloadResults();
+                        }
+                        break;
+                }
+            }
+        });
+    </script>
+</body>
+</html>
+�
