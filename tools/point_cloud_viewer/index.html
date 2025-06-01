@@ -123,6 +123,7 @@
                 <input type="range" id="maxIntensitySlider" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" disabled>
                 <span id="maxIntensityValue" class="text-xs text-gray-300 w-12 text-right">N/A</span>
             </div>
+            <button id="otsuButton" class="mt-2 w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-1 px-2 rounded text-xs" disabled>Otsu法で閾値設定</button>
         </div>
 
         <div class="pt-2 border-t border-gray-700">
@@ -206,6 +207,7 @@
         const maxIntensitySlider = document.getElementById('maxIntensitySlider');
         const maxIntensityValueDisplay = document.getElementById('maxIntensityValue');
         const colorMapSelect = document.getElementById('colorMapSelect');
+        const otsuButton = document.getElementById('otsuButton'); // Added
 
         const voxelizeCheckbox = document.getElementById('voxelizeCheckbox');
         const voxelSizeInput = document.getElementById('voxelSizeInput');
@@ -349,25 +351,115 @@
                 const gridMinX = Math.floor(min.x / voxelSize) * voxelSize - voxelSize;
                 const gridMaxX = Math.ceil(max.x / voxelSize) * voxelSize + voxelSize;
                 const gridSizeX = gridMaxX - gridMinX;
-                const divisionsX = Math.round(gridSizeX / voxelSize);
+                // const divisionsX = Math.round(gridSizeX / voxelSize); // Not directly used for final grid
 
                 const gridMinY = Math.floor(min.y / voxelSize) * voxelSize - voxelSize;
                 const gridMaxY = Math.ceil(max.y / voxelSize) * voxelSize + voxelSize;
                 const gridSizeY = gridMaxY - gridMinY;
-                const divisionsY = Math.round(gridSizeY / voxelSize);
+                // const divisionsY = Math.round(gridSizeY / voxelSize); // Not directly used for final grid
 
-                const finalGridSize = Math.max(gridSizeX, gridSizeY, voxelSize);
-                const finalDivisions = Math.round(finalGridSize / voxelSize);
+                const finalGridSize = Math.max(gridSizeX, gridSizeY, voxelSize); // Ensure grid is at least one voxel
+                const finalDivisions = Math.max(1, Math.round(finalGridSize / voxelSize));
+
 
                 dynamicGridHelper = new THREE.GridHelper(finalGridSize, finalDivisions, 0x666666, 0x555555);
                 dynamicGridHelper.rotation.x = Math.PI / 2;
-                dynamicGridHelper.position.set(0, 0, 0);
+                // Center the grid approximately under the point cloud
+                const center = new THREE.Vector3();
+                overallBoundingBox.getCenter(center);
+                dynamicGridHelper.position.set(center.x, center.y, 0); // Assuming Z=0 is the ground plane for the grid
 
                 scene.add(dynamicGridHelper);
                 gridHelper.visible = false;
             } else {
                 gridHelper.visible = true;
             }
+        }
+
+        /**
+         * Calculates the Otsu threshold for a given set of intensity values.
+         * @param {number[]} rawIntensities - Array of intensity values.
+         * @param {number} dataMinIntensity - The minimum intensity value in the dataset (for histogram range).
+         * @param {number} dataMaxIntensity - The maximum intensity value in the dataset (for histogram range).
+         * @param {number} [numBins=256] - Number of bins for the histogram.
+         * @returns {object} An object containing the calculated threshold and a message.
+         * { threshold: number, message: string }
+         */
+        function calculateOtsuThreshold(rawIntensities, dataMinIntensity, dataMaxIntensity, numBins = 256) {
+            if (rawIntensities.length === 0) {
+                return { threshold: dataMinIntensity, message: "点群データが空のため、Otsu法を適用できませんでした。" };
+            }
+
+            const firstIntensity = rawIntensities[0];
+            const allSame = rawIntensities.every(val => val === firstIntensity);
+
+            if (allSame) {
+                return { threshold: firstIntensity, message: `全ての点の強度が同じ (${firstIntensity.toFixed(2)}) です。閾値はこの値に設定されました。` };
+            }
+
+            // Ensure dataMinIntensity is strictly less than dataMaxIntensity for histogram creation.
+            // This case should ideally be handled by the global min/max intensity calculation logic
+            // which ensures maxIntensityGlobal > minIntensityGlobal if points exist and are not all same.
+            if (dataMinIntensity >= dataMaxIntensity) {
+                 // If, for some reason, they are still equal or inverted after global calculation,
+                 // it implies an issue or a very specific dataset (e.g., all points have same intensity,
+                 // which is handled by `allSame` check).
+                 // As a fallback, return the min intensity.
+                console.warn("Otsu: dataMinIntensity >= dataMaxIntensity. Defaulting to dataMinIntensity.", dataMinIntensity, dataMaxIntensity);
+                return { threshold: dataMinIntensity, message: "強度の範囲が無効か、全ての点が同じ強度です。" };
+            }
+
+
+            const histogram = new Array(numBins).fill(0);
+            const step = (dataMaxIntensity - dataMinIntensity) / numBins;
+
+            for (const intensity of rawIntensities) {
+                let binIndex = Math.floor((intensity - dataMinIntensity) / step);
+                binIndex = Math.max(0, Math.min(numBins - 1, binIndex)); // Clamp to [0, numBins-1]
+                histogram[binIndex]++;
+            }
+
+            const totalPixels = rawIntensities.length;
+
+            let sum = 0; // Sum of (binIndex * countInBin)
+            for (let i = 0; i < numBins; i++) {
+                sum += i * histogram[i];
+            }
+
+            let sumB = 0; // Sum of (binIndex * countInBin) for background class
+            let wB = 0;   // Weight (pixel count) of background class
+            let wF = 0;   // Weight (pixel count) of foreground class
+            let maxVariance = 0;
+            let thresholdBin = 0;
+
+            for (let t = 0; t < numBins; t++) {
+                wB += histogram[t];
+                if (wB === 0) continue;
+
+                wF = totalPixels - wB;
+                if (wF === 0) break; // All pixels are in background, no foreground
+
+                sumB += t * histogram[t];
+
+                const mB = sumB / wB; // Mean of background
+                const mF = (sum - sumB) / wF; // Mean of foreground
+
+                const betweenClassVariance = wB * wF * (mB - mF) * (mB - mF);
+
+                if (betweenClassVariance > maxVariance) {
+                    maxVariance = betweenClassVariance;
+                    thresholdBin = t;
+                }
+            }
+
+            // Convert the threshold bin index back to an intensity value.
+            // The threshold is typically considered to be at the end of the `thresholdBin`.
+            const otsuThresholdValue = dataMinIntensity + (thresholdBin + 1) * step;
+
+            // Clip the threshold to be within the original data's min/max intensity range.
+            const clampedThreshold = Math.max(dataMinIntensity, Math.min(dataMaxIntensity, otsuThresholdValue));
+
+            return { threshold: clampedThreshold, message: `Otsu法による閾値: ${clampedThreshold.toFixed(2)}` };
         }
 
 
@@ -387,6 +479,7 @@
                                 console.error("Error processing file:", error);
                                 showAlert('処理エラー', `ファイルの処理中にエラーが発生しました: ${error.message}`);
                                 originalPointsData = null;
+                                processAndDisplayPointCloud(); // Clear display and disable UI
                             } finally {
                                 loader.style.display = 'none';
                             }
@@ -396,12 +489,14 @@
                             showAlert('ファイル読み込みエラー', `ファイルの読み込み中にエラーが発生しました: ${error.message}`);
                             loader.style.display = 'none';
                             originalPointsData = null;
+                            processAndDisplayPointCloud(); // Clear display and disable UI
                         };
                         reader.readAsArrayBuffer(file);
                     } else {
                         showAlert('ファイルエラー', '無効なファイル形式です。.bin ファイルを選択してください。');
-                        fileInput.value = '';
+                        fileInput.value = ''; // Reset file input
                         originalPointsData = null;
+                        processAndDisplayPointCloud(); // Clear display and disable UI
                     }
                 }
             });
@@ -418,7 +513,7 @@
                 currentMinIntensityFilter = parseFloat(minIntensitySlider.value);
                 if (currentMinIntensityFilter > currentMaxIntensityFilter) {
                     currentMaxIntensityFilter = currentMinIntensityFilter;
-                    maxIntensitySlider.value = currentMaxIntensityFilter;
+                    maxIntensitySlider.value = currentMaxIntensityFilter.toFixed(Math.max(2, maxIntensitySlider.step.split('.')[1]?.length || 2));
                     maxIntensityValueDisplay.textContent = currentMaxIntensityFilter.toFixed(2);
                 }
                 minIntensityValueDisplay.textContent = currentMinIntensityFilter.toFixed(2);
@@ -432,7 +527,7 @@
                 currentMaxIntensityFilter = parseFloat(maxIntensitySlider.value);
                 if (currentMaxIntensityFilter < currentMinIntensityFilter) {
                     currentMinIntensityFilter = currentMaxIntensityFilter;
-                    minIntensitySlider.value = currentMinIntensityFilter;
+                    minIntensitySlider.value = currentMinIntensityFilter.toFixed(Math.max(2, minIntensitySlider.step.split('.')[1]?.length || 2));
                     minIntensityValueDisplay.textContent = currentMinIntensityFilter.toFixed(2);
                 }
                 maxIntensityValueDisplay.textContent = currentMaxIntensityFilter.toFixed(2);
@@ -449,6 +544,66 @@
                     processAndDisplayPointCloud();
                 }
             });
+
+            otsuButton.addEventListener('click', () => {
+                if (!originalPointsData) {
+                    showAlert('情報', 'まず点群ファイルをロードしてください。');
+                    return;
+                }
+                loader.style.display = 'block';
+
+                // Use setTimeout to allow the loader to render before potentially heavy computation
+                setTimeout(() => {
+                    try {
+                        const intensities = [];
+                        const totalNumPoints = originalPointsData.length / 4;
+
+                        if (totalNumPoints === 0) {
+                             showAlert('Otsu法 結果', "点群データが空のため、Otsu法を適用できませんでした。");
+                             loader.style.display = 'none';
+                             return;
+                        }
+
+                        for (let i = 0; i < totalNumPoints; i++) {
+                            intensities.push(originalPointsData[i * 4 + 3]);
+                        }
+
+                        // minIntensityGlobal and maxIntensityGlobal should be up-to-date from file load
+                        const result = calculateOtsuThreshold(intensities, minIntensityGlobal, maxIntensityGlobal);
+                        showAlert('Otsu法 結果', result.message);
+
+                        if (typeof result.threshold !== 'number' || isNaN(result.threshold)) {
+                            console.error("Otsu threshold calculation failed or returned invalid value.");
+                            loader.style.display = 'none';
+                            return;
+                        }
+                        const otsuThreshold = result.threshold;
+
+                        currentMinIntensityFilter = otsuThreshold;
+                        // Set max filter to global max to show all points above Otsu's threshold
+                        currentMaxIntensityFilter = maxIntensityGlobal;
+
+                        // Update slider UI to reflect the new filter values
+                        const minStepDecimalPlaces = minIntensitySlider.step.split('.')[1]?.length || 0;
+                        minIntensitySlider.value = currentMinIntensityFilter.toFixed(Math.max(2, minStepDecimalPlaces));
+                        minIntensityValueDisplay.textContent = currentMinIntensityFilter.toFixed(2);
+
+                        const maxStepDecimalPlaces = maxIntensitySlider.step.split('.')[1]?.length || 0;
+                        maxIntensitySlider.value = currentMaxIntensityFilter.toFixed(Math.max(2, maxStepDecimalPlaces));
+                        maxIntensityValueDisplay.textContent = currentMaxIntensityFilter.toFixed(2);
+
+                        performCameraAdjustmentOnFileLoad = false; // Don't readjust camera
+                        processAndDisplayPointCloud();
+
+                    } catch (error) {
+                        console.error("Error during Otsu thresholding:", error);
+                        showAlert('エラー', `Otsu法処理中にエラーが発生しました: ${error.message}`);
+                    } finally {
+                        loader.style.display = 'none';
+                    }
+                }, 10); // Small delay for loader visibility
+            });
+
 
             voxelizeCheckbox.addEventListener('change', (event) => {
                 voxelizeEnabled = event.target.checked;
@@ -481,7 +636,7 @@
                     }
                 } else {
                     showAlert("入力エラー", "ボクセルサイズは0より大きい値を入力してください。");
-                    voxelSizeInput.value = voxelSize;
+                    voxelSizeInput.value = voxelSize; // Revert to previous valid size
                 }
             });
 
@@ -507,7 +662,7 @@
                     voxelSizeInput.disabled = true;
                     displayVoxelsAsCubesCheckbox.disabled = true;
                     displayVoxelsAsCubesCheckbox.checked = false;
-                    pointSizeSlider.disabled = false;
+                    pointSizeSlider.disabled = false; // Re-enable point size slider if octree is on
                 }
                 if (originalPointsData) {
                     performCameraAdjustmentOnFileLoad = false;
@@ -526,7 +681,7 @@
                     }
                 } else {
                     showAlert("入力エラー", "Octreeの深さは1から10の間で入力してください。");
-                    octreeDepthInput.value = octreeMaxDepth;
+                    octreeDepthInput.value = octreeMaxDepth; // Revert
                 }
             });
             displayOctreeBoundsCheckbox.addEventListener('change', (event) => {
@@ -542,13 +697,13 @@
 
         function clearPointCloudObject() {
             if (pointCloudObject) {
-                if (pointCloudObject.type === 'Group') {
+                if (pointCloudObject.type === 'Group') { // For voxel cubes
                     pointCloudObject.children.forEach(child => {
                         if (child.geometry) child.geometry.dispose();
                         if (child.material) child.material.dispose();
                     });
-                    pointCloudObject.clear();
-                } else {
+                    pointCloudObject.clear(); // Remove all children
+                } else { // For Points object
                     if (pointCloudObject.geometry) pointCloudObject.geometry.dispose();
                     if (pointCloudObject.material) pointCloudObject.material.dispose();
                 }
@@ -568,18 +723,12 @@
 
 
         // --- Octree Node Class and Build Function ---
-        // Implements a standard Region Octree where each node stores points
-        // and can be subdivided. Representative points are centroids of leaf nodes.
-        // Actual bounds are also tracked for tighter bounding box visualization.
         class OctreeNode {
             constructor(bounds, depth) {
-                this.bounds = bounds; // THREE.Box3, theoretical extent of this node
-                this.actualBounds = new THREE.Box3(); // Tight bounding box of points *within* this node and its children
+                this.bounds = bounds;
+                this.actualBounds = new THREE.Box3();
                 this.depth = depth;
-                // this.pointsData = []; // No longer storing raw points in each node to save memory for deep trees
                 this.children = null;
-
-                // For representative point calculation (centroid and average intensity)
                 this.sumX = 0; this.sumY = 0; this.sumZ = 0;
                 this.sumIntensity = 0; this.pointCount = 0;
             }
@@ -590,22 +739,18 @@
                 const max = this.bounds.max;
                 const mid = new THREE.Vector3().addVectors(min, max).multiplyScalar(0.5);
 
-                // Order: ---, +--, -+-, ++-, --+, +-+, -++, +++ (X, Y, Z)
-                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(min.x, min.y, min.z), new THREE.Vector3(mid.x, mid.y, mid.z)), this.depth + 1)); // 000
-                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(mid.x, min.y, min.z), new THREE.Vector3(max.x, mid.y, mid.z)), this.depth + 1)); // 100
-                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(min.x, mid.y, min.z), new THREE.Vector3(mid.x, max.y, mid.z)), this.depth + 1)); // 010
-                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(mid.x, mid.y, min.z), new THREE.Vector3(max.x, max.y, mid.z)), this.depth + 1)); // 110
-                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(min.x, min.y, mid.z), new THREE.Vector3(mid.x, mid.y, max.z)), this.depth + 1)); // 001
-                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(mid.x, min.y, mid.z), new THREE.Vector3(max.x, mid.y, max.z)), this.depth + 1)); // 101
-                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(min.x, mid.y, mid.z), new THREE.Vector3(mid.x, max.y, max.z)), this.depth + 1)); // 011
-                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(mid.x, mid.y, mid.z), new THREE.Vector3(max.x, max.y, max.z)), this.depth + 1)); // 111
+                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(min.x, min.y, min.z), new THREE.Vector3(mid.x, mid.y, mid.z)), this.depth + 1));
+                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(mid.x, min.y, min.z), new THREE.Vector3(max.x, mid.y, mid.z)), this.depth + 1));
+                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(min.x, mid.y, min.z), new THREE.Vector3(mid.x, max.y, mid.z)), this.depth + 1));
+                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(mid.x, mid.y, min.z), new THREE.Vector3(max.x, max.y, mid.z)), this.depth + 1));
+                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(min.x, min.y, mid.z), new THREE.Vector3(mid.x, mid.y, max.z)), this.depth + 1));
+                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(mid.x, min.y, mid.z), new THREE.Vector3(max.x, mid.y, max.z)), this.depth + 1));
+                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(min.x, mid.y, mid.z), new THREE.Vector3(mid.x, max.y, max.z)), this.depth + 1));
+                this.children.push(new OctreeNode(new THREE.Box3(new THREE.Vector3(mid.x, mid.y, mid.z), new THREE.Vector3(max.x, max.y, max.z)), this.depth + 1));
             }
 
             insert(point) {
-                // Update actualBounds for this node (and recursively for its parents via call stack)
                 this.actualBounds.expandByPoint(new THREE.Vector3(point.x, point.y, point.z));
-
-                // Accumulate sums for centroid/average intensity calculation
                 this.sumX += point.x; this.sumY += point.y; this.sumZ += point.z;
                 this.sumIntensity += point.intensity; this.pointCount++;
 
@@ -622,10 +767,7 @@
                             break;
                         }
                     }
-                    // If a point is exactly on a boundary, it might not be strictly contained by any child.
-                    // In such rare cases, it contributes to the current node's average.
                 }
-                // If max depth is reached, point contributes to this leaf node's average.
             }
 
             getLeafRepresentativePoints(representatives) {
@@ -640,16 +782,15 @@
                     }
                 } else {
                     for (let i = 0; i < 8; i++) {
-                        if (this.children[i].pointCount > 0) {
+                        if (this.children[i].pointCount > 0) { // Only recurse if child has points
                            this.children[i].getLeafRepresentativePoints(representatives);
                         }
                     }
                 }
             }
 
-            // Gets actual bounding boxes of leaf nodes (or nodes at maxDepth) that contain points
             getDisplayableNodeActualBounds(boundsList) {
-                if (this.pointCount > 0) {
+                if (this.pointCount > 0) { // Only consider nodes that actually received points
                     if (this.depth === octreeMaxDepth || this.children === null) {
                         if (!this.actualBounds.isEmpty()) {
                             boundsList.push(this.actualBounds);
@@ -665,22 +806,33 @@
 
 
         function processAndDisplayPointCloud() {
+            // Update Otsu button state
+            if (originalPointsData && originalPointsData.length > 0) {
+                otsuButton.disabled = false;
+            } else {
+                otsuButton.disabled = true;
+            }
+
             if (!originalPointsData) {
                 pointCountDisplay.textContent = `点群数: 0 (表示中: 0)`;
                 minIntensitySlider.disabled = true; maxIntensitySlider.disabled = true;
                 minIntensityValueDisplay.textContent = "N/A"; maxIntensityValueDisplay.textContent = "N/A";
+                colorMapSelect.disabled = true; // Disable if no data
+
                 voxelizeCheckbox.disabled = true; voxelizeCheckbox.checked = false;
                 voxelSizeInput.disabled = true;
                 displayVoxelsAsCubesCheckbox.disabled = true; displayVoxelsAsCubesCheckbox.checked = false;
                 octreeCheckbox.disabled = true; octreeCheckbox.checked = false;
                 octreeDepthInput.disabled = true;
                 displayOctreeBoundsCheckbox.disabled = true; displayOctreeBoundsCheckbox.checked = false;
-                pointSizeSlider.disabled = false;
+                pointSizeSlider.disabled = false; // Default state
+
                 voxelizeEnabled = false; displayVoxelsAsCubes = false; octreeEnabled = false; displayOctreeBounds = false;
 
                 clearPointCloudObject();
                 clearOctreeBounds();
                 updateDynamicGridHelper(null);
+                // Reset camera to default if no data
                 controls.target.set(0,0,0);
                 camera.position.set(10, -10, 10);
                 camera.lookAt(controls.target);
@@ -689,20 +841,27 @@
             }
 
             loader.style.display = 'block';
-            camera.up.set(0,0,1);
-            // UI Enable/Disable Logic
-            voxelizeCheckbox.disabled = octreeEnabled;
+            camera.up.set(0,0,1); // Ensure Z is up
+
+            // UI Enable/Disable Logic based on current state
+            minIntensitySlider.disabled = false;
+            maxIntensitySlider.disabled = false;
+            colorMapSelect.disabled = false;
+
+            voxelizeCheckbox.disabled = octreeEnabled; // Can't use both
             voxelSizeInput.disabled = !voxelizeEnabled || octreeEnabled;
             displayVoxelsAsCubesCheckbox.disabled = !voxelizeEnabled || octreeEnabled;
-            octreeCheckbox.disabled = voxelizeEnabled;
+
+            octreeCheckbox.disabled = voxelizeEnabled; // Can't use both
             octreeDepthInput.disabled = !octreeEnabled || voxelizeEnabled;
             displayOctreeBoundsCheckbox.disabled = !octreeEnabled || voxelizeEnabled;
+
             pointSizeSlider.disabled = (voxelizeEnabled && displayVoxelsAsCubes);
 
 
             const float32Array = originalPointsData;
             if (float32Array.length % 4 !== 0) {
-                showAlert('ファイルエラー', 'ファイルのデータ形式が正しくありません。');
+                showAlert('ファイルエラー', 'ファイルのデータ形式が正しくありません (x,y,z,intensity の組であるべきです)。');
                 loader.style.display = 'none';
                 return;
             }
@@ -712,36 +871,39 @@
             if (performCameraAdjustmentOnFileLoad) {
                 minIntensityGlobal = Infinity;
                 maxIntensityGlobal = -Infinity;
-                for (let i = 0; i < totalNumPoints; i++) {
-                    const intensityVal = float32Array[i * 4 + 3];
-                    if (intensityVal < minIntensityGlobal) minIntensityGlobal = intensityVal;
-                    if (intensityVal > maxIntensityGlobal) maxIntensityGlobal = intensityVal;
-                }
-                if (totalNumPoints === 0) {
+                if (totalNumPoints > 0) {
+                    for (let i = 0; i < totalNumPoints; i++) {
+                        const intensityVal = float32Array[i * 4 + 3];
+                        if (intensityVal < minIntensityGlobal) minIntensityGlobal = intensityVal;
+                        if (intensityVal > maxIntensityGlobal) maxIntensityGlobal = intensityVal;
+                    }
+                } else { // No points
                     minIntensityGlobal = 0;
                     maxIntensityGlobal = 1;
-                } else if (minIntensityGlobal === maxIntensityGlobal) {
-                     maxIntensityGlobal = minIntensityGlobal + (minIntensityGlobal === 0 ? 1.0 : Math.abs(minIntensityGlobal * 0.1) + 0.1);
-                     if (minIntensityGlobal === maxIntensityGlobal) maxIntensityGlobal +=1.0;
                 }
+
+                if (minIntensityGlobal === maxIntensityGlobal) { // All points have same intensity or no points
+                     maxIntensityGlobal = minIntensityGlobal + (minIntensityGlobal === 0 ? 1.0 : Math.abs(minIntensityGlobal * 0.1) + 0.1);
+                     if (minIntensityGlobal === maxIntensityGlobal && totalNumPoints > 0) maxIntensityGlobal +=1.0; // Ensure different if single intensity
+                     else if (totalNumPoints === 0) maxIntensityGlobal = 1.0; // Default for no points
+                }
+
 
                 minIntensitySlider.min = minIntensityGlobal.toFixed(2);
                 minIntensitySlider.max = maxIntensityGlobal.toFixed(2);
                 minIntensitySlider.value = minIntensityGlobal.toFixed(2);
-                minIntensitySlider.disabled = false;
                 minIntensityValueDisplay.textContent = minIntensityGlobal.toFixed(2);
                 currentMinIntensityFilter = minIntensityGlobal;
 
                 maxIntensitySlider.min = minIntensityGlobal.toFixed(2);
                 maxIntensitySlider.max = maxIntensityGlobal.toFixed(2);
                 maxIntensitySlider.value = maxIntensityGlobal.toFixed(2);
-                maxIntensitySlider.disabled = false;
                 maxIntensityValueDisplay.textContent = maxIntensityGlobal.toFixed(2);
                 currentMaxIntensityFilter = maxIntensityGlobal;
 
                 const stepValue = Math.max(0.01, (maxIntensityGlobal - minIntensityGlobal) / 100);
-                minIntensitySlider.step = stepValue.toFixed(4);
-                maxIntensitySlider.step = stepValue.toFixed(4);
+                minIntensitySlider.step = stepValue.toFixed(Math.max(2, stepValue.toString().split('.')[1]?.length || 0));
+                maxIntensitySlider.step = stepValue.toFixed(Math.max(2, stepValue.toString().split('.')[1]?.length || 0));
             }
 
             let pointsToProcess = [];
@@ -759,18 +921,17 @@
 
             let finalPositionsArray = [];
             let finalIntensitiesArray = [];
-            let voxelGridData = [];
+            let voxelGridData = []; // For displaying voxels as cubes
             let rootNodeForOctree = null;
 
-            clearOctreeBounds();
+            clearOctreeBounds(); // Clear previous bounds visuals
 
             if (octreeEnabled && pointsToProcess.length > 0) {
                 const overallBounds = new THREE.Box3();
-                // Calculate initial overall bounds from *filtered* points
                 pointsToProcess.forEach(p => overallBounds.expandByPoint(new THREE.Vector3(p.x, p.y, p.z)));
 
                 if (!overallBounds.isEmpty()) {
-                    rootNodeForOctree = new OctreeNode(overallBounds.clone(), 0);
+                    rootNodeForOctree = new OctreeNode(overallBounds.clone(), 0); // Use clone for safety
                     pointsToProcess.forEach(p => rootNodeForOctree.insert(p));
 
                     const representativePoints = [];
@@ -786,16 +947,14 @@
                         rootNodeForOctree.getDisplayableNodeActualBounds(boundsToDisplay);
                         boundsToDisplay.forEach(box => {
                             if (!box.isEmpty()){
-                                const helper = new THREE.Box3Helper(box, 0xcccccc);
+                                const helper = new THREE.Box3Helper(box, 0xcccccc); // Light gray color for bounds
                                 octreeBoundsGroup.add(helper);
                             }
                         });
                     }
                 }
-
-
             } else if (voxelizeEnabled && pointsToProcess.length > 0) {
-                const voxels = new Map();
+                const voxels = new Map(); // Map to store voxel data { sumIntensity, count, voxelIndices }
                 const invVoxelSize = 1.0 / voxelSize;
 
                 pointsToProcess.forEach(p => {
@@ -825,7 +984,7 @@
                         finalIntensitiesArray.push(avgIntensity);
                     }
                 });
-            } else {
+            } else { // No octree, no voxelization, or no points to process for them
                 pointsToProcess.forEach(p => {
                     finalPositionsArray.push(p.x, p.y, p.z);
                     finalIntensitiesArray.push(p.intensity);
@@ -835,55 +994,61 @@
             const numVisibleElements = (voxelizeEnabled && displayVoxelsAsCubes) ? voxelGridData.length : finalPositionsArray.length / 3;
             pointCountDisplay.textContent = `点群数: ${totalNumPoints.toLocaleString()} (表示中: ${numVisibleElements.toLocaleString()})`;
 
-            clearPointCloudObject();
+            clearPointCloudObject(); // Clear existing points/cubes
 
+            // Check if there's anything to display before proceeding
             if (numVisibleElements === 0 && !(octreeEnabled && displayOctreeBounds && octreeBoundsGroup.children.length > 0)) {
-                updateDynamicGridHelper(null);
+                updateDynamicGridHelper(null); // Clear dynamic grid if nothing to show
                 loader.style.display = 'none';
-                controls.update();
+                controls.update(); // Ensure controls are responsive
                 return;
             }
 
-            let geometry;
-            let overallBoundingBox = new THREE.Box3();
+            let geometry; // Will hold BufferGeometry or an object with boundingSphere for camera adjustment
+            let overallBoundingBox = new THREE.Box3(); // To calculate overall bounds for camera and grid
 
             if (voxelizeEnabled && displayVoxelsAsCubes) {
-                pointCloudObject = new THREE.Group();
-                const cubeGeometry = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
+                pointCloudObject = new THREE.Group(); // Group for cube meshes
+                const cubeGeometry = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize); // Reusable geometry
 
                 voxelGridData.forEach(voxel => {
                     const normIntensity = Math.max(0, Math.min(1, (voxel.intensity - minIntensityGlobal) / (maxIntensityGlobal - minIntensityGlobal || 1)));
                     const color = applyColorMap(normIntensity, currentColorMap);
 
+                    // Create a new material for each cube to have different colors
                     const cubeMaterial = new THREE.MeshStandardMaterial({
                         color: color,
                         roughness: 0.8,
                         metalness: 0.0,
+                        // wireframe: true // Optional: for debugging voxel shapes
                     });
                     const cubeMesh = new THREE.Mesh(cubeGeometry, cubeMaterial);
                     cubeMesh.position.set(voxel.x, voxel.y, voxel.z);
                     pointCloudObject.add(cubeMesh);
-                    overallBoundingBox.expandByObject(cubeMesh);
+                    overallBoundingBox.expandByObject(cubeMesh); // Expand bounds by each cube
                 });
                 scene.add(pointCloudObject);
 
+                // For camera adjustment, get bounding sphere of the group
                 if (pointCloudObject.children.length > 0 && !overallBoundingBox.isEmpty()) {
-                     geometry = { boundingSphere: new THREE.Sphere() };
+                     geometry = { boundingSphere: new THREE.Sphere() }; // Mock geometry object
                      overallBoundingBox.getBoundingSphere(geometry.boundingSphere);
                 } else {
-                    geometry = null;
+                    geometry = null; // No geometry if no cubes
                 }
 
-            } else if (finalPositionsArray.length > 0) {
+            } else if (finalPositionsArray.length > 0) { // Display as points
                 const finalPositions = new Float32Array(finalPositionsArray);
-                const finalColors = new Float32Array(numVisibleElements * 3);
+                const finalColors = new Float32Array(numVisibleElements * 3); // RGB for each point
 
+                // Use consistent normalization range for colors based on global min/max
                 let normMin = minIntensityGlobal;
                 let normMax = maxIntensityGlobal;
-                if (normMin === normMax) {
+                if (normMin === normMax) { // Avoid division by zero if all intensities are same
                      normMax = normMin + (normMin === 0 ? 1.0 : Math.abs(normMin * 0.1) + 0.1);
                      if (normMin === normMax) normMax +=1.0;
                 }
+
 
                 for (let i = 0; i < numVisibleElements; i++) {
                     const normIntensity = Math.max(0, Math.min(1, (finalIntensitiesArray[i] - normMin) / (normMax - normMin)));
@@ -898,44 +1063,47 @@
                 geometry.setAttribute('color', new THREE.BufferAttribute(finalColors, 3));
 
                 if (numVisibleElements > 0) {
-                    geometry.computeBoundingBox();
-                    overallBoundingBox.copy(geometry.boundingBox);
-                    geometry.computeBoundingSphere();
+                    geometry.computeBoundingBox(); // For camera adjustment
+                    overallBoundingBox.copy(geometry.boundingBox); // Update overall bounds
+                    geometry.computeBoundingSphere(); // For camera adjustment
                 }
+
 
                 const material = new THREE.PointsMaterial({
                     size: parseFloat(pointSizeSlider.value),
                     vertexColors: true,
-                    sizeAttenuation: true
+                    sizeAttenuation: true // Points get smaller further away
                 });
 
                 pointCloudObject = new THREE.Points(geometry, material);
                 scene.add(pointCloudObject);
             }
 
+            // If Octree bounds are displayed, union their extent with the overall bounding box
             if (octreeEnabled && displayOctreeBounds && rootNodeForOctree) {
-                 const octreeOverallBounds = new THREE.Box3();
-                 octreeBoundsGroup.children.forEach(helper => {
-                    // Box3Helper's box property holds the Box3 it represents
-                    if (helper.box) octreeOverallBounds.union(helper.box);
-                 });
-                 if(!octreeOverallBounds.isEmpty()){
-                    overallBoundingBox.union(octreeOverallBounds);
-                 } else if (rootNodeForOctree.actualBounds && !rootNodeForOctree.actualBounds.isEmpty() && overallBoundingBox.isEmpty()) {
-                     // If no helpers were added but root has actual bounds (e.g. depth 0)
+                const octreeVisualBounds = new THREE.Box3();
+                octreeBoundsGroup.children.forEach(helper => {
+                    if (helper.box) octreeVisualBounds.union(helper.box); // Box3Helper stores its box
+                });
+                if(!octreeVisualBounds.isEmpty()){
+                    overallBoundingBox.union(octreeVisualBounds);
+                } else if (rootNodeForOctree.actualBounds && !rootNodeForOctree.actualBounds.isEmpty() && overallBoundingBox.isEmpty()) {
+                    // Fallback if no helpers but root has bounds (e.g. depth 0 and bounds displayed)
                     overallBoundingBox.copy(rootNodeForOctree.actualBounds);
-                 } else if (rootNodeForOctree.bounds && !rootNodeForOctree.bounds.isEmpty() && overallBoundingBox.isEmpty()) {
+                } else if (rootNodeForOctree.bounds && !rootNodeForOctree.bounds.isEmpty() && overallBoundingBox.isEmpty()) {
+                    // Further fallback to theoretical bounds if actual are also empty
                     overallBoundingBox.copy(rootNodeForOctree.bounds);
-                 }
+                }
 
-                 if ((!pointCloudObject || pointCloudObject.children && pointCloudObject.children.length === 0) && !overallBoundingBox.isEmpty()) {
+                // If only octree bounds are visible (no points/cubes), ensure 'geometry' for camera adjustment
+                if ((!pointCloudObject || (pointCloudObject.children && pointCloudObject.children.length === 0)) && !overallBoundingBox.isEmpty()) {
                     geometry = { boundingSphere: new THREE.Sphere() };
                     overallBoundingBox.getBoundingSphere(geometry.boundingSphere);
-                 }
+                }
             }
 
 
-            updateDynamicGridHelper(overallBoundingBox);
+            updateDynamicGridHelper(overallBoundingBox); // Update grid based on final displayed content
 
             if (performCameraAdjustmentOnFileLoad && geometry && geometry.boundingSphere && (numVisibleElements > 0 || (octreeEnabled && displayOctreeBounds && octreeBoundsGroup.children.length > 0)) && !geometry.boundingSphere.isEmpty()) {
                 const center = geometry.boundingSphere.center;
@@ -943,31 +1111,39 @@
 
                 controls.target.copy(center);
                 const fov = camera.fov * (Math.PI / 180);
+                // Calculate distance to fit the sphere in view
                 let camDistance = Math.max(
-                    radius / Math.sin(fov / 2) * 1.1,
-                    radius + controls.minDistance + 0.2,
-                    0.5
+                    radius / Math.sin(fov / 2) * 1.1, // Factor for some padding
+                    radius + controls.minDistance + 0.2,  // Ensure minDistance is respected
+                    0.5 // Minimum camera distance fallback
                 );
-                if (radius < 0.1 && camDistance < 1.0) {
+                if (radius < 0.1 && camDistance < 1.0) { // For very small point clouds
                     camDistance = Math.max(camDistance, 1.0);
                 }
 
-                const offsetFactor = camDistance * 0.5;
+
+                // Set camera position relative to the center
+                // Using a consistent offset direction for predictability
+                const offsetFactor = camDistance * 0.5; // Arbitrary factor for a nice diagonal view
                 camera.position.set(
                     center.x + offsetFactor,
                     center.y - offsetFactor,
                     center.z + offsetFactor
                 );
 
-                if (camera.position.distanceTo(center) < radius * 1.05 || totalNumPoints === 1 && radius < 0.1) {
-                    const fallbackDist = Math.max(radius * 1.5, 0.5);
+
+                // Sanity check for camera position if it ends up too close or inside
+                if (camera.position.distanceTo(center) < radius * 1.05 || (totalNumPoints === 1 && radius < 0.1) ) {
+                    const fallbackDist = Math.max(radius * 1.5, 0.5); // Ensure it's outside
                     camera.position.set(center.x + fallbackDist, center.y - fallbackDist, center.z + fallbackDist);
                 }
+
                 camera.lookAt(controls.target);
-                performCameraAdjustmentOnFileLoad = false;
+                performCameraAdjustmentOnFileLoad = false; // Only adjust once per file load
             } else if (performCameraAdjustmentOnFileLoad && (numVisibleElements === 0 || (geometry && geometry.boundingSphere && geometry.boundingSphere.isEmpty()))) {
+                // If file loaded but no points are visible (e.g., all filtered out initially) or empty geometry
                  controls.target.set(0,0,0);
-                 camera.position.set(10, -10, 10);
+                 camera.position.set(10, -10, 10); // Reset to default view
                  camera.lookAt(controls.target);
                  performCameraAdjustmentOnFileLoad = false;
             }
@@ -978,3 +1154,6 @@
     </script>
 </body>
 </html>
+```
+
+この更新により、Otsu法を用いた閾値の自動設定が可能になり、特定の高強度な特徴を持つ点群の解析が容易になるはずです。もし何か不具合や、さらに改善したい点があれば教えてくだ
