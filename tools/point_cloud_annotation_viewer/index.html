@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>点群・アノテーションビューア</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body { margin: 0; font-family: 'Inter', sans-serif; overflow: hidden; }
+        #container { width: 100vw; height: 100vh; display: block; }
+        #loader {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #3498db;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            z-index: 100;
+            display: none;
+        }
+        @keyframes spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        .custom-modal {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .custom-modal.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .custom-modal-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 90%;
+            width: 400px;
+        }
+        .custom-modal-content h2 {
+            margin-top: 0;
+            font-size: 1.25rem;
+            color: #333;
+        }
+        .custom-modal-content p {
+            margin-bottom: 20px;
+            color: #555;
+        }
+        .custom-modal-content button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background-color: #3498db;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        .custom-modal-content button:hover {
+            background-color: #2980b9;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+    <div id="container"></div>
+    <div id="loader"></div>
+
+    <div id="customAlert" class="custom-modal">
+        <div class="custom-modal-content bg-gray-800 text-white rounded-lg">
+            <h2 id="customAlertTitle" class="text-xl font-semibold mb-2">通知</h2>
+            <p id="customAlertMessage" class="mb-4">メッセージ</p>
+            <button id="customAlertClose" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">閉じる</button>
+        </div>
+    </div>
+
+
+
+    <div class="absolute top-0 left-0 p-4 space-y-2 bg-gray-800 bg-opacity-80 rounded-br-lg shadow-lg max-w-xs md:max-w-sm">
+        <div>
+            <label for="pointCloudDirInput" class="block text-sm font-medium text-gray-300">点群ディレクトリを選択:</label>
+            <input type="file" id="pointCloudDirInput" webkitdirectory directory multiple
+                   class="mt-1 block w-full text-sm text-gray-400
+                   file:mr-4 file:py-2 file:px-4
+                   file:rounded-md file:border-0
+                   file:text-sm file:font-semibold
+                   file:bg-blue-500 file:text-white
+                   hover:file:bg-blue-600 cursor-pointer"/>
+        </div>
+        <div>
+            <label for="annotationDirInput" class="block text-sm font-medium text-gray-300">アノテーションディレクトリを選択 (オプション):</label>
+            <input type="file" id="annotationDirInput" webkitdirectory directory multiple
+                   class="mt-1 block w-full text-sm text-gray-400
+                   file:mr-4 file:py-2 file:px-4
+                   file:rounded-md file:border-0
+                   file:text-sm file:font-semibold
+                   file:bg-blue-500 file:text-white
+                   hover:file:bg-blue-600 cursor-pointer"/>
+        </div>
+        <div>
+            <label for="centerDirInput" class="block text-sm font-medium text-gray-300">重心ファイルディレクトリを選択 (オプション):</label>
+            <input type="file" id="centerDirInput" webkitdirectory directory multiple
+                   class="mt-1 block w-full text-sm text-gray-400
+                   file:mr-4 file:py-2 file:px-4
+                   file:rounded-md file:border-0
+                   file:text-sm file:font-semibold
+                   file:bg-blue-500 file:text-white
+                   hover:file:bg-blue-600 cursor-pointer"/>
+        </div>
+        <div class="flex space-x-2">
+            <button id="loadDataBtn" class="bg-blue-700 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded text-sm">
+                Load Data
+            </button>
+            <button id="prevFrameBtn" class="bg-orange-500 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded text-sm" disabled>
+                Prev
+            </button>
+            <button id="nextFrameBtn" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded text-sm" disabled>
+                Next
+            </button>
+        </div>
+
+        <div class="pt-2 border-t border-gray-700">
+            <div class="flex items-center space-x-2">
+                <label for="showBBoxes" class="text-sm text-gray-300">バウンディングボックス表示:</label>
+                <input type="checkbox" id="showBBoxes" checked class="h-4 w-4 text-indigo-600 border-gray-500 rounded">
+            </div>
+            <div class="flex items-center space-x-2 mt-1">
+                <label for="bboxOpacity" class="text-xs text-gray-400 w-20">透明度:</label>
+                <input type="range" id="bboxOpacity" min="0.1" max="1.0" step="0.1" value="0.3"
+                       class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                <span id="bboxOpacityValue" class="text-xs text-gray-300 w-8">0.3</span>
+            </div>
+            <div class="flex items-center space-x-2 mt-1">
+                <label for="showCenters" class="text-sm text-gray-300">重心表示:</label>
+                <input type="checkbox" id="showCenters" checked class="h-4 w-4 text-indigo-600 border-gray-500 rounded">
+            </div>
+            <div class="flex items-center space-x-2 mt-1">
+                <label for="centerSize" class="text-xs text-gray-400 w-20">重心サイズ:</label>
+                <input type="range" id="centerSize" min="0.1" max="2.0" step="0.1" value="0.5"
+                       class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                <span id="centerSizeValue" class="text-xs text-gray-300 w-8">0.2</span>
+            </div>
+        </div>
+
+        <div class="pt-2 border-t border-gray-700">
+            <div class="flex items-center space-x-2">
+                <label for="pointSize" class="text-sm text-gray-300">点のサイズ:</label>
+                <input type="range" id="pointSize" min="0.01" max="0.50" step="0.01" value="0.05"
+                       class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                <span id="pointSizeValue" class="text-sm text-gray-300 w-10">0.05</span>
+            </div>
+        </div>
+
+        <div class="pt-2 border-t border-gray-700">
+            <div class="flex items-center space-x-2">
+                <label for="colorMapSelect" class="text-sm text-gray-300">カラーマップ:</label>
+                <select id="colorMapSelect" class="text-sm bg-gray-700 text-gray-200 border-gray-600 rounded-md p-1">
+                    <option value="whiteRed">白-赤</option>
+                    <option value="grayscale">グレースケール</option>
+                    <option value="rainbow">虹色</option>
+                    <option value="blueYellowRed">青-黄-赤</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="pt-2 border-t border-gray-700">
+            <div class="text-sm text-gray-300">情報:</div>
+            <div id="frameInfo" class="text-xs text-gray-400">フレーム(1-based): -</div>
+            <div id="fileName" class="text-xs text-gray-400">ファイル名: -</div>
+            <div id="pointCount" class="text-xs text-gray-400">点群数: 0</div>
+            <div id="bboxCount" class="text-xs text-gray-400">バウンディングボックス: 0</div>
+            <div id="centerCount" class="text-xs text-gray-400">重心: 0</div>
+        </div>
+
+        <p class="text-xs text-gray-400 mt-1">座標系: X:奥(赤), Y:左(緑), Z:上(青)</p>
+    </div>
+
+    <script type="module">
+        let scene, camera, renderer, controls;
+        let pointCloudObject = null;
+        let bboxGroup = null;
+        let centerGroup = null;
+        let currentFrameIndex = 0;
+        let currentPointsData = null;
+        let gridHelper, axesHelper;
+        let isFrameLoading = false;
+        let isHoldingNext = false;
+        let autoAdvancedDuringHold = false;
+
+        let minIntensityGlobal = 0;
+        let maxIntensityGlobal = 1;
+        let currentColorMap = 'whiteRed';
+        let showBBoxes = true;
+        let bboxOpacity = 0.3;
+
+        // ディレクトリ選択用の変数
+        let pointCloudFiles = [];
+        let annotationFiles = [];
+        let centerFiles = [];
+
+        const container = document.getElementById('container');
+        const loader = document.getElementById('loader');
+        const pointCloudDirInput = document.getElementById('pointCloudDirInput');
+        const annotationDirInput = document.getElementById('annotationDirInput');
+        const centerDirInput = document.getElementById('centerDirInput');
+        const loadDataBtn = document.getElementById('loadDataBtn');
+        const prevFrameBtn = document.getElementById('prevFrameBtn');
+        const nextFrameBtn = document.getElementById('nextFrameBtn');
+        const showBBoxesCheckbox = document.getElementById('showBBoxes');
+        const bboxOpacitySlider = document.getElementById('bboxOpacity');
+        const bboxOpacityValue = document.getElementById('bboxOpacityValue');
+        const showCentersCheckbox = document.getElementById('showCenters');
+        const centerSizeSlider = document.getElementById('centerSize');
+        const centerSizeValue = document.getElementById('centerSizeValue');
+        const pointSizeSlider = document.getElementById('pointSize');
+        const pointSizeValue = document.getElementById('pointSizeValue');
+        const colorMapSelect = document.getElementById('colorMapSelect');
+        const frameInfo = document.getElementById('frameInfo');
+        const fileName = document.getElementById('fileName');
+        const pointCount = document.getElementById('pointCount');
+        const bboxCount = document.getElementById('bboxCount');
+        const centerCount = document.getElementById('centerCount');
+
+        const customAlert = document.getElementById('customAlert');
+        const customAlertTitle = document.getElementById('customAlertTitle');
+        const customAlertMessage = document.getElementById('customAlertMessage');
+        const customAlertClose = document.getElementById('customAlertClose');
+
+        function showAlert(title, message) {
+            customAlertTitle.textContent = title;
+            customAlertMessage.textContent = message;
+            customAlert.classList.add('show');
+        }
+        customAlertClose.addEventListener('click', () => customAlert.classList.remove('show'));
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x111827);
+
+            camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.up.set(0, 0, 1);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.075;
+            controls.screenSpacePanning = true;
+            controls.minDistance = 0.01;
+            controls.maxDistance = 1000;
+            controls.rotateSpeed = 0.7;
+            controls.panSpeed = 0.7;
+            controls.zoomSpeed = 0.9;
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            directionalLight.position.set(5, -5, 10);
+            scene.add(directionalLight);
+
+            gridHelper = new THREE.GridHelper(100, 100, 0x555555, 0x444444);
+            gridHelper.rotation.x = Math.PI / 2;
+            scene.add(gridHelper);
+
+            axesHelper = new THREE.AxesHelper(5);
+            scene.add(axesHelper);
+
+            bboxGroup = new THREE.Group();
+            scene.add(bboxGroup);
+
+            centerGroup = new THREE.Group();
+            scene.add(centerGroup);
+
+            controls.target.set(0, 0, 0);
+            camera.position.set(10, -10, 10);
+            camera.lookAt(controls.target);
+            controls.update();
+
+            window.addEventListener('resize', onWindowResize, false);
+            animate();
+            setupEventListeners();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        function setupEventListeners() {
+            loadDataBtn.addEventListener('click', loadData);
+            prevFrameBtn.addEventListener('click', prevFrame);
+            nextFrameBtn.addEventListener('click', handleNextFrameClick);
+            nextFrameBtn.addEventListener('mousedown', startHoldAdvance);
+            nextFrameBtn.addEventListener('mouseup', stopHoldAdvance);
+            nextFrameBtn.addEventListener('mouseleave', stopHoldAdvance);
+            nextFrameBtn.addEventListener('touchstart', startHoldAdvance);
+            nextFrameBtn.addEventListener('touchend', stopHoldAdvance);
+            nextFrameBtn.addEventListener('touchcancel', stopHoldAdvance);
+            showBBoxesCheckbox.addEventListener('change', toggleBBoxes);
+            bboxOpacitySlider.addEventListener('input', updateBBoxOpacity);
+            showCentersCheckbox.addEventListener('change', toggleCenters);
+            centerSizeSlider.addEventListener('input', updateCenterSize);
+            pointSizeSlider.addEventListener('input', updatePointSize);
+            colorMapSelect.addEventListener('change', updateColorMap);
+
+            // ディレクトリ選択関連
+            pointCloudDirInput.addEventListener('change', handlePointCloudDirSelect);
+            annotationDirInput.addEventListener('change', handleAnnotationDirSelect);
+            centerDirInput.addEventListener('change', handleCenterDirSelect);
+            customAlertClose.addEventListener('click', () => customAlert.classList.remove('show'));
+        }
+
+        function handleNextFrameClick() {
+            // 長押し中に自動で進んだ場合はクリックによる追加進行を抑止
+            if (autoAdvancedDuringHold) {
+                autoAdvancedDuringHold = false;
+                return;
+            }
+            nextFrame();
+        }
+
+        function startHoldAdvance() {
+            if (pointCloudFiles.length === 0) return;
+            isHoldingNext = true;
+            autoAdvancedDuringHold = false;
+            autoAdvanceLoop();
+        }
+
+        function stopHoldAdvance() {
+            isHoldingNext = false;
+        }
+
+        async function autoAdvanceLoop() {
+            if (!isHoldingNext) return;
+            if (isFrameLoading) {
+                setTimeout(autoAdvanceLoop, 50);
+                return;
+            }
+            if (currentFrameIndex >= pointCloudFiles.length - 1) {
+                isHoldingNext = false;
+                return;
+            }
+            currentFrameIndex++;
+            autoAdvancedDuringHold = true;
+            await loadFrame(currentFrameIndex, false);
+            // 長押し => 110ms周期で再生
+            if (isHoldingNext) setTimeout(autoAdvanceLoop, 110);
+        }
+
+        function applyColorMap(normalizedIntensity, mapType) {
+            let r, g, b;
+            const v = Math.max(0, Math.min(1, normalizedIntensity));
+
+            switch (mapType) {
+                case 'grayscale':
+                    r = v; g = v; b = v;
+                    break;
+                case 'rainbow':
+                    if (v < 0.25) {
+                        r = 0; g = 4 * v; b = 1;
+                    } else if (v < 0.5) {
+                        r = 0; g = 1; b = 1 - 4 * (v - 0.25);
+                    } else if (v < 0.75) {
+                        r = 4 * (v - 0.5); g = 1; b = 0;
+                    } else {
+                        r = 1; g = 1 - 4 * (v - 0.75); b = 0;
+                    }
+                    break;
+                case 'blueYellowRed':
+                    if (v < 0.5) {
+                        r = 2 * v; g = 2 * v; b = 1;
+                    } else {
+                        r = 1; g = 2 - 2 * v; b = 2 - 2 * v;
+                    }
+                    break;
+                default: // whiteRed
+                    r = 1; g = 1 - v; b = 1 - v;
+                    break;
+            }
+            return { r, g, b };
+        }
+
+        async function loadData() {
+            // 点群だけでも可視化できるように、点群のみ必須に変更
+            if (pointCloudFiles.length === 0) {
+                showAlert('エラー', '点群ディレクトリを選択してください。');
+                return;
+            }
+
+            // ファイル名の一致を確認（アノテーションは任意）
+            if (!validateFileNames()) {
+                return;
+            }
+
+            loader.style.display = 'block';
+            try {
+                if (pointCloudFiles.length === 0) {
+                    showAlert('エラー', '点群ファイルが見つかりません。');
+                    return;
+                }
+
+                currentFrameIndex = 0;
+                prevFrameBtn.disabled = false;
+                nextFrameBtn.disabled = false;
+                await loadFrame(currentFrameIndex);
+
+            } catch (error) {
+                showAlert('エラー', `データ読み込みエラー: ${error.message}`);
+            } finally {
+                loader.style.display = 'none';
+            }
+        }
+
+        function validateFileNames() {
+            const pointCloudNames = pointCloudFiles.map(file => getFileNameWithoutExtension(file.name));
+            const annotationNames = annotationFiles.map(file => getFileNameWithoutExtension(file.name));
+            const centerNames = centerFiles.map(file => getFileNameWithoutExtension(file.name));
+
+            // アノテーションは任意。存在する場合のみ名前の一致を確認
+            if (annotationFiles.length > 0) {
+                const missingAnnotations = pointCloudNames.filter(name => !annotationNames.includes(name));
+                const missingPointClouds = annotationNames.filter(name => !pointCloudNames.includes(name));
+
+                if (missingAnnotations.length > 0) {
+                    showAlert('ファイル名不一致', `以下の点群ファイルに対応するアノテーションファイルが見つかりません:\n${missingAnnotations.slice(0, 5).join(', ')}${missingAnnotations.length > 5 ? '...' : ''}`);
+                    return false;
+                }
+
+                if (missingPointClouds.length > 0) {
+                    showAlert('ファイル名不一致', `以下のアノテーションファイルに対応する点群ファイルが見つかりません:\n${missingPointClouds.slice(0, 5).join(', ')}${missingPointClouds.length > 5 ? '...' : ''}`);
+                    return false;
+                }
+            }
+
+            // 重心ファイルがある場合、その名前も確認
+            if (centerFiles.length > 0) {
+                const missingCenters = pointCloudNames.filter(name => !centerNames.includes(name));
+                const extraCenters = centerNames.filter(name => !pointCloudNames.includes(name));
+
+                if (missingCenters.length > 0) {
+                    showAlert('ファイル名不一致', `以下の点群ファイルに対応する重心ファイルが見つかりません:\n${missingCenters.slice(0, 5).join(', ')}${missingCenters.length > 5 ? '...' : ''}`);
+                    return false;
+                }
+
+                if (extraCenters.length > 0) {
+                    console.warn(`以下の重心ファイルに対応する点群ファイルが見つかりません: ${extraCenters.join(', ')}`);
+                }
+            }
+
+            console.log('ファイル名の一致確認が完了しました');
+            return true;
+        }
+
+        function getFileNameWithoutExtension(filename) {
+            return filename.replace(/\.[^/.]+$/, '');
+        }
+
+        function extractNumberFromFilename(filename) {
+            // ファイル名から数字を抽出する関数
+            const match = filename.match(/(\d+)/);
+            return match ? parseInt(match[1], 10) : 0;
+        }
+
+        function handlePointCloudDirSelect(event) {
+            const files = Array.from(event.target.files);
+            pointCloudFiles = files.filter(file => file.name.endsWith('.bin'));
+            // ファイル名の番号でソートして一貫した順序を保証
+            pointCloudFiles.sort((a, b) => {
+                const numA = extractNumberFromFilename(a.name);
+                const numB = extractNumberFromFilename(b.name);
+                return numA - numB;
+            });
+            console.log(`点群ファイル ${pointCloudFiles.length} 個を選択しました`);
+        }
+
+        function handleAnnotationDirSelect(event) {
+            const files = Array.from(event.target.files);
+            annotationFiles = files.filter(file => file.name.endsWith('.txt'));
+            // ファイル名の番号でソートして一貫した順序を保証
+            annotationFiles.sort((a, b) => {
+                const numA = extractNumberFromFilename(a.name);
+                const numB = extractNumberFromFilename(b.name);
+                return numA - numB;
+            });
+            console.log(`アノテーションファイル ${annotationFiles.length} 個を選択しました`);
+        }
+
+        function handleCenterDirSelect(event) {
+            const files = Array.from(event.target.files);
+            centerFiles = files.filter(file => file.name.endsWith('.csv'));
+            // ファイル名の番号でソートして一貫した順序を保証
+            centerFiles.sort((a, b) => {
+                const numA = extractNumberFromFilename(a.name);
+                const numB = extractNumberFromFilename(b.name);
+                return numA - numB;
+            });
+            console.log(`重心ファイル ${centerFiles.length} 個を選択しました`);
+        }
+
+        async function nextFrame() {
+            if (isFrameLoading) return;
+            if (currentFrameIndex < pointCloudFiles.length - 1) {
+                currentFrameIndex++;
+                // 次フレーム遷移時はローダー非表示で即時切替
+                await loadFrame(currentFrameIndex, false);
+            }
+        }
+
+        async function prevFrame() {
+            if (isFrameLoading) return;
+            if (currentFrameIndex > 0) {
+                currentFrameIndex--;
+                // 前フレーム遷移時はローダー非表示で即時切替
+                await loadFrame(currentFrameIndex, false);
+            }
+        }
+
+        async function loadFrame(frameIndex, showLoader = true) {
+            isFrameLoading = true;
+            if (showLoader) loader.style.display = 'block';
+            try {
+                // 点群データを読み込み
+                await loadPointCloud(frameIndex);
+
+                // アノテーションデータ（任意）
+                if (annotationFiles.length > 0) {
+                    await loadAnnotations(frameIndex);
+                } else {
+                    displayBoundingBoxes([]);
+                }
+
+                // 重心データを読み込み（オプション）
+                if (centerFiles.length > 0) {
+                    await loadCenters(frameIndex);
+                } else {
+                    displayCenters([]);
+                }
+
+                frameInfo.textContent = `フレーム(1-based): ${frameIndex + 1}/${pointCloudFiles.length}`;
+                fileName.textContent = `ファイル名: ${pointCloudFiles[frameIndex].name}`;
+
+                // ボタンの有効/無効状態を更新
+                prevFrameBtn.disabled = frameIndex === 0;
+                nextFrameBtn.disabled = frameIndex >= pointCloudFiles.length - 1;
+
+            } catch (error) {
+                showAlert('エラー', `フレーム読み込みエラー: ${error.message}`);
+            } finally {
+                if (showLoader) loader.style.display = 'none';
+                isFrameLoading = false;
+            }
+        }
+
+        async function loadPointCloud(frameIndex) {
+            if (frameIndex >= pointCloudFiles.length) {
+                showAlert('エラー', 'フレームインデックスが範囲外です。');
+                return;
+            }
+
+            const file = pointCloudFiles[frameIndex];
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pointsData = new Float32Array(arrayBuffer);
+                displayPointCloud(pointsData);
+            } catch (error) {
+                console.error("Error loading point cloud file:", error);
+                showAlert('エラー', `点群ファイルの読み込みエラー: ${file.name}: ${error.message}`);
+            }
+        }
+
+        async function loadAnnotations(frameIndex) {
+            if (frameIndex >= annotationFiles.length) {
+                console.log('アノテーションファイルが見つかりません');
+                displayBoundingBoxes([]);
+                return;
+            }
+
+            const file = annotationFiles[frameIndex];
+            const expectedName = getFileNameWithoutExtension(pointCloudFiles[frameIndex].name);
+            const actualName = getFileNameWithoutExtension(file.name);
+
+            if (expectedName !== actualName) {
+                console.warn(`ファイル名不一致: 期待=${expectedName}, 実際=${actualName}`);
+            }
+
+            try {
+                const text = await file.text();
+                const lines = text.trim().split('\n');
+                const annotations = [];
+
+                for (const line of lines) {
+                    if (line.trim()) {
+                        const parts = line.trim().split(' ');
+                        if (parts.length >= 15) {
+                            const annotation = {
+                                type: parts[0],
+                                truncated: parseFloat(parts[1]),
+                                occluded: parseFloat(parts[2]),
+                                alpha: parseFloat(parts[3]),
+                                bbox_left: parseFloat(parts[4]),
+                                bbox_top: parseFloat(parts[5]),
+                                bbox_right: parseFloat(parts[6]),
+                                bbox_bottom: parseFloat(parts[7]),
+                                height: parseFloat(parts[8]),
+                                width: parseFloat(parts[9]),
+                                length: parseFloat(parts[10]),
+                                x: parseFloat(parts[11]),
+                                y: parseFloat(parts[12]),
+                                z: parseFloat(parts[13]),
+                                rotation_y: parseFloat(parts[14])
+                            };
+                            annotations.push(annotation);
+                        }
+                    }
+                }
+
+                displayBoundingBoxes(annotations);
+            } catch (error) {
+                console.error("Error loading annotation file:", error);
+                showAlert('エラー', `アノテーションファイルの読み込みエラー: ${file.name}: ${error.message}`);
+                displayBoundingBoxes([]);
+            }
+        }
+
+        async function loadCenters(frameIndex) {
+            if (frameIndex >= centerFiles.length) {
+                console.log('重心ファイルが見つかりません');
+                displayCenters([]);
+                return;
+            }
+
+            const file = centerFiles[frameIndex];
+            const expectedName = getFileNameWithoutExtension(pointCloudFiles[frameIndex].name);
+            const actualName = getFileNameWithoutExtension(file.name);
+
+            if (expectedName !== actualName) {
+                console.warn(`ファイル名不一致: 期待=${expectedName}, 実際=${actualName}`);
+            }
+
+            try {
+                const text = await file.text();
+                const lines = text.trim().split('\n');
+                const centers = [];
+
+                for (const line of lines) {
+                    if (line.trim()) {
+                        const parts = line.trim().split(' ');
+                        if (parts.length >= 3) {
+                            const center = {
+                                x: parseFloat(parts[0]),
+                                y: parseFloat(parts[1]),
+                                z: parseFloat(parts[2])
+                            };
+                            centers.push(center);
+                        }
+                    }
+                }
+
+                displayCenters(centers);
+            } catch (error) {
+                console.error("Error loading center file:", error);
+                showAlert('エラー', `重心ファイルの読み込みエラー: ${file.name}: ${error.message}`);
+                displayCenters([]);
+            }
+        }
+
+        function displayPointCloud(pointsData) {
+            clearPointCloud();
+
+            if (!pointsData || pointsData.length === 0) {
+                pointCount.textContent = '点群数: 0';
+                return;
+            }
+
+            // データ形式のチェック
+            if (pointsData.length % 4 !== 0) {
+                showAlert('ファイルエラー', 'ファイルのデータ形式が正しくありません (x,y,z,intensity の組であるべきです)。');
+                return;
+            }
+
+            const numPoints = pointsData.length / 4;
+            const positions = new Float32Array(numPoints * 3);
+            const colors = new Float32Array(numPoints * 3);
+
+            // 強度値の範囲を計算
+            let minIntensity = Infinity;
+            let maxIntensity = -Infinity;
+            for (let i = 0; i < numPoints; i++) {
+                const intensity = pointsData[i * 4 + 3];
+                minIntensity = Math.min(minIntensity, intensity);
+                maxIntensity = Math.max(maxIntensity, intensity);
+            }
+
+            // 強度値の正規化範囲を設定
+            if (minIntensity === maxIntensity) {
+                maxIntensity = minIntensity + (minIntensity === 0 ? 1.0 : Math.abs(minIntensity * 0.1) + 0.1);
+            }
+
+            minIntensityGlobal = minIntensity;
+            maxIntensityGlobal = maxIntensity;
+
+            for (let i = 0; i < numPoints; i++) {
+                positions[i * 3 + 0] = pointsData[i * 4 + 0];
+                positions[i * 3 + 1] = pointsData[i * 4 + 1];
+                positions[i * 3 + 2] = pointsData[i * 4 + 2];
+
+                const intensity = pointsData[i * 4 + 3];
+                const normalizedIntensity = Math.max(0, Math.min(1, (intensity - minIntensity) / (maxIntensity - minIntensity)));
+                const color = applyColorMap(normalizedIntensity, currentColorMap);
+
+                colors[i * 3 + 0] = color.r;
+                colors[i * 3 + 1] = color.g;
+                colors[i * 3 + 2] = color.b;
+            }
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+            const material = new THREE.PointsMaterial({
+                size: parseFloat(pointSizeSlider.value),
+                vertexColors: true,
+                sizeAttenuation: true
+            });
+
+            pointCloudObject = new THREE.Points(geometry, material);
+            scene.add(pointCloudObject);
+
+            pointCount.textContent = `点群数: ${numPoints.toLocaleString()}`;
+
+            // カメラを点群に合わせて調整
+            if (geometry.boundingSphere) {
+                const center = geometry.boundingSphere.center;
+                const radius = geometry.boundingSphere.radius;
+
+                controls.target.copy(center);
+                const distance = radius * 2;
+                camera.position.set(center.x + distance, center.y - distance, center.z + distance);
+                camera.lookAt(controls.target);
+                controls.update();
+            }
+        }
+
+        function displayBoundingBoxes(annotations) {
+            clearBoundingBoxes();
+
+            if (!annotations || annotations.length === 0) {
+                bboxCount.textContent = 'バウンディングボックス: 0';
+                return;
+            }
+
+            annotations.forEach((annotation, index) => {
+                const bbox = createBoundingBox(annotation);
+                if (bbox) {
+                    bboxGroup.add(bbox);
+                }
+            });
+
+            bboxCount.textContent = `バウンディングボックス: ${annotations.length}`;
+        }
+
+        function displayCenters(centers) {
+            clearCenters();
+
+            if (!centers || centers.length === 0) {
+                centerCount.textContent = '重心: 0';
+                return;
+            }
+
+            centers.forEach((center, index) => {
+                const centerSphere = createCenterSphere(center);
+                if (centerSphere) {
+                    centerGroup.add(centerSphere);
+                }
+            });
+
+            centerCount.textContent = `重心: ${centers.length}`;
+        }
+
+        function createBoundingBox(annotation) {
+            const { x, y, z, width, length, height, rotation_y } = annotation;
+
+            const geometry = new THREE.BoxGeometry(width, length, height);
+            const material = new THREE.MeshBasicMaterial({
+                color: 0x00ff00,
+                transparent: true,
+                opacity: bboxOpacity,
+                wireframe: true
+            });
+
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(x, y, z);
+            mesh.rotation.y = rotation_y;
+
+            return mesh;
+        }
+
+        function createCenterSphere(center) {
+            const { x, y, z } = center;
+            const size = parseFloat(centerSizeSlider.value);
+
+            const geometry = new THREE.SphereGeometry(size, 16, 16);
+            const material = new THREE.MeshBasicMaterial({
+                color: 0xff0000,
+                transparent: true,
+                opacity: 0.8
+            });
+
+            const sphere = new THREE.Mesh(geometry, material);
+            sphere.position.set(x, y, z);
+
+            return sphere;
+        }
+
+        function clearPointCloud() {
+            if (pointCloudObject) {
+                scene.remove(pointCloudObject);
+                pointCloudObject.geometry.dispose();
+                pointCloudObject.material.dispose();
+                pointCloudObject = null;
+            }
+        }
+
+        function clearBoundingBoxes() {
+            while (bboxGroup.children.length > 0) {
+                const child = bboxGroup.children[0];
+                bboxGroup.remove(child);
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) child.material.dispose();
+            }
+        }
+
+        function clearCenters() {
+            while (centerGroup.children.length > 0) {
+                const child = centerGroup.children[0];
+                centerGroup.remove(child);
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) child.material.dispose();
+            }
+        }
+
+        function toggleBBoxes() {
+            showBBoxes = showBBoxesCheckbox.checked;
+            bboxGroup.visible = showBBoxes;
+        }
+
+        function updateBBoxOpacity() {
+            bboxOpacity = parseFloat(bboxOpacitySlider.value);
+            bboxOpacityValue.textContent = bboxOpacity.toFixed(1);
+
+            bboxGroup.children.forEach(child => {
+                if (child.material) {
+                    child.material.opacity = bboxOpacity;
+                }
+            });
+        }
+
+        function toggleCenters() {
+            const showCenters = showCentersCheckbox.checked;
+            centerGroup.visible = showCenters;
+        }
+
+        function updateCenterSize() {
+            const size = parseFloat(centerSizeSlider.value);
+            centerSizeValue.textContent = size.toFixed(1);
+
+            centerGroup.children.forEach(child => {
+                if (child.geometry) {
+                    child.geometry.dispose();
+                    child.geometry = new THREE.SphereGeometry(size, 16, 16);
+                }
+            });
+        }
+
+        function updatePointSize() {
+            const size = parseFloat(pointSizeSlider.value);
+            pointSizeValue.textContent = size.toFixed(2);
+
+            if (pointCloudObject && pointCloudObject.material) {
+                pointCloudObject.material.size = size;
+            }
+        }
+
+        function updateColorMap() {
+            currentColorMap = colorMapSelect.value;
+            // 点群の色を再計算する必要がある場合は、ここで再描画
+        }
+
+
+
+        init();
+    </script>
+</body>
+</html>
+
+
