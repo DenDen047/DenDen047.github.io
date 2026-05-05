@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Mini Smash</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Mini Smash Bros</h1>
+
+  <div id="hud">
+    <div id="p1-info" class="player-info">
+      <span class="name">P1</span>
+      <span class="damage">0%</span>
+      <span class="stocks">♥♥♥</span>
+      <span class="shield-bar"><span class="shield-fill"></span></span>
+    </div>
+    <div id="p2-info" class="player-info">
+      <span class="name">P2</span>
+      <span class="damage">0%</span>
+      <span class="stocks">♥♥♥</span>
+      <span class="shield-bar"><span class="shield-fill"></span></span>
+    </div>
+  </div>
+
+  <canvas id="game" width="800" height="600"></canvas>
+
+  <div id="controls">
+    <div><b>P1 (赤):</b> A/D 移動 ・ W ジャンプ/上 ・ S 下 ・ F 弱 ・ G <b style="color:#ff8080">強</b> ・ <b style="color:#ffcb80">H 遠距離</b> ・ Q <b style="color:#80d8ff">防御</b></div>
+    <div><b>P2 (青):</b> ←/→ 移動 ・ ↑ ジャンプ/上 ・ ↓ 下 ・ / 弱 ・ . <b style="color:#ff8080">強</b> ・ <b style="color:#ffcb80">' 遠距離</b> ・ Enter <b style="color:#80d8ff">防御</b></div>
+    <div style="margin-top:6px;color:#9c9;">
+      攻撃中に <b>↑/W</b> で<b style="color:#a0e0a0">上攻撃</b>　|　<b>↓/S</b> で<b style="color:#e0a0ff">下攻撃</b> (空中ならメテオ)
+    </div>
+    <div style="color:#cb9;">
+      遠距離: <b>忍者</b>=手裏剣3連 ・ <b>ロボ</b>=レーザー ・ <b>魔導士</b>=誘導火球 ・ <b>騎士</b>=なし(近接特化)
+    </div>
+    <div><b>R</b> = キャラ選択に戻る　|　<b>M</b> = ミュート</div>
+  </div>
+
+  <div id="message"></div>
+
+  <script src="game.js"></script>
+</body>
+</html>
