@@ -454,17 +454,37 @@ function drawAlien(ctx, x, y, w, h, facing, tint, state = {}) {
 // =============================================================
 const CHARACTERS = [
   { id: 'knight', name: '騎士',   speed: 5.0, jump: 12.0, weight: 1.30, atkMul: 1.10, draw: drawKnight,
-    desc: '近接特化・最重量級',
-    ranged: null },
+    desc: '近接特化・パワー',
+    ranged: null,
+    super: '剣の旋風 (前方広範囲・無敵)' },
   { id: 'ninja',  name: '忍者',   speed: 6.5, jump: 14.0, weight: 0.85, atkMul: 0.90, draw: drawNinja,
-    desc: '俊足・手裏剣 3連射',
-    ranged: { type: 'shuriken', count: 3, damage: 4, speed: 9, cooldown: 38, spread: 0.18, life: 80 } },
+    desc: '俊足・手裏剣 3連',
+    ranged: { type: 'shuriken', count: 3, damage: 4, speed: 9, cooldown: 38, spread: 0.18, life: 80 },
+    super: '影分身連撃 (多段ヒット)' },
   { id: 'robot',  name: 'ロボ',   speed: 5.2, jump: 12.5, weight: 1.15, atkMul: 1.00, draw: drawRobot,
-    desc: 'バランス・レーザー射撃',
-    ranged: { type: 'laser', count: 1, damage: 8, speed: 12, cooldown: 50, spread: 0, life: 70 } },
+    desc: 'バランス・レーザー',
+    ranged: { type: 'laser', count: 1, damage: 8, speed: 12, cooldown: 50, spread: 0, life: 70 },
+    super: 'ホーミングミサイル × 5' },
   { id: 'wizard', name: '魔導士', speed: 4.8, jump: 13.5, weight: 0.95, atkMul: 1.15, draw: drawWizard,
-    desc: '高威力・誘導火球',
-    ranged: { type: 'fireball', count: 1, damage: 14, speed: 5, cooldown: 75, spread: 0, homing: 0.13, life: 110 } },
+    desc: '誘導火球・高威力',
+    ranged: { type: 'fireball', count: 1, damage: 14, speed: 5, cooldown: 75, spread: 0, homing: 0.13, life: 110 },
+    super: '隕石召喚 (相手頭上に落下)' },
+  { id: 'sumo',   name: '力士',   speed: 3.8, jump: 10.5, weight: 1.55, atkMul: 1.20, draw: drawSumo,
+    desc: '超重量・最強の踏ん張り',
+    ranged: null,
+    super: '土俵入り (場全体の衝撃波)' },
+  { id: 'pirate', name: '海賊',   speed: 5.5, jump: 12.5, weight: 1.05, atkMul: 1.00, draw: drawPirate,
+    desc: '銃の単発射撃 (高威力)',
+    ranged: { type: 'bullet', count: 1, damage: 16, speed: 14, cooldown: 90, spread: 0, life: 70 },
+    super: '大砲発射 (巨大砲弾)' },
+  { id: 'dragon', name: 'ドラゴン', speed: 4.5, jump: 11.0, weight: 1.25, atkMul: 1.15, draw: drawDragon,
+    desc: '近距離火炎放射',
+    ranged: { type: 'flame', count: 5, damage: 4, speed: 8, cooldown: 55, spread: 0.30, life: 18 },
+    super: '業火のブレス (連続炎)' },
+  { id: 'alien',  name: '宇宙人', speed: 5.8, jump: 15.0, weight: 0.75, atkMul: 0.95, draw: drawAlien,
+    desc: '超高ジャンプ・蛇行プラズマ',
+    ranged: { type: 'plasma', count: 1, damage: 7, speed: 5, cooldown: 45, spread: 0, life: 100, wave: { freq: 0.22, amp: 2.5 } },
+    super: 'UFO召喚 (上空から雨レーザー)' },
 ];
 
 // =============================================================
@@ -497,6 +517,7 @@ class Player {
     this.shieldBroken = 0;
     this.invincible = initial ? 0 : 60;
     this.animPhase = 0;
+    if (initial) this.hitCount = 0; // 必殺ゲージ。死亡しても引き継ぐ
   }
   computeAnimState() {
     const walking = this.onGround && Math.abs(this.vx) > 0.5;
@@ -532,6 +553,10 @@ class Player {
     if (canControl && !this.shielding) {
       if (keys[c.left])  { this.vx -= MOVE_ACCEL; this.facing = -1; }
       if (keys[c.right]) { this.vx += MOVE_ACCEL; this.facing = 1; }
+      // 必殺技 (相手に20回当てたら発動可)
+      if (keys[c.super] && this.hitCount >= 20 && this.attackCooldown <= 0) {
+        this.useSuper();
+      }
       if (keys[c.jump] && this.onGround) {
         this.vy = -JUMP_POWER;
         this.onGround = false;
@@ -614,7 +639,11 @@ class Player {
     if (this.attackBox) {
       this.syncAttackBox();
       this.attackBox.life--;
-      if (!this.attackBox.hit && hitTest(this.attackBox, opponent) && opponent.invincible <= 0) {
+      if (this.attackBox.rehit > 0) this.attackBox.rehit--;
+      const canHit = this.attackBox.multihit
+        ? this.attackBox.rehit <= 0
+        : !this.attackBox.hit;
+      if (canHit && hitTest(this.attackBox, opponent) && opponent.invincible <= 0) {
         const a = this.attackBox;
         const hx = opponent.x + opponent.w / 2;
         const hy = opponent.y + opponent.h / 2;
@@ -634,6 +663,7 @@ class Player {
           }
         } else {
           opponent.takeHit(this);
+          this.hitCount = Math.min(20, (this.hitCount || 0) + 1);
           if (a.dir === 'up') sfx.upHit();
           else if (a.dir === 'down' || a.dir === 'spike' || a.dir === 'sweep') sfx.downHit();
           else if (a.strong) sfx.strongHit();
@@ -641,7 +671,8 @@ class Player {
           spawnHitSpark(hx, hy, a.strong, a.dir);
           shake(a.strong ? 7 : 2, a.strong ? 18 : 6);
         }
-        this.attackBox.hit = true;
+        if (this.attackBox.multihit) this.attackBox.rehit = 8;
+        else this.attackBox.hit = true;
       }
       if (this.attackBox.life <= 0) this.attackBox = null;
     }
@@ -706,6 +737,33 @@ class Player {
     this.attackBox.x = this.x + this.attackBox.offsetX;
     this.attackBox.y = this.y + this.attackBox.offsetY;
   }
+  useSuper() {
+    const handler = SUPER_HANDLERS[this.character.id];
+    if (!handler) return;
+    this.hitCount = 0; // ゲージ消費 → 次の発動には再び 20 ヒット必要
+    handler(this);
+    // 発動エフェクト
+    addParticle({
+      x: this.x + this.w/2, y: this.y + this.h/2,
+      vx: 0, vy: 0, life: 30, maxLife: 30,
+      size: 100, color: '#ffd86b', shape: 'flash', gravity: 0,
+    });
+    addParticle({
+      x: this.x + this.w/2, y: this.y + this.h/2,
+      vx: 0, vy: 0, life: 24, maxLife: 24,
+      size: 30, color: this.tint, shape: 'ring', gravity: 0,
+    });
+    for (let i = 0; i < 16; i++) {
+      const ang = (i / 16) * Math.PI * 2;
+      addParticle({
+        x: this.x + this.w/2, y: this.y + this.h/2,
+        vx: Math.cos(ang) * 5, vy: Math.sin(ang) * 5,
+        life: 30, maxLife: 30, size: 4,
+        color: '#fff', shape: 'streak', gravity: 0,
+      });
+    }
+    shake(10, 26);
+  }
   fireRanged() {
     const r = this.character.ranged;
     if (!r) return;
@@ -714,32 +772,37 @@ class Player {
     const baseY = this.y + this.h / 2 - 4;
     for (let i = 0; i < r.count; i++) {
       const t = r.count > 1 ? (i / (r.count - 1)) - 0.5 : 0;
-      const angle = t * r.spread * 2;
+      // flame は毎発ランダムに散らす (火炎放射感)
+      const jitter = r.type === 'flame' ? (Math.random() - 0.5) * r.spread : 0;
+      const angle = t * r.spread * 2 + jitter;
       const cosA = Math.cos(angle), sinA = Math.sin(angle);
       const vx = cosA * r.speed * this.facing;
       const vy = sinA * r.speed;
       projectiles.push(new Projectile({
         owner: this,
-        x: baseX, y: baseY,
+        x: baseX + (Math.random() - 0.5) * 4,
+        y: baseY + (Math.random() - 0.5) * 4,
         vx, vy,
         type: r.type,
         damage: r.damage,
         life: r.life,
         homing: r.homing || 0,
+        wave: r.wave || null,
       }));
     }
-    // 反動
-    this.vx -= this.facing * (r.type === 'fireball' ? 2 : 0.6);
-    // sfx + マズルフラッシュ
-    if (r.type === 'fireball') sfx.fireball();
-    else if (r.type === 'laser') sfx.laser();
+    this.vx -= this.facing * (r.type === 'fireball' || r.type === 'bullet' ? 2 : 0.6);
+    if (r.type === 'fireball' || r.type === 'flame') sfx.fireball();
+    else if (r.type === 'laser' || r.type === 'plasma') sfx.laser();
+    else if (r.type === 'bullet') sfx.strongHit();
     else sfx.shuriken();
     addParticle({
       x: baseX, y: baseY + 4,
       vx: 0, vy: 0,
       life: 10, maxLife: 10,
-      size: r.type === 'fireball' ? 28 : 18,
-      color: r.type === 'fireball' ? '#ffaa30' : (r.type === 'laser' ? '#80ffff' : '#fff'),
+      size: r.type === 'fireball' || r.type === 'bullet' ? 28 : 18,
+      color: r.type === 'fireball' || r.type === 'flame' ? '#ffaa30'
+           : r.type === 'laser' || r.type === 'plasma' ? '#80ffff'
+           : '#fff',
       shape: 'flash',
       gravity: 0,
     });
@@ -822,26 +885,233 @@ function hitTest(a, b) {
 }
 
 // =============================================================
+// 必殺技ハンドラ (キャラ別)
+// =============================================================
+const SUPER_HANDLERS = {
+  knight: (p) => {
+    // 剣の旋風: 大きな前方ヒットボックス + 短時間無敵
+    p.invincible = Math.max(p.invincible, 35);
+    p.attackBox = {
+      offsetX: p.facing === 1 ? -10 : -90,
+      offsetY: -8,
+      w: 110, h: 80,
+      damage: 20 * p.character.atkMul,
+      kbBonus: 1.8, life: 24,
+      hit: false, rehit: 0, multihit: true,
+      dir: 'side', strong: true,
+    };
+    p.attackCooldown = 60;
+    sfx.strongHit();
+  },
+  ninja: (p) => {
+    // 影分身連撃: 多段ヒットの大きな前方ボックス + 前方瞬間移動
+    p.x += p.facing * 30;
+    p.invincible = Math.max(p.invincible, 20);
+    p.attackBox = {
+      offsetX: p.facing === 1 ? p.w : -90,
+      offsetY: 0,
+      w: 90, h: 60,
+      damage: 4 * p.character.atkMul,
+      kbBonus: 0.7, life: 36,
+      hit: false, rehit: 0, multihit: true,
+      dir: 'side', strong: false,
+    };
+    p.attackCooldown = 50;
+    sfx.shuriken();
+    // 残像エフェクト
+    for (let i = 0; i < 5; i++) {
+      addParticle({
+        x: p.x - p.facing * i * 12, y: p.y + p.h/2,
+        vx: 0, vy: 0,
+        life: 14, maxLife: 14,
+        size: 30, color: p.tint,
+        shape: 'flash', gravity: 0,
+      });
+    }
+  },
+  robot: (p) => {
+    // ホーミングミサイル × 5
+    for (let i = 0; i < 5; i++) {
+      setTimeout(() => {
+        if (gameState !== 'playing' || p.stocks <= 0) return;
+        const ang = (i / 5 - 0.5) * 0.5;
+        projectiles.push(new Projectile({
+          owner: p,
+          x: p.x + (p.facing === 1 ? p.w : -10),
+          y: p.y + 20,
+          vx: Math.cos(ang) * 5 * p.facing,
+          vy: Math.sin(ang) * 5 - 1.5,
+          type: 'missile',
+          damage: 8,
+          life: 110,
+          homing: 0.22,
+          knockbackBonus: 0.9,
+        }));
+        sfx.laser();
+      }, i * 90);
+    }
+  },
+  wizard: (p) => {
+    // 隕石: 相手の上空から落下
+    const opp = (p === p1) ? p2 : p1;
+    const tx = Math.max(80, Math.min(STAGE_W - 80, opp.x + opp.w / 2 - 30));
+    projectiles.push(new Projectile({
+      owner: p,
+      x: tx, y: -80,
+      vx: 0, vy: 3,
+      type: 'meteor',
+      damage: 24,
+      life: 280,
+      knockbackBonus: 1.6,
+      strong: true,
+    }));
+    sfx.fireball();
+  },
+  sumo: (p) => {
+    // 土俵入り: 大ジャンプ → 落下 → 着地時に画面全体の衝撃波
+    p.vy = -20;
+    p.invincible = Math.max(p.invincible, 30);
+    setTimeout(() => {
+      if (gameState !== 'playing' || p.stocks <= 0) return;
+      p.vy = 32;
+    }, 320);
+    setTimeout(() => {
+      if (gameState !== 'playing' || p.stocks <= 0) return;
+      shake(18, 40);
+      sfx.ko();
+      // 場全体に当たる超広範囲ボックス
+      p.attackBox = {
+        offsetX: -200, offsetY: 30,
+        w: 440, h: 28,
+        damage: 18 * p.character.atkMul,
+        kbBonus: 1.4, life: 14,
+        hit: false, rehit: 0, multihit: false,
+        dir: 'up', strong: true,
+      };
+      p.attackCooldown = 50;
+      // 砂煙
+      for (let i = 0; i < 50; i++) {
+        const a = Math.random() * Math.PI - Math.PI;
+        addParticle({
+          x: p.x + p.w/2, y: p.y + p.h - 4,
+          vx: Math.cos(a) * (3 + Math.random() * 6),
+          vy: Math.sin(a) * 2 - Math.random() * 3,
+          life: 36, maxLife: 36, size: 5 + Math.random() * 3,
+          color: i % 2 ? '#daa520' : '#fff',
+          shape: 'rect', gravity: 0.32,
+        });
+      }
+    }, 700);
+  },
+  pirate: (p) => {
+    // 大砲: 巨大砲弾を射出
+    projectiles.push(new Projectile({
+      owner: p,
+      x: p.x + (p.facing === 1 ? p.w : -40),
+      y: p.y + 18,
+      vx: 7 * p.facing, vy: 0,
+      type: 'cannonball',
+      damage: 26,
+      life: 140,
+      knockbackBonus: 1.7,
+      strong: true,
+    }));
+    p.vx -= p.facing * 6; // 大反動
+    sfx.fireball();
+    // マズルフラッシュ
+    addParticle({
+      x: p.x + (p.facing === 1 ? p.w + 10 : -10),
+      y: p.y + 20, vx: 0, vy: 0,
+      life: 18, maxLife: 18, size: 50,
+      color: '#ffd86b', shape: 'flash', gravity: 0,
+    });
+  },
+  dragon: (p) => {
+    // 業火のブレス: 連続炎を吐き続ける
+    let count = 0;
+    const interval = setInterval(() => {
+      if (count++ >= 12 || gameState !== 'playing' || p.stocks <= 0) {
+        clearInterval(interval);
+        return;
+      }
+      for (let i = 0; i < 4; i++) {
+        const ang = (Math.random() - 0.5) * 0.4;
+        const speed = 8 + Math.random() * 3;
+        projectiles.push(new Projectile({
+          owner: p,
+          x: p.x + (p.facing === 1 ? p.w : -10),
+          y: p.y + 16 + (Math.random() - 0.5) * 10,
+          vx: Math.cos(ang) * speed * p.facing,
+          vy: Math.sin(ang) * speed,
+          type: 'flame',
+          damage: 5,
+          life: 22,
+          knockbackBonus: 0.7,
+        }));
+      }
+      if (count % 3 === 0) sfx.fireball();
+    }, 60);
+  },
+  alien: (p) => {
+    // UFO: 上空から雨レーザー
+    for (let i = 0; i < 7; i++) {
+      setTimeout(() => {
+        if (gameState !== 'playing' || p.stocks <= 0) return;
+        const x = 100 + Math.random() * (STAGE_W - 200);
+        projectiles.push(new Projectile({
+          owner: p,
+          x, y: -60,
+          vx: 0, vy: 13,
+          type: 'plasma',
+          damage: 9,
+          life: 70,
+          knockbackBonus: 0.9,
+        }));
+        // 警告マーカー
+        addParticle({
+          x: x + 11, y: 30,
+          vx: 0, vy: 0, life: 14, maxLife: 14,
+          size: 30, color: '#a040ff', shape: 'flash', gravity: 0,
+        });
+        sfx.laser();
+      }, i * 110);
+    }
+  },
+};
+
+// =============================================================
 // 飛び道具 (Projectile)
 // =============================================================
 const projectiles = [];
 
 class Projectile {
-  constructor({ owner, x, y, vx, vy, type, damage, life = 90, homing = 0 }) {
+  constructor({ owner, x, y, vx, vy, type, damage, life = 90, homing = 0, wave = null, knockbackBonus = 0.7, strong = false }) {
     this.owner = owner;
     this.x = x; this.y = y;
     this.vx = vx; this.vy = vy;
+    this.baseVy = vy;
     this.type = type;
     this.damage = damage;
     this.life = life;
     this.homing = homing;
+    this.wave = wave;
+    this.t = 0;
+    this.knockbackBonus = knockbackBonus;
+    this.strong = strong;
     this.alive = true;
     this.rot = 0;
-    if (type === 'laser')         { this.w = 28; this.h = 6; }
-    else if (type === 'fireball') { this.w = 22; this.h = 22; }
-    else                          { this.w = 14; this.h = 14; } // shuriken
+    if (type === 'laser')          { this.w = 28; this.h = 6; }
+    else if (type === 'fireball')  { this.w = 22; this.h = 22; }
+    else if (type === 'flame')     { this.w = 18; this.h = 18; }
+    else if (type === 'plasma')    { this.w = 22; this.h = 22; }
+    else if (type === 'bullet')    { this.w = 12; this.h = 4; }
+    else if (type === 'missile')   { this.w = 16; this.h = 6; }
+    else if (type === 'meteor')    { this.w = 60; this.h = 60; }
+    else if (type === 'cannonball'){ this.w = 32; this.h = 32; }
+    else                           { this.w = 14; this.h = 14; }
   }
   update(opponent) {
+    this.t++;
     if (this.homing > 0) {
       const tx = opponent.x + opponent.w / 2;
       const ty = opponent.y + opponent.h / 2;
@@ -852,8 +1122,14 @@ class Projectile {
       this.vx += (dx / len) * this.homing;
       this.vy += (dy / len) * this.homing;
       const sp = Math.hypot(this.vx, this.vy);
-      const maxSp = 7;
+      const maxSp = this.type === 'missile' ? 9 : 7;
       if (sp > maxSp) { this.vx *= maxSp / sp; this.vy *= maxSp / sp; }
+    }
+    if (this.wave) {
+      this.vy = this.baseVy + Math.sin(this.t * this.wave.freq) * this.wave.amp;
+    }
+    if (this.type === 'meteor' || this.type === 'cannonball') {
+      this.vy += 0.18; // 重力
     }
     this.x += this.vx;
     this.y += this.vy;
@@ -861,13 +1137,13 @@ class Projectile {
     this.life--;
 
     // 軌跡パーティクル
-    if (this.type === 'fireball' && Math.random() < 0.6) {
+    if ((this.type === 'fireball' || this.type === 'flame' || this.type === 'meteor') && Math.random() < 0.7) {
       addParticle({
-        x: this.x + this.w / 2 + (Math.random() - 0.5) * 4,
-        y: this.y + this.h / 2 + (Math.random() - 0.5) * 4,
+        x: this.x + this.w / 2 + (Math.random() - 0.5) * 6,
+        y: this.y + this.h / 2 + (Math.random() - 0.5) * 6,
         vx: -this.vx * 0.1, vy: -this.vy * 0.1 + 0.5,
-        life: 16, maxLife: 16, size: 4 + Math.random() * 2,
-        color: Math.random() < 0.5 ? '#ffaa30' : '#ff6020',
+        life: 16, maxLife: 16, size: 4 + Math.random() * 3,
+        color: Math.random() < 0.5 ? '#ffaa30' : '#ff5020',
         shape: 'rect', gravity: -0.05,
       });
     } else if (this.type === 'laser' && Math.random() < 0.5) {
@@ -875,6 +1151,18 @@ class Projectile {
         x: this.x + this.w / 2, y: this.y + this.h / 2,
         vx: 0, vy: 0, life: 6, maxLife: 6, size: 8,
         color: '#80ffff', shape: 'flash', gravity: 0,
+      });
+    } else if (this.type === 'plasma' && Math.random() < 0.5) {
+      addParticle({
+        x: this.x + this.w / 2, y: this.y + this.h / 2,
+        vx: 0, vy: 0, life: 12, maxLife: 12, size: 10,
+        color: '#a040ff', shape: 'flash', gravity: 0,
+      });
+    } else if (this.type === 'missile' && Math.random() < 0.6) {
+      addParticle({
+        x: this.x + this.w / 2 - this.vx * 0.5, y: this.y + this.h / 2 - this.vy * 0.5,
+        vx: 0, vy: 0, life: 14, maxLife: 14, size: 5,
+        color: '#cccccc', shape: 'rect', gravity: 0.05,
       });
     }
 
@@ -900,16 +1188,17 @@ class Projectile {
           shake(8, 24);
         }
       } else {
-        // takeHit が期待する形に擬似 attacker を組み立てる
         const fakeAtk = {
-          attackBox: { damage: this.damage, dir: 'side', kbBonus: 0.7, strong: false },
+          attackBox: { damage: this.damage, dir: 'side', kbBonus: this.knockbackBonus, strong: this.strong },
           facing: this.vx >= 0 ? 1 : -1,
         };
         opponent.takeHit(fakeAtk);
-        spawnHitSpark(cx, cy, this.type === 'fireball', 'side');
-        if (this.type === 'fireball') sfx.strongHit();
+        if (this.owner) this.owner.hitCount = Math.min(20, (this.owner.hitCount || 0) + 1);
+        const big = this.type === 'fireball' || this.type === 'meteor' || this.type === 'cannonball';
+        spawnHitSpark(cx, cy, big, 'side');
+        if (big) sfx.strongHit();
         else sfx.weakHit();
-        shake(this.type === 'fireball' ? 5 : 2, 8);
+        shake(big ? 8 : 2, big ? 16 : 8);
       }
       this.alive = false;
     }
@@ -944,6 +1233,69 @@ class Projectile {
       ctx.fillRect(-this.w / 2, -this.h / 2, this.w, this.h);
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(-this.w / 2, -this.h / 4, this.w, this.h / 2);
+    } else if (this.type === 'flame') {
+      const grad = ctx.createRadialGradient(0, 0, 1, 0, 0, this.w);
+      grad.addColorStop(0, '#fff');
+      grad.addColorStop(0.3, '#ffe060');
+      grad.addColorStop(0.7, '#ff5020');
+      grad.addColorStop(1, 'rgba(120,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.w / 1.4 * (this.life / 18 + 0.5), 0, Math.PI * 2);
+      ctx.fill();
+    } else if (this.type === 'plasma') {
+      const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, this.w);
+      grad.addColorStop(0, '#fff');
+      grad.addColorStop(0.4, '#80ffe0');
+      grad.addColorStop(0.8, '#a040ff');
+      grad.addColorStop(1, 'rgba(60,0,120,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.w / 1.3, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (this.type === 'bullet') {
+      ctx.rotate(Math.atan2(this.vy, this.vx));
+      ctx.fillStyle = '#444';
+      ctx.fillRect(-this.w / 2, -this.h / 2, this.w, this.h);
+      ctx.fillStyle = '#ffd86b';
+      ctx.fillRect(this.w / 2 - 2, -this.h / 2, 2, this.h);
+    } else if (this.type === 'missile') {
+      ctx.rotate(Math.atan2(this.vy, this.vx));
+      ctx.fillStyle = '#bbb';
+      ctx.fillRect(-this.w / 2, -this.h / 2, this.w, this.h);
+      ctx.fillStyle = '#e74c3c';
+      ctx.fillRect(this.w / 2 - 4, -this.h / 2, 4, this.h);
+      ctx.fillStyle = '#ffd86b';
+      ctx.beginPath();
+      ctx.moveTo(this.w / 2, 0);
+      ctx.lineTo(this.w / 2 + 4, -this.h);
+      ctx.lineTo(this.w / 2 + 4, this.h);
+      ctx.closePath();
+      ctx.fill();
+    } else if (this.type === 'meteor') {
+      const grad = ctx.createRadialGradient(0, 0, 4, 0, 0, this.w);
+      grad.addColorStop(0, '#ffffff');
+      grad.addColorStop(0.3, '#ffe080');
+      grad.addColorStop(0.7, '#ff4020');
+      grad.addColorStop(1, 'rgba(80,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.w / 2, 0, Math.PI * 2);
+      ctx.fill();
+      // 核
+      ctx.fillStyle = '#1a0500';
+      ctx.beginPath();
+      ctx.arc(0, 0, this.w / 5, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (this.type === 'cannonball') {
+      ctx.fillStyle = '#222';
+      ctx.beginPath();
+      ctx.arc(0, 0, this.w / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#555';
+      ctx.beginPath();
+      ctx.arc(-4, -4, this.w / 4, 0, Math.PI * 2);
+      ctx.fill();
     }
     ctx.restore();
   }
@@ -1213,9 +1565,10 @@ function drawStage() {
 // キャラクター選択画面
 // =============================================================
 const SELECT_CTRL = {
-  p1: { left: 'a', right: 'd', confirm: 'f', cancel: 'q' },
-  p2: { left: 'arrowleft', right: 'arrowright', confirm: '/', cancel: 'enter' },
+  p1: { left:'a', right:'d', up:'w', down:'s', confirm:'f', cancel:'q' },
+  p2: { left:'arrowleft', right:'arrowright', up:'arrowup', down:'arrowdown', confirm:'/', cancel:'enter' },
 };
+const SELECT_COLS = 4;
 let p1Char = 0, p2Char = 1;
 let p1Confirmed = false, p2Confirmed = false;
 let cd1 = 0, cd2 = 0;
@@ -1236,12 +1589,20 @@ function navigatePlayer(playerNum) {
   let char = playerNum === 1 ? p1Char : p2Char;
   let confirmed = playerNum === 1 ? p1Confirmed : p2Confirmed;
   let cd = playerNum === 1 ? cd1 : cd2;
+  const cols = SELECT_COLS;
+  const total = CHARACTERS.length;
+  const rows = Math.ceil(total / cols);
 
   if (cd <= 0) {
     if (!confirmed) {
-      if (keys[ctrl.left])  { char = (char + CHARACTERS.length - 1) % CHARACTERS.length; cd = 12; sfx.cursor(); }
-      else if (keys[ctrl.right]) { char = (char + 1) % CHARACTERS.length; cd = 12; sfx.cursor(); }
+      let col = char % cols;
+      let row = Math.floor(char / cols);
+      if (keys[ctrl.left])       { col = (col + cols - 1) % cols; cd = 12; sfx.cursor(); }
+      else if (keys[ctrl.right]) { col = (col + 1) % cols; cd = 12; sfx.cursor(); }
+      else if (keys[ctrl.up])    { row = (row + rows - 1) % rows; cd = 12; sfx.cursor(); }
+      else if (keys[ctrl.down])  { row = (row + 1) % rows; cd = 12; sfx.cursor(); }
       else if (keys[ctrl.confirm]) { confirmed = true; cd = 20; sfx.confirm(); }
+      char = Math.min(total - 1, row * cols + col);
     } else {
       if (keys[ctrl.cancel]) { confirmed = false; cd = 18; sfx.cursor(); }
     }
@@ -1259,60 +1620,76 @@ function updateSelect() {
 }
 
 function drawSelect() {
-  // 背景タイトル
   ctx.fillStyle = '#fff';
-  ctx.font = 'bold 36px -apple-system, "Hiragino Sans", sans-serif';
+  ctx.font = 'bold 28px -apple-system, "Hiragino Sans", sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('CHARACTER SELECT', STAGE_W/2, 70);
+  ctx.fillText('CHARACTER SELECT', STAGE_W/2, 38);
 
-  const slotW = 150, slotH = 200;
-  const totalW = slotW * CHARACTERS.length;
+  const cols = SELECT_COLS;
+  const rows = Math.ceil(CHARACTERS.length / cols);
+  const slotW = 180, slotH = 175, gap = 6;
+  const totalW = slotW * cols;
+  const totalH = slotH * rows + gap * (rows - 1);
   const startX = (STAGE_W - totalW) / 2;
-  const slotY = 140;
+  const startY = 60;
 
   CHARACTERS.forEach((char, i) => {
-    const sx = startX + i * slotW + 8;
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const sx = startX + col * slotW + 4;
+    const sy = startY + row * (slotH + gap);
+    const innerW = slotW - 8;
     // パネル
     ctx.fillStyle = '#22243a';
-    ctx.fillRect(sx, slotY, slotW - 16, slotH);
+    ctx.fillRect(sx, sy, innerW, slotH);
     ctx.strokeStyle = '#333a55';
     ctx.lineWidth = 2;
-    ctx.strokeRect(sx, slotY, slotW - 16, slotH);
-    // プレビュー (中立色)
-    char.draw(ctx, sx + slotW/2 - 28, slotY + 30, 40, 60, 1, '#888aa0');
+    ctx.strokeRect(sx, sy, innerW, slotH);
+    // プレビュー
+    char.draw(ctx, sx + innerW/2 - 20, sy + 18, 40, 60, 1, '#888aa0');
     // 名前
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 18px sans-serif';
+    ctx.font = 'bold 16px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(char.name, sx + (slotW-16)/2, slotY + 120);
+    ctx.fillText(char.name, sx + innerW/2, sy + 100);
     // ステータス
     ctx.font = '11px sans-serif';
     ctx.fillStyle = '#aab';
-    ctx.fillText(`SPD ${char.speed.toFixed(1)}  JMP ${char.jump.toFixed(1)}`, sx + (slotW-16)/2, slotY + 145);
-    ctx.fillText(`重さ ${char.weight.toFixed(2)}  攻撃 ×${char.atkMul.toFixed(2)}`, sx + (slotW-16)/2, slotY + 162);
-    ctx.fillStyle = '#7a8';
-    ctx.fillText(char.desc, sx + (slotW-16)/2, slotY + 185);
+    ctx.fillText(`SPD ${char.speed.toFixed(1)}  JMP ${char.jump.toFixed(1)}`, sx + innerW/2, sy + 118);
+    ctx.fillText(`重 ${char.weight.toFixed(2)}  攻 ×${char.atkMul.toFixed(2)}`, sx + innerW/2, sy + 132);
+    ctx.fillStyle = '#7c9';
+    ctx.fillText(char.desc, sx + innerW/2, sy + 148);
+    ctx.fillStyle = '#dc8';
+    ctx.font = '10px sans-serif';
+    ctx.fillText('必殺: ' + char.super, sx + innerW/2, sy + 165);
   });
 
   // カーソル
-  drawCursor(startX + p1Char * slotW + 8, slotY, slotW - 16, slotH, '#e74c3c', p1Confirmed, 'P1', -3);
-  drawCursor(startX + p2Char * slotW + 8, slotY, slotW - 16, slotH, '#3498db', p2Confirmed, 'P2',  3);
+  const slotPos = (idx) => {
+    const col = idx % cols, row = Math.floor(idx / cols);
+    return { x: startX + col * slotW + 4, y: startY + row * (slotH + gap) };
+  };
+  const p1Pos = slotPos(p1Char);
+  const p2Pos = slotPos(p2Char);
+  drawCursor(p1Pos.x, p1Pos.y, slotW - 8, slotH, '#e74c3c', p1Confirmed, 'P1', -3);
+  drawCursor(p2Pos.x, p2Pos.y, slotW - 8, slotH, '#3498db', p2Confirmed, 'P2',  3);
 
   // 操作説明
-  ctx.font = '14px sans-serif';
+  const ctrlY = startY + totalH + 18;
+  ctx.font = '13px sans-serif';
   ctx.textAlign = 'center';
   ctx.fillStyle = '#e74c3c';
-  ctx.fillText('P1: A / D で選択   F で決定   Q でキャンセル', STAGE_W/2, 410);
+  ctx.fillText('P1: A/D ←横  W/S ←縦  F 決定  Q キャンセル', STAGE_W/2, ctrlY);
   ctx.fillStyle = '#3498db';
-  ctx.fillText('P2: ← / → で選択   / で決定   Enter でキャンセル', STAGE_W/2, 432);
+  ctx.fillText('P2: ←/→ 横  ↑/↓ 縦  / 決定  Enter キャンセル', STAGE_W/2, ctrlY + 18);
   ctx.fillStyle = '#999';
-  ctx.fillText('両プレイヤーが「決定」するとバトル開始', STAGE_W/2, 470);
+  ctx.fillText('両プレイヤーが「決定」するとバトル開始', STAGE_W/2, ctrlY + 38);
   if (p1Confirmed && !p2Confirmed) {
     ctx.fillStyle = '#ffd86b';
-    ctx.fillText('P2 の決定待ち...', STAGE_W/2, 500);
+    ctx.fillText('P2 の決定待ち...', STAGE_W/2, ctrlY + 56);
   } else if (!p1Confirmed && p2Confirmed) {
     ctx.fillStyle = '#ffd86b';
-    ctx.fillText('P1 の決定待ち...', STAGE_W/2, 500);
+    ctx.fillText('P1 の決定待ち...', STAGE_W/2, ctrlY + 56);
   }
 }
 
@@ -1333,11 +1710,12 @@ let p1, p2, winnerLabel = '';
 
 function startGame() {
   p1 = new Player(250,
-    { left:'a', right:'d', up:'w', down:'s', jump:'w', attack:'f', strong:'g', shield:'q', ranged:'h' },
+    { left:'a', right:'d', up:'w', down:'s', jump:'w',
+      attack:'f', strong:'g', shield:'q', ranged:'h', super:'b' },
     'P1', CHARACTERS[p1Char], '#e74c3c');
   p2 = new Player(550,
-    { left:'arrowleft', right:'arrowright', up:'arrowup', down:'arrowdown',
-      jump:'arrowup', attack:'/', strong:'.', shield:'enter', ranged:"'" },
+    { left:'arrowleft', right:'arrowright', up:'arrowup', down:'arrowdown', jump:'arrowup',
+      attack:'/', strong:'.', shield:'enter', ranged:"'", super:';' },
     'P2', CHARACTERS[p2Char], '#3498db');
   projectiles.length = 0;
   gameState = 'playing';
@@ -1352,6 +1730,10 @@ function resetHUD() {
   document.querySelector('#p2-info .stocks').textContent = '♥♥♥';
   document.querySelector('#p1-info .shield-fill').style.width = '100%';
   document.querySelector('#p2-info .shield-fill').style.width = '100%';
+  document.querySelector('#p1-info .super-fill').style.width = '0%';
+  document.querySelector('#p2-info .super-fill').style.width = '0%';
+  document.querySelector('#p1-info .super-count').textContent = '0/20';
+  document.querySelector('#p2-info .super-count').textContent = '0/20';
   document.querySelector('#p1-info .name').textContent = 'P1';
   document.querySelector('#p2-info .name').textContent = 'P2';
 }
@@ -1364,6 +1746,17 @@ function updateHUD() {
   document.querySelector('#p2-info .stocks').textContent = '♥'.repeat(Math.max(0, p2.stocks));
   document.querySelector('#p1-info .shield-fill').style.width = p1.shieldHP + '%';
   document.querySelector('#p2-info .shield-fill').style.width = p2.shieldHP + '%';
+  // 必殺技ゲージ (相手に当てたヒット数 / 20)
+  const p1Super = Math.min(100, ((p1.hitCount || 0) / 20) * 100);
+  const p2Super = Math.min(100, ((p2.hitCount || 0) / 20) * 100);
+  const p1SF = document.querySelector('#p1-info .super-fill');
+  const p2SF = document.querySelector('#p2-info .super-fill');
+  p1SF.style.width = p1Super + '%';
+  p2SF.style.width = p2Super + '%';
+  p1SF.classList.toggle('ready', (p1.hitCount || 0) >= 20);
+  p2SF.classList.toggle('ready', (p2.hitCount || 0) >= 20);
+  document.querySelector('#p1-info .super-count').textContent = Math.min(20, p1.hitCount || 0) + '/20';
+  document.querySelector('#p2-info .super-count').textContent = Math.min(20, p2.hitCount || 0) + '/20';
 }
 
 function loop() {

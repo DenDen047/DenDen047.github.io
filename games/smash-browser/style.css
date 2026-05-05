@@ -44,14 +44,19 @@ h1 {
 .damage { font-weight: bold; font-variant-numeric: tabular-nums; }
 .stocks { color: #ff6b6b; }
 
-.shield-bar {
-  display: inline-block;
-  width: 60px;
-  height: 8px;
-  background: #444;
-  border-radius: 4px;
-  overflow: hidden;
+.bar-group {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 3px;
   align-self: center;
+}
+.shield-bar, .super-bar {
+  display: inline-block;
+  width: 70px;
+  height: 6px;
+  background: #444;
+  border-radius: 3px;
+  overflow: hidden;
 }
 .shield-fill {
   display: block;
@@ -59,6 +64,28 @@ h1 {
   height: 100%;
   background: linear-gradient(90deg, #80d8ff, #4fc3f7);
   transition: width 80ms linear;
+}
+.super-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #ffd86b, #ff8b3d);
+  transition: width 80ms linear;
+}
+.super-fill.ready {
+  background: linear-gradient(90deg, #fff, #ffd86b);
+  box-shadow: 0 0 8px #ffd86b;
+}
+.super-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.super-count {
+  font-size: 10px;
+  color: #ffb060;
+  font-variant-numeric: tabular-nums;
+  min-width: 36px;
 }
 
 #controls {
