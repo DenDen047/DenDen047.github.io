@@ -41,6 +41,8 @@ h1 {
   border-left: 4px solid #ff8b8b;
   font-variant-numeric: tabular-nums;
 }
+.coin  { color: #ffd86b; }
+.heart { color: #ff7a8a; }
 
 .bar {
   display: inline-block;
@@ -61,7 +63,7 @@ h1 {
 #hotbar {
   width: 960px;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 6px;
   margin-top: 8px;
 }
