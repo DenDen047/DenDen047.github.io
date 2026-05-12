@@ -1,4 +1,7 @@
 
+# Local Claude Code per-clone settings (machine-specific, not for sharing)
+.claude/
+
 # Created by https://www.gitignore.io/api/osx,macos,linux,windows
 # Edit at https://www.gitignore.io/?templates=osx,macos,linux,windows
 
