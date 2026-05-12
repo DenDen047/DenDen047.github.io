@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>ふたりでマリオっぽい冒険</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>ふたりでマリオっぽい冒険</h1>
+
+  <div id="hud">
+    <div id="p1-info" class="player-info p1">
+      <span class="name">P1</span>
+      <span class="lives" id="p1-lives">♥♥♥</span>
+      <span class="score" id="p1-score">0</span>
+      <span class="coins" id="p1-coins">🪙 0</span>
+    </div>
+    <div id="p2-info" class="player-info p2">
+      <span class="name">P2</span>
+      <span class="lives" id="p2-lives">♥♥♥</span>
+      <span class="score" id="p2-score">0</span>
+      <span class="coins" id="p2-coins">🪙 0</span>
+    </div>
+  </div>
+
+  <canvas id="game" width="960" height="480"></canvas>
+
+  <div id="controls">
+    <div><b>P1 (赤):</b> A / D 移動・W ジャンプ</div>
+    <div><b>P2 (緑):</b> ← / → 移動・↑ ジャンプ</div>
+    <div><b>R</b> = リスタート　|　ふたりでゴール旗を目指せ！</div>
+  </div>
+
+  <div id="message"></div>
+
+  <script src="game.js"></script>
+</body>
+</html>

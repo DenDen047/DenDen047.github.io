@@ -1,0 +1,67 @@
+body {
+  font-family: -apple-system, "Hiragino Sans", sans-serif;
+  background: #1a1a2e;
+  color: #eee;
+  margin: 0;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+h1 {
+  margin: 0 0 8px 0;
+  font-size: 22px;
+  letter-spacing: 0.1em;
+}
+
+#game {
+  background: linear-gradient(#7ec0ee 0%, #b3dcff 60%, #d8b878 60%, #a0784c 100%);
+  border: 2px solid #555;
+  display: block;
+  image-rendering: pixelated;
+}
+
+#hud {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+  width: 960px;
+  justify-content: space-between;
+}
+
+.player-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 14px;
+  background: #222;
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.player-info.p1 { border-left: 4px solid #e74c3c; }
+.player-info.p2 { border-left: 4px solid #4caf50; }
+
+.player-info .name   { font-weight: bold; }
+.player-info .lives  { color: #ff8b8b; letter-spacing: 2px; }
+.player-info .score  { color: #ffd86b; }
+.player-info .coins  { color: #ffd86b; }
+
+#controls {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #aaa;
+  text-align: center;
+  line-height: 1.6;
+}
+
+#message {
+  margin-top: 12px;
+  font-size: 24px;
+  font-weight: bold;
+  height: 32px;
+  color: #ffd86b;
+  text-align: center;
+}
