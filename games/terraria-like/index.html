@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Mini Terraria</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Mini Terraria</h1>
+
+  <div id="hud">
+    <div id="stats">
+      <span class="hp">HP <span id="hp-text">100</span></span>
+      <span class="bar"><span class="fill" id="hp-fill"></span></span>
+      <span class="pos">XY: <span id="pos-text">0,0</span></span>
+      <span class="fps">FPS: <span id="fps-text">60</span></span>
+    </div>
+  </div>
+
+  <canvas id="game" width="960" height="600"></canvas>
+
+  <div id="hotbar"></div>
+
+  <div id="controls">
+    <div><b>移動:</b> A/D ・ <b>ジャンプ:</b> W or Space ・ <b>採掘/設置:</b> 左クリック / 右クリック</div>
+    <div><b>ホットバー:</b> 1〜5 で選択</div>
+    <div><b>M:</b> ミュート ・ <b>R:</b> ワールド再生成</div>
+  </div>
+
+  <div id="message"></div>
+
+  <script src="game.js"></script>
+</body>
+</html>

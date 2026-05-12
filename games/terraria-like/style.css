@@ -1,0 +1,100 @@
+body {
+  font-family: -apple-system, "Hiragino Sans", sans-serif;
+  background: #1a1a2e;
+  color: #eee;
+  margin: 0;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+h1 {
+  margin: 0 0 8px 0;
+  font-size: 22px;
+  letter-spacing: 0.1em;
+}
+
+#game {
+  background: #6cbcf7;
+  border: 2px solid #555;
+  display: block;
+  cursor: crosshair;
+  image-rendering: pixelated;
+}
+
+#hud {
+  width: 960px;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+#stats {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 6px 12px;
+  background: #222;
+  border-radius: 6px;
+  border-left: 4px solid #ff8b8b;
+  font-variant-numeric: tabular-nums;
+}
+
+.bar {
+  display: inline-block;
+  width: 120px;
+  height: 8px;
+  background: #444;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.fill {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #ff8b8b, #e74c3c);
+  transition: width 100ms linear;
+}
+
+#hotbar {
+  width: 960px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.slot {
+  position: relative;
+  background: #2b2b46;
+  border: 2px solid #555;
+  border-radius: 6px;
+  padding: 6px 4px;
+  text-align: center;
+  user-select: none;
+  font-size: 11px;
+  cursor: pointer;
+}
+.slot.active { border-color: #ffd86b; background: #3a3a5a; }
+.slot .swatch { display: inline-block; width: 28px; height: 28px; border-radius: 3px; vertical-align: middle; border: 1px solid #111; }
+.slot .name   { display: block; margin-top: 4px; color: #eee; }
+.slot .hotkey { position: absolute; top: 2px; left: 4px; font-size: 9px; color: #999; }
+.slot .count  { position: absolute; top: 2px; right: 4px; font-size: 10px; color: #ffd86b; font-weight: bold; }
+
+#controls {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #aaa;
+  text-align: center;
+  line-height: 1.6;
+}
+
+#message {
+  margin-top: 12px;
+  font-size: 22px;
+  font-weight: bold;
+  height: 28px;
+  color: #ffd86b;
+}
