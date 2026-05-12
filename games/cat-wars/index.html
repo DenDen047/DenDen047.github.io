@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>にゃんこウォーズ</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>にゃんこウォーズ</h1>
+
+  <div id="hud">
+    <div class="base-info ally">
+      <span class="label">自陣</span>
+      <span class="bar"><span id="ally-hp-fill" class="fill"></span></span>
+      <span id="ally-hp-text" class="hp-text">1000 / 1000</span>
+    </div>
+    <div class="money">
+      <span class="label">💰</span>
+      <span class="bar money-bar"><span id="money-fill" class="fill"></span></span>
+      <span id="money-text" class="money-text">100 / 999</span>
+    </div>
+    <div class="base-info enemy">
+      <span class="label">敵陣</span>
+      <span class="bar"><span id="enemy-hp-fill" class="fill"></span></span>
+      <span id="enemy-hp-text" class="hp-text">2000 / 2000</span>
+    </div>
+  </div>
+
+  <canvas id="game" width="960" height="320"></canvas>
+
+  <div id="deck"></div>
+
+  <div id="controls">
+    <div>カードをクリック（または <b>1〜9, 0</b> キー）で召喚。お金が足りない・リチャージ中は灰色。</div>
+    <div>勝利条件: 敵陣の HP を 0 に。 敗北条件: 自陣の HP が 0 に。</div>
+    <div><b>R</b> = リスタート　|　<b>P</b> = 一時停止　|　<b>M</b> = ミュート</div>
+  </div>
+
+  <div id="message"></div>
+
+  <script src="game.js"></script>
+</body>
+</html>

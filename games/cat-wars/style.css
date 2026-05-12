@@ -1,0 +1,122 @@
+body {
+  font-family: -apple-system, "Hiragino Sans", sans-serif;
+  background: #1a1a2e;
+  color: #eee;
+  margin: 0;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+h1 {
+  margin: 0 0 8px 0;
+  font-size: 22px;
+  letter-spacing: 0.1em;
+}
+
+#game {
+  background: linear-gradient(#87ceeb 0%, #87ceeb 70%, #6b8e3b 70%, #4a6b28 100%);
+  border: 2px solid #555;
+  display: block;
+}
+
+#hud {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+  width: 960px;
+  justify-content: space-between;
+}
+
+.base-info, .money {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #222;
+  border-radius: 6px;
+}
+.base-info.ally  { border-left: 4px solid #4fc3f7; }
+.base-info.enemy { border-left: 4px solid #e74c3c; }
+.money           { border-left: 4px solid #ffd86b; }
+
+.bar {
+  display: inline-block;
+  width: 160px;
+  height: 10px;
+  background: #444;
+  border-radius: 5px;
+  overflow: hidden;
+}
+.fill {
+  display: block;
+  height: 100%;
+  width: 100%;
+  transition: width 80ms linear;
+}
+#ally-hp-fill   { background: linear-gradient(90deg, #80d8ff, #4fc3f7); }
+#enemy-hp-fill  { background: linear-gradient(90deg, #ff8b8b, #e74c3c); }
+#money-fill     { background: linear-gradient(90deg, #ffd86b, #ff8b3d); }
+
+.hp-text, .money-text {
+  font-variant-numeric: tabular-nums;
+  min-width: 90px;
+  font-size: 12px;
+}
+
+#deck {
+  width: 960px;
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.card {
+  position: relative;
+  background: #2b2b46;
+  border: 2px solid #555;
+  border-radius: 8px;
+  padding: 6px 4px 4px 4px;
+  text-align: center;
+  cursor: pointer;
+  overflow: hidden;
+  user-select: none;
+  font-size: 11px;
+  transition: transform 80ms;
+}
+.card:hover:not(.disabled) { transform: translateY(-2px); }
+.card.disabled { cursor: not-allowed; }
+.card .emoji   { font-size: 26px; display: block; line-height: 1.1; }
+.card .name    { display: block; font-size: 10px; color: #eee; margin-top: 2px; height: 24px; }
+.card .cost    { display: block; color: #ffd86b; font-weight: bold; font-variant-numeric: tabular-nums; }
+.card .cost.unaffordable { color: #ff7070; }
+.card .hotkey  { position: absolute; top: 2px; left: 4px; font-size: 9px; color: #999; }
+
+.card .cooldown {
+  position: absolute;
+  left: 0; bottom: 0;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  transition: height 80ms linear;
+}
+
+#controls {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #aaa;
+  text-align: center;
+  line-height: 1.6;
+}
+
+#message {
+  margin-top: 12px;
+  font-size: 24px;
+  font-weight: bold;
+  height: 32px;
+  color: #ffd86b;
+}
