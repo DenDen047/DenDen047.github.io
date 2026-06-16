@@ -245,6 +245,13 @@ const FRICTION = 0.85;
 const AIR_FRICTION = 0.96;
 const MOVE_ACCEL = 0.9;
 
+// ジャストガード・カウンター (全キャラ共通)
+const COUNTER_WINDOW = 8;     // 防御開始から受付となるフレーム数
+const COUNTER_MULT = 1.4;     // 受けた攻撃の何倍を反撃ダメージにするか
+const COUNTER_MIN_DMG = 10;   // 反撃ダメージの最低値
+const COUNTER_HITSTOP = 8;    // カウンター成功時の停止フレーム (演出)
+let hitstop = 0;              // > 0 の間はゲーム進行を停止 (フリーズ演出)
+
 // =============================================================
 // 入力管理
 // =============================================================
@@ -373,6 +380,8 @@ const sfx = {
   downHit:     () => blip({ type: 'sawtooth', freq: 200, freqEnd: 60, duration: 0.18, volume: 0.6 }),
   swing:       () => blip({ type: 'triangle', freq: 800, freqEnd: 400, duration: 0.06, volume: 0.25 }),
   shieldHit:   () => blip({ type: 'square', freq: 1100, freqEnd: 700, duration: 0.08, volume: 0.4 }),
+  counter:     () => { blip({ type: 'square', freq: 1700, freqEnd: 2500, duration: 0.05, volume: 0.5 });
+                       blip({ type: 'triangle', freq: 880, freqEnd: 1760, duration: 0.14, volume: 0.4 }); },
   shieldBreak: () => { blip({ type: 'sawtooth', freq: 900, freqEnd: 80, duration: 0.4, volume: 0.6 });
                        noiseBurst({ duration: 0.4, volume: 0.6, lowpass: 2200 }); },
   ko:          () => { blip({ type: 'square', freq: 880, freqEnd: 110, duration: 0.5, volume: 0.7 });
@@ -1067,6 +1076,7 @@ class Player {
     this.shielding = false;
     this.shieldHP = 100;
     this.shieldBroken = 0;
+    this.counterWindow = 0;    // ジャストガード受付の残りフレーム
     this.invincible = initial ? 0 : 60;
     this.animPhase = 0;
     // 特殊能力の状態 (キャラ依存)
@@ -1116,7 +1126,13 @@ class Player {
     const wasShielding = this.shielding;
     this.shielding = canControl && this.onGround
       && keys[c.shield] && this.attackCooldown <= 0 && this.shieldHP > 0;
-    if (this.shielding && !wasShielding) spawnShieldRipple(this);
+    if (this.shielding && !wasShielding) {
+      spawnShieldRipple(this);
+      this.counterWindow = COUNTER_WINDOW;  // 防御開始 → カウンター受付開始
+    } else if (this.counterWindow > 0) {
+      this.counterWindow--;
+    }
+    if (!this.shielding) this.counterWindow = 0;
 
     // 居合カウンター (侍): 防御中に攻撃ボタンの立ち上がりで瞬時の斬撃波
     const attackEdge = (keys[c.attack] || keys[c.strong]) && !this.prevAttackKey;
@@ -1278,7 +1294,11 @@ class Player {
         const a = this.attackBox;
         const hx = opponent.x + opponent.w / 2;
         const hy = opponent.y + opponent.h / 2;
-        if (opponent.shielding) {
+        if (opponent.shielding && opponent.counterWindow > 0) {
+          // ジャストガード成立 → 攻撃を打ち消して反撃
+          opponent.performCounter(this, a.damage);
+          this.attackBox = null;
+        } else if (opponent.shielding) {
           opponent.shieldHP = Math.max(0, opponent.shieldHP - a.damage * 1.5);
           this.vx = -this.facing * 4;
           sfx.shieldHit();
@@ -1306,10 +1326,12 @@ class Player {
           spawnHitSpark(hx, hy, a.strong, a.dir);
           shake(a.strong ? 7 : 2, a.strong ? 18 : 6);
         }
-        if (this.attackBox.multihit) this.attackBox.rehit = 8;
-        else this.attackBox.hit = true;
+        if (this.attackBox) { // カウンターで消えていなければヒット消費を記録
+          if (this.attackBox.multihit) this.attackBox.rehit = 8;
+          else this.attackBox.hit = true;
+        }
       }
-      if (this.attackBox.life <= 0) this.attackBox = null;
+      if (this.attackBox && this.attackBox.life <= 0) this.attackBox = null;
     }
 
     // 場外 KO
@@ -1506,6 +1528,27 @@ class Player {
       }
     }
   }
+  // ジャストガード成功時のカウンター: 被弾を無効化し相手へ反撃 (全キャラ共通)
+  performCounter(attacker, incomingDamage) {
+    this.counterWindow = 0; // 1 回限り
+    const dmg = Math.max(COUNTER_MIN_DMG, incomingDamage * COUNTER_MULT);
+    // 相手を自分から遠ざける向き (相手が左にいれば左へ吹き飛ばす)
+    const dir = (attacker.x + attacker.w / 2) < (this.x + this.w / 2) ? -1 : 1;
+    attacker.takeHit({
+      attackBox: { damage: dmg, dir: 'side', kbBonus: 1.6, strong: true },
+      facing: dir,
+    });
+    // 報酬: シールド小回復・必殺ゲージ加算・短い無敵 (多段ヒットの連続被弾防止)
+    this.shieldHP = Math.min(100, this.shieldHP + 12);
+    this.hitCount = Math.min(5, (this.hitCount || 0) + 1);
+    this.invincible = Math.max(this.invincible, 16);
+    this.facing = -dir; // 相手の方を向く
+    // 演出
+    hitstop = Math.max(hitstop, COUNTER_HITSTOP);
+    spawnCounterFlash(this);
+    sfx.counter();
+    shake(9, 22);
+  }
   // 居合カウンター (侍の special active)
   releaseIaiCounter(cfg) {
     projectiles.push(new Projectile({
@@ -1608,6 +1651,14 @@ class Player {
       ctx.arc(cx - r * 0.35, cy - r * 0.35, r * 0.25, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
       ctx.fill();
+      // カウンター受付中は金色のリングを重ねて可視化
+      if (this.counterWindow > 0) {
+        ctx.strokeStyle = `rgba(255,216,107,${0.5 + 0.5 * (this.counterWindow / COUNTER_WINDOW)})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r * pulse + 4, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
     if (this.shieldBroken > 0) {
       ctx.fillStyle = 'rgba(255,255,100,0.9)';
@@ -2052,7 +2103,10 @@ class Projectile {
     if (opponent.invincible <= 0 && hitTest(this, opponent)) {
       const cx = opponent.x + opponent.w / 2;
       const cy = opponent.y + opponent.h / 2;
-      if (opponent.shielding) {
+      if (opponent.shielding && opponent.counterWindow > 0 && this.owner) {
+        // ジャストガードで飛び道具を打ち消し、撃った相手へ反撃
+        opponent.performCounter(this.owner, this.damage);
+      } else if (opponent.shielding) {
         opponent.shieldHP = Math.max(0, opponent.shieldHP - this.damage * 1.5);
         sfx.shieldHit();
         spawnShieldRipple(opponent);
@@ -2483,6 +2537,30 @@ function spawnShieldRipple(player) {
       color: '#cdf4ff',
       shape: 'rect',
       gravity: 0,
+    });
+  }
+}
+
+// ジャストガード成功時の閃光 (金 + 白)
+function spawnCounterFlash(player) {
+  const cx = player.x + player.w / 2;
+  const cy = player.y + player.h / 2;
+  addParticle({
+    x: cx, y: cy, vx: 0, vy: 0, life: 20, maxLife: 20,
+    size: player.w * 2.2, color: '#fff', shape: 'flash', gravity: 0,
+  });
+  addParticle({
+    x: cx, y: cy, vx: 0, vy: 0, life: 26, maxLife: 26,
+    size: player.w * 1.5, color: '#ffd86b', shape: 'ring', gravity: 0,
+  });
+  for (let i = 0; i < 14; i++) {
+    const ang = (i / 14) * Math.PI * 2;
+    const speed = 4 + Math.random() * 4;
+    addParticle({
+      x: cx, y: cy,
+      vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed,
+      life: 22, maxLife: 22, size: 4,
+      color: i % 2 ? '#fff' : '#ffd86b', shape: 'rect', gravity: 0.05,
     });
   }
 }
@@ -2924,6 +3002,7 @@ function startGame() {
     'P2', CHARACTERS[p2Char], '#3498db');
   projectiles.length = 0;
   hazards.length = 0;
+  hitstop = 0;
   resetStage(currentStage);
   stageFrame = 0;
   gameState = 'playing';
@@ -2985,7 +3064,10 @@ function loop() {
     ctx.translate(sx, sy);
 
     drawStage();
-    if (gameState === 'playing') {
+    if (gameState === 'playing' && hitstop > 0) {
+      // カウンター成功などのフリーズ演出中は進行を止める (描画は継続)
+      hitstop--;
+    } else if (gameState === 'playing') {
       // ステージの動的更新 (動く足場・ハザード生成・崩壊タイマー)
       stageFrame++;
       if (currentStage.update) currentStage.update(currentStage, stageFrame);
