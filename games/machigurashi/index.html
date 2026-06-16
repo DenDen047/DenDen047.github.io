@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>まちぐらし ― Lagoon Life (prototype)</title>
+<style>
+  :root {
+    --cream: #fff6e6;
+    --cream2: #ffeccb;
+    --brown: #6b4a2b;
+    --brown-soft: #8a6a47;
+    --accent: #e08a3c;
+    --green: #6cbf5a;
+    --shadow: rgba(60, 40, 20, 0.25);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+  body {
+    background: #20232b;
+    font-family: "Hiragino Maru Gothic ProN", "Yu Gothic", "Helvetica Neue", system-ui, sans-serif;
+    color: var(--brown);
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  #game { display: block; position: absolute; inset: 0; }
+
+  .panel {
+    background: var(--cream);
+    border: 2px solid var(--brown);
+    border-radius: 12px;
+    box-shadow: 0 4px 0 var(--shadow);
+    padding: 8px 12px;
+  }
+
+  /* ---- Top HUD ---- */
+  #topbar {
+    position: fixed; top: 12px; left: 12px; right: 12px;
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    pointer-events: none;
+  }
+  #topbar .panel { pointer-events: auto; }
+  #dateBox { font-weight: 700; font-size: 14px; min-width: 200px; }
+  #dateBox #clock { color: var(--accent); }
+  #dateBox #season { margin-left: 8px; }
+  #placeBox { font-weight: 700; font-size: 14px; }
+  #moneyBox { font-weight: 700; font-size: 15px; }
+  #energyBox { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
+  #energyTrack { width: 130px; height: 12px; background: #e7d3ad; border-radius: 8px; overflow: hidden; border: 1px solid var(--brown-soft); }
+  #energyFill { height: 100%; width: 100%; background: linear-gradient(90deg, #8fd06f, #5fae4a); transition: width .25s ease; }
+  #ctrlBox { display: flex; gap: 6px; align-items: center; }
+  .chip {
+    pointer-events: auto;
+    cursor: pointer; border: 2px solid var(--brown); background: var(--cream2);
+    border-radius: 9px; padding: 4px 9px; font-weight: 700; font-size: 13px; color: var(--brown);
+  }
+  .chip.active { background: var(--accent); color: #fff; }
+  .chip:active { transform: translateY(1px); }
+
+  /* ---- Interaction prompt ---- */
+  #prompt {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+    font-weight: 700; font-size: 15px; display: none; pointer-events: none;
+  }
+  #prompt .key {
+    display: inline-block; background: var(--brown); color: var(--cream);
+    border-radius: 6px; padding: 1px 8px; margin-right: 8px; font-size: 13px;
+  }
+
+  /* ---- Toasts ---- */
+  #toasts {
+    position: fixed; top: 64px; left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; z-index: 30;
+  }
+  .toast {
+    font-weight: 700; font-size: 14px; padding: 7px 14px;
+    animation: toastIn .2s ease, toastOut .4s ease 2.1s forwards;
+  }
+  @keyframes toastIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+  @keyframes toastOut { to { opacity: 0; transform: translateY(-8px); } }
+
+  /* ---- Modal ---- */
+  #overlay {
+    position: fixed; inset: 0; background: rgba(20, 14, 8, 0.45);
+    display: none; align-items: center; justify-content: center; z-index: 40; padding: 16px;
+  }
+  #modal { width: 100%; max-width: 430px; }
+  #modalTitle { font-size: 18px; font-weight: 800; margin: 0 0 8px; }
+  #modalBody { font-size: 14px; line-height: 1.7; margin-bottom: 12px; }
+  #modalBody .hint { color: var(--brown-soft); font-size: 12px; margin-top: 6px; }
+  #modalButtons { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn {
+    cursor: pointer; border: 2px solid var(--brown); background: var(--cream2);
+    color: var(--brown); border-radius: 10px; padding: 8px 14px; font-weight: 800; font-size: 14px;
+    box-shadow: 0 3px 0 var(--shadow); flex: 1 1 auto; min-width: 110px;
+  }
+  .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--shadow); }
+  .btn.primary { background: var(--accent); color: #fff; border-color: #b96a25; }
+  .btn.ghost { background: var(--cream); }
+  .shopRow { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 3px 0; }
+  .shopRow .meta { color: var(--brown-soft); font-size: 12px; }
+</style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="topbar">
+    <div class="panel" id="dateBox">
+      <span id="date">1年 1月 1日</span>
+      <span id="clock">06:00</span>
+      <span id="season">🌸 春</span>
+    </div>
+    <div class="panel" id="placeBox">📍 <span id="place">まち</span></div>
+    <div class="panel" id="eventBox" style="display:none; background:#ffe1ad; border-color:#d08a2c;">🎉 <span id="eventName"></span></div>
+    <div class="panel" id="moneyBox">💰 <span id="money">¥0</span></div>
+    <div class="panel" id="energyBox">⚡<div id="energyTrack"><div id="energyFill"></div></div></div>
+    <div class="panel" id="ctrlBox">
+      <span style="font-size:12px;">速さ</span>
+      <span class="chip" data-speed="1">×1</span>
+      <span class="chip" data-speed="5">×5</span>
+      <span class="chip" data-speed="20">×20</span>
+      <span class="chip" id="helpBtn">？</span>
+      <span class="chip" id="resetBtn">⟳</span>
+    </div>
+  </div>
+
+  <div id="prompt"><span class="key">E</span><span id="promptText"></span></div>
+  <div id="toasts"></div>
+
+  <div id="overlay">
+    <div class="panel" id="modal">
+      <h2 id="modalTitle"></h2>
+      <div id="modalBody"></div>
+      <div id="modalButtons"></div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
