@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ラグドール・ランブル</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>ラグドール・ランブル</h1>
+
+  <div id="hud">
+    <div class="stat hp">
+      <span class="label">体力</span>
+      <span class="bar"><span id="hp-fill" class="fill"></span></span>
+      <span id="hp-text" class="num">100 / 100</span>
+    </div>
+    <div class="stat wave"><span class="label">WAVE</span> <span id="wave-text" class="num">1</span></div>
+    <div class="stat score"><span class="label">SCORE</span> <span id="score-text" class="num">0</span></div>
+    <div class="stat combo"><span class="label">COMBO</span> <span id="combo-text" class="num">0</span></div>
+  </div>
+
+  <div id="stage-wrap">
+    <canvas id="game" width="960" height="540"></canvas>
+    <div id="message"></div>
+  </div>
+
+  <div id="controls">
+    <div><b>← →</b> / <b>A D</b> = 移動　|　<b>Space</b> / <b>↑</b> / <b>W</b> = ジャンプ</div>
+    <div><b>J</b> / 左クリック = パンチ　|　<b>K</b> / 右クリック = キック（強ノックバック）</div>
+    <div><b>R</b> = リスタート　|　<b>P</b> = 一時停止　|　<b>M</b> = ミュート</div>
+    <div class="hint">敵をぶっ飛ばして全滅させると次の WAVE へ。フラフラのラグドールを操って戦え！</div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
