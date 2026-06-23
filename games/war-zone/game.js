@@ -1551,7 +1551,8 @@
       try { await Net.join(code); } catch (e) { netMsg(e.message, true); }
     });
 
-    // ヘルプ
+    // 操作方法 (メニューからも対戦中の ? からも表示)
+    document.getElementById("btn-controls").addEventListener("click", () => el.help.classList.remove("hidden"));
     document.getElementById("btn-help").addEventListener("click", () => el.help.classList.remove("hidden"));
     document.getElementById("btn-help-close").addEventListener("click", () => el.help.classList.add("hidden"));
 
