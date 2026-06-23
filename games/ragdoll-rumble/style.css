@@ -38,10 +38,11 @@ h1 {
 .stat .label { color: #aaa; font-size: 11px; letter-spacing: 0.08em; }
 .stat .num   { font-variant-numeric: tabular-nums; font-weight: bold; }
 
-.stat.hp    { flex: 1; border-left: 4px solid #5ad65a; }
-.stat.wave  { border-left: 4px solid #ffd86b; }
-.stat.score { border-left: 4px solid #4fc3f7; }
-.stat.combo { border-left: 4px solid #ff7fb0; }
+.stat.hp     { flex: 1; border-left: 4px solid #5ad65a; }
+.stat.wave   { border-left: 4px solid #ffd86b; }
+.stat.score  { border-left: 4px solid #4fc3f7; }
+.stat.combo  { border-left: 4px solid #ff7fb0; }
+.stat.weapon { border-left: 4px solid #d8a866; }
 
 .bar {
   flex: 1;
