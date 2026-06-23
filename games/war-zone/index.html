@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>WARZONE 2D ― 戦場</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- ===== ゲーム画面 ===== -->
+    <div id="stage-wrap">
+      <canvas id="game" width="960" height="600"></canvas>
+
+      <!-- HUD -->
+      <div id="hud">
+        <div class="hud-top">
+          <div class="score ally">
+            <span class="tag">味方</span>
+            <span id="score-ally" class="num">0</span>
+          </div>
+          <div class="objective">
+            <span id="objective-text">先に <b id="score-goal">30</b> キル</span>
+          </div>
+          <div class="score enemy">
+            <span id="score-enemy" class="num">0</span>
+            <span class="tag">敵</span>
+          </div>
+        </div>
+        <div class="hud-bottom">
+          <div class="vitals">
+            <div class="hp-row">
+              <span class="hp-bar"><span id="hp-fill" class="fill"></span></span>
+              <span id="hp-text" class="hp-text">100</span>
+            </div>
+            <div class="xp-row">
+              <span class="lv">Lv <b id="lv-text">1</b></span>
+              <span class="xp-bar"><span id="xp-fill" class="fill"></span></span>
+            </div>
+          </div>
+          <div class="weapon">
+            <span id="weapon-name" class="wname">アサルトライフル</span>
+            <span id="ammo-text" class="ammo">30 / 30</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ミニマップ -->
+      <canvas id="minimap" width="160" height="106"></canvas>
+
+      <!-- キルフィード -->
+      <div id="killfeed"></div>
+
+      <!-- 上部ボタン -->
+      <div id="topbtns">
+        <button id="btn-help" class="ui-btn" aria-label="あそびかた">?</button>
+        <button id="btn-mute" class="ui-btn" aria-label="ミュート">🔊</button>
+        <button id="btn-menu" class="ui-btn" aria-label="メニュー">≡</button>
+      </div>
+
+      <!-- レベルアップ通知 -->
+      <div id="levelup" class="hidden"></div>
+
+      <!-- ===== タッチ操作 (スマホ) ===== -->
+      <div id="touch" class="hidden">
+        <div id="stick-move" class="stick"><div class="knob"></div></div>
+        <div id="stick-aim" class="stick"><div class="knob"></div></div>
+        <div id="touch-btns">
+          <button id="t-reload" class="tbtn">リロード</button>
+          <button id="t-swap" class="tbtn">武器</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== メニュー / ロビー ===== -->
+    <div id="menu" class="overlay">
+      <div class="panel">
+        <h1>WARZONE <span class="sub">2D ― 戦場</span></h1>
+        <p class="lead">見下ろし型の本格2D戦争シューター。銃を撃ち、敵を倒してレベルアップ。</p>
+
+        <label class="field">
+          <span>あなたの名前</span>
+          <input id="name-input" type="text" maxlength="12" placeholder="Soldier" value="">
+        </label>
+
+        <div id="menu-main">
+          <button id="btn-solo" class="big-btn primary">ソロ戦（CPUと対戦）</button>
+          <button id="btn-online" class="big-btn">オンライン対戦</button>
+          <div class="diff-row">
+            <span>難易度</span>
+            <div class="seg" id="diff-seg">
+              <button data-diff="easy">かんたん</button>
+              <button data-diff="normal" class="on">ふつう</button>
+              <button data-diff="hard">むずかしい</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- オンラインのサブパネル -->
+        <div id="menu-online" class="hidden">
+          <p class="lead small">同じルームコードを共有すると、ブラウザ同士で対戦できます（P2P / サーバー不要）。</p>
+          <button id="btn-host" class="big-btn primary">ルームを作成（ホスト）</button>
+          <div class="join-row">
+            <input id="join-code" type="text" maxlength="8" placeholder="ルームコード" autocapitalize="characters">
+            <button id="btn-join" class="big-btn">参加</button>
+          </div>
+          <div id="net-status" class="net-status"></div>
+          <button id="btn-back" class="link-btn">← もどる</button>
+        </div>
+
+        <p class="hint" id="menu-hint"></p>
+      </div>
+    </div>
+
+    <!-- ===== あそびかた ===== -->
+    <div id="help" class="overlay hidden">
+      <div class="panel">
+        <h2>あそびかた</h2>
+        <div class="help-cols">
+          <div>
+            <h3>PC</h3>
+            <ul>
+              <li><b>WASD</b> … 移動</li>
+              <li><b>マウス</b> … 照準</li>
+              <li><b>左クリック長押し</b> … 射撃</li>
+              <li><b>R</b> … リロード</li>
+              <li><b>1〜5</b> / ホイール … 武器切替</li>
+              <li><b>Shift</b> … ダッシュ</li>
+            </ul>
+          </div>
+          <div>
+            <h3>スマホ</h3>
+            <ul>
+              <li><b>左スティック</b> … 移動</li>
+              <li><b>右スティック</b> … 照準＆自動射撃</li>
+              <li><b>リロード / 武器</b> … 右下ボタン</li>
+            </ul>
+          </div>
+        </div>
+        <p class="help-rpg">敵を倒すと <b>EXP</b> 獲得。レベルアップで最大HPと火力が上昇し、全回復します。倒れても数秒で復活。先に目標キル数に到達したチームの勝ち。</p>
+        <button id="btn-help-close" class="big-btn primary">とじる</button>
+      </div>
+    </div>
+
+    <!-- ===== 結果 ===== -->
+    <div id="result" class="overlay hidden">
+      <div class="panel">
+        <h2 id="result-title">勝利！</h2>
+        <div id="result-stats" class="result-stats"></div>
+        <button id="btn-again" class="big-btn primary">もう一度</button>
+        <button id="btn-tomenu" class="big-btn">メニューへ</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
