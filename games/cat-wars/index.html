@@ -2,6 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>にゃんこウォーズ</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -30,10 +31,16 @@
 
   <div id="deck"></div>
 
+  <div id="action-buttons">
+    <button id="btn-pause" type="button">⏸ 一時停止</button>
+    <button id="btn-restart" type="button">🔄 リスタート</button>
+    <button id="btn-mute" type="button">🔊 サウンド</button>
+  </div>
+
   <div id="controls">
-    <div>カードをクリック（または <b>1〜9, 0</b> キー）で召喚。お金が足りない・リチャージ中は灰色。</div>
+    <div>カードを<b>タップ／クリック</b>（PC は <b>1〜9, 0</b> キー）で召喚。お金が足りない・リチャージ中は灰色。</div>
     <div>勝利条件: 敵陣の HP を 0 に。 敗北条件: 自陣の HP が 0 に。</div>
-    <div><b>R</b> = リスタート　|　<b>P</b> = 一時停止　|　<b>M</b> = ミュート</div>
+    <div class="kbd-hint">キーボード: <b>R</b> = リスタート　|　<b>P</b> = 一時停止　|　<b>M</b> = ミュート</div>
   </div>
 
   <div id="message"></div>

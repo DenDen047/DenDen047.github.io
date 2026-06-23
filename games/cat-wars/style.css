@@ -7,6 +7,8 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior: contain;
 }
 
 h1 {
@@ -19,6 +21,10 @@ h1 {
   background: linear-gradient(#87ceeb 0%, #87ceeb 70%, #6b8e3b 70%, #4a6b28 100%);
   border: 2px solid #555;
   display: block;
+  width: 100%;
+  max-width: 960px;
+  height: auto;          /* canvas の 960×320 比率を保ったまま画面幅に収まる */
+  touch-action: manipulation;
 }
 
 #hud {
@@ -27,8 +33,11 @@ h1 {
   align-items: center;
   margin-bottom: 8px;
   font-size: 13px;
-  width: 960px;
+  width: 100%;
+  max-width: 960px;
+  box-sizing: border-box;
   justify-content: space-between;
+  flex-wrap: wrap;
 }
 
 .base-info, .money {
@@ -45,7 +54,7 @@ h1 {
 
 .bar {
   display: inline-block;
-  width: 160px;
+  width: 130px;
   height: 10px;
   background: #444;
   border-radius: 5px;
@@ -68,7 +77,9 @@ h1 {
 }
 
 #deck {
-  width: 960px;
+  width: 100%;
+  max-width: 960px;
+  box-sizing: border-box;
   display: grid;
   grid-template-columns: repeat(10, 1fr);
   gap: 6px;
@@ -85,10 +96,16 @@ h1 {
   cursor: pointer;
   overflow: hidden;
   user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
   font-size: 11px;
   transition: transform 80ms;
 }
-.card:hover:not(.disabled) { transform: translateY(-2px); }
+/* ホバーは実際にホバー可能なデバイス (PC) でのみ。タッチ端末で hover が固着するのを防ぐ */
+@media (hover: hover) {
+  .card:hover:not(.disabled) { transform: translateY(-2px); }
+}
+.card:active:not(.disabled) { transform: scale(0.96); }
 .card.disabled { cursor: not-allowed; }
 .card .emoji   { font-size: 26px; display: block; line-height: 1.1; }
 .card .name    { display: block; font-size: 10px; color: #eee; margin-top: 2px; height: 24px; }
@@ -105,6 +122,37 @@ h1 {
   transition: height 80ms linear;
 }
 
+/* タッチ操作用ボタン (一時停止 / リスタート / ミュート) */
+#action-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+  max-width: 960px;
+  box-sizing: border-box;
+}
+#action-buttons button {
+  background: #2b2b46;
+  color: #eee;
+  border: 2px solid #555;
+  border-radius: 8px;
+  padding: 10px 16px;
+  min-height: 44px;          /* 指で押しやすいタッチターゲット */
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: background 80ms, transform 80ms;
+}
+#action-buttons button:active {
+  background: #3a3a5c;
+  transform: scale(0.97);
+}
+
 #controls {
   margin-top: 10px;
   font-size: 13px;
@@ -119,4 +167,30 @@ h1 {
   font-weight: bold;
   height: 32px;
   color: #ffd86b;
+}
+
+/* ------- スマホ / 狭い画面向け ------- */
+@media (max-width: 640px) {
+  body { padding: 8px; }
+  h1 { font-size: 18px; }
+
+  /* 3 項目は横並びだと幅が足りず見切れるので縦積み。各項目は内容幅で中央寄せ */
+  #hud {
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+  }
+  .base-info, .money { padding: 5px 10px; gap: 8px; }
+  .bar { width: 120px; height: 9px; }
+  .hp-text, .money-text { min-width: 0; font-size: 11px; white-space: nowrap; }
+
+  /* 10 列は指には狭すぎるので 5 列 × 2 段に */
+  #deck { grid-template-columns: repeat(5, 1fr); gap: 5px; }
+  .card { padding: 8px 4px 6px 4px; font-size: 12px; }
+  .card .emoji { font-size: 30px; }
+  .card .name { font-size: 11px; height: 26px; }
+
+  #controls { font-size: 12px; }
+  .kbd-hint { display: none; }   /* タッチ端末ではキーボード説明を隠す */
 }

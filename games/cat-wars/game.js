@@ -769,17 +769,24 @@ function showMessage(msg) {
   document.getElementById("message").textContent = msg;
 }
 
-// -------- 入力 -------------------------------------------------------------
+// -------- 入力 (キーボード + タッチ/クリックボタンで共通の操作) ------------
+function toggleMute() {
+  muted = !muted;
+  updateButtonLabels();
+  showMessage(muted ? "🔇 ミュート" : "🔊 サウンド ON");
+  setTimeout(() => { if (!state.ended) showMessage(""); }, 1200);
+}
+function togglePause() {
+  if (state.ended) return;
+  state.paused = !state.paused;
+  updateButtonLabels();
+}
+
 document.addEventListener("keydown", (ev) => {
   unlockAudio();
-  if (ev.key === "m" || ev.key === "M") {
-    muted = !muted;
-    showMessage(muted ? "🔇 ミュート" : "🔊 サウンド ON");
-    setTimeout(() => { if (!state.ended) showMessage(""); }, 1200);
-    return;
-  }
+  if (ev.key === "m" || ev.key === "M") return toggleMute();
   if (ev.key === "r" || ev.key === "R") return reset();
-  if (ev.key === "p" || ev.key === "P") return (state.paused = !state.paused);
+  if (ev.key === "p" || ev.key === "P") return togglePause();
   if (state.ended) return;
   // 1..9 → slot 0..8, 0 → slot 9
   if (/^[0-9]$/.test(ev.key)) {
@@ -787,6 +794,21 @@ document.addEventListener("keydown", (ev) => {
     if (UNITS[slot]) spawnAlly(UNITS[slot]);
   }
 });
+
+// --- タッチ/クリック操作ボタン ---
+const btnPause   = document.getElementById("btn-pause");
+const btnRestart = document.getElementById("btn-restart");
+const btnMute    = document.getElementById("btn-mute");
+
+function updateButtonLabels() {
+  btnPause.textContent = state.paused ? "▶️ 再開" : "⏸ 一時停止";
+  btnMute.textContent  = muted ? "🔇 ミュート中" : "🔊 サウンド";
+}
+
+btnPause.addEventListener("click",   () => { unlockAudio(); togglePause(); });
+btnRestart.addEventListener("click", () => { unlockAudio(); reset(); });
+btnMute.addEventListener("click",    () => { unlockAudio(); toggleMute(); });
+updateButtonLabels();
 
 function reset() {
   state.money = 100;
@@ -801,6 +823,7 @@ function reset() {
   state.paused = false;
   state.ended = null;
   showMessage("");
+  updateButtonLabels();
 }
 
 // -------- ループ -----------------------------------------------------------
