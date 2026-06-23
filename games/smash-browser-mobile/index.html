@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Mini Smash (スマホ版)</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="topbar">
+    <div id="topbar-row">
+      <span class="title">Mini Smash</span>
+      <span id="hud">
+        <span id="p1-info" class="player-info">
+          <span class="name">YOU</span>
+          <span class="damage">0%</span>
+          <span class="stocks">♥♥♥</span>
+          <span class="bar-group">
+            <span class="shield-bar"><span class="shield-fill"></span></span>
+            <span class="super-row">
+              <span class="super-bar"><span class="super-fill"></span></span>
+              <span class="super-count">0/5</span>
+            </span>
+          </span>
+        </span>
+        <span id="p2-info" class="player-info">
+          <span class="name">CPU</span>
+          <span class="damage">0%</span>
+          <span class="stocks">♥♥♥</span>
+          <span class="bar-group">
+            <span class="shield-bar"><span class="shield-fill"></span></span>
+            <span class="super-row">
+              <span class="super-bar"><span class="super-fill"></span></span>
+              <span class="super-count">0/5</span>
+            </span>
+          </span>
+        </span>
+      </span>
+      <span class="topbtns">
+        <button id="btn-help" class="ui-btn" aria-label="あそびかた">?</button>
+        <button id="btn-mute" class="ui-btn" aria-label="ミュート">🔊</button>
+        <button id="btn-reset" class="ui-btn" aria-label="キャラ選択へ">↺</button>
+      </span>
+    </div>
+    <div id="message"></div>
+  </div>
+
+  <div id="stage-wrap">
+    <canvas id="game" width="800" height="600"></canvas>
+
+    <!-- タッチ操作オーバーレイ (対戦中のみ表示) -->
+    <div id="touch">
+      <div id="pad-left">
+        <button class="tbtn move" data-btn="left">◀</button>
+        <button class="tbtn move" data-btn="right">▶</button>
+      </div>
+      <div id="pad-right">
+        <button class="tbtn special" data-btn="special">必殺</button>
+        <button class="tbtn jump" data-btn="jump">跳</button>
+        <button class="tbtn attack" data-btn="attack">攻撃</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="help" class="hidden">
+    <div class="help-card">
+      <h2>あそびかた</h2>
+      <p><b>◀ ▶</b> 移動　<b>跳</b> ジャンプ (空中でもう一度でキャラにより多段ジャンプ)</p>
+      <p><b>攻撃</b>: 近いと打撃 / 遠いと飛び道具を自動で出し分け。<b>長押しで強攻撃</b>、空中で相手の上＝上攻撃・下＝メテオ。</p>
+      <p><b>必殺</b>: 相手に5回ヒットでゲージ満タン → 発動。</p>
+      <p>相手のダメージ%が高いほど吹っ飛ぶ。場外に落とすと1ストック (♥) 減少。先に相手の3ストックを奪ったら勝ち。</p>
+      <p>右上 ↺ でキャラ選択へ、🔊 でミュート。PCでは A/D・W・F (攻撃)・B (必殺) でも操作できます。</p>
+      <button id="btn-help-close" class="ui-btn wide">とじる</button>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>

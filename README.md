@@ -14,6 +14,7 @@
 ## Games
 
 - [Mini Smash Bros](https://denden047.github.io/games/smash-browser/): A browser-based 2D fighting game playable with two players on the same keyboard.
+- [Mini Smash (Mobile)](https://denden047.github.io/games/smash-browser-mobile/): A touch-friendly single-player version of Mini Smash — fight a CPU with simplified on-screen controls on phones and tablets.
 - [Mini Terraria](https://denden047.github.io/games/terraria-like/): A browser-based 2D sandbox where you dig, gather, and build blocks.
 - [Two-Player Mario-like Adventure](https://denden047.github.io/games/mario-coop/): A browser-based 2-player co-op platformer inspired by classic Mario.
 - [Nyanko Wars](https://denden047.github.io/games/cat-wars/): A browser-based lane-based tower defense where you summon units to crush the enemy base.
