@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ストリート・ファイト</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>ストリート・ファイト</h1>
+
+  <div id="stage-wrap">
+    <canvas id="game" width="960" height="540"></canvas>
+    <div id="message"></div>
+  </div>
+
+  <div id="controls">
+    <div class="cols">
+      <div class="col">
+        <div class="who p1">1P（左・青帯）</div>
+        <div><b>A</b>/<b>D</b> 移動　<b>W</b> ジャンプ　<b>S</b> しゃがみ　<b>A</b>(後ろ) 長押し＝ガード</div>
+        <div><b>F</b> パンチ　<b>G</b> キック　<b>F+G</b> 同時＝投げ　<b>H</b> 必殺技</div>
+      </div>
+      <div class="col">
+        <div class="who p2">2P（右・赤帯）</div>
+        <div><b>←</b>/<b>→</b> 移動　<b>↑</b> ジャンプ　<b>↓</b> しゃがみ　<b>←</b>(後ろ) 長押し＝ガード</div>
+        <div><b>K</b> パンチ　<b>L</b> キック　<b>K+L</b> 同時＝投げ　<b>'</b> 必殺技</div>
+      </div>
+    </div>
+    <div class="moves">
+      <b>必殺技ボタン（H / '）＋方向</b>　そのまま＝<b>波動拳</b>　｜　前(→)＝<b>昇龍拳</b>（対空）　｜　後(←)＝<b>竜巻旋風脚</b>　｜
+      下(↓)＝<span class="super">真空波動拳</span>（ゲージMAX時）　※コマンド入力は不要
+    </div>
+    <div class="hint">
+      しゃがみパンチ＝対空の昇り突き、しゃがみキック＝足払い(下段)、ジャンプ中の攻撃＝飛び込み(中段)。
+      ガードは下段＝しゃがみG・中段＝立ち/しゃがみ・飛び込み(中段overhead)＝立ちG。
+      打撃はガードに弱く、投げはガードを掴み、打撃は投げの出掛かりを潰す——三すくみで読み合え。
+    </div>
+    <div><b>R</b> = タイトルへ　｜　<b>P</b> = 一時停止　｜　<b>M</b> = ミュート</div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>

@@ -20,3 +20,4 @@
 - [Nyanko Wars](https://denden047.github.io/games/cat-wars/): A browser-based lane-based tower defense where you summon units to crush the enemy base.
 - [Ragdoll Rumble](https://denden047.github.io/games/ragdoll-rumble/): A browser-based physics brawler where you control a wobbly active-ragdoll fighter and punch and kick enemy ragdolls across waves.
 - [Machigurashi (Lagoon Life)](https://denden047.github.io/games/machigurashi/): A browser-based top-down life-sim prototype where you live, work, shop, and join events through days and seasons in a procedurally generated lagoon town.
+- [Street Fight](https://denden047.github.io/games/street-fighter/): A browser-based 2D fighter with easy one-button specials (fireball, dragon punch, hurricane kick), high/low/overhead guards, throws, a super meter, and best-of-3 rounds — vs CPU (3 difficulties) or 2-player local.
