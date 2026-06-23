@@ -44,8 +44,9 @@ const K_LIMB = 0.115;   // 手足
 const PLAYER_HP = 100;
 const GRAB_REACH = 66;  // 掴みが届く前方距離
 
-// 同時にステージへ出せる敵の最大数（超過分はキューで待機し、撃破されると補充）
+// ステージに出せる敵の最大数（全ステージ共通。ボス回はボス込みで 3 体）
 const MAX_ENEMIES = 3;
+const BOSS_EVERY = 5;        // 何ウェーブごとにボスを出すか
 
 // 敵タイプ（ウェーブで強くなる）
 const ENEMY_TYPES = [
@@ -54,12 +55,15 @@ const ENEMY_TYPES = [
   { id: "swift", color: "#ffae3d", hpBase: 18, dmg: 5,  reach: 54, atkCD: 0.8, speed: 0.85, scale: 0.88 },
 ];
 
+// ボス（BOSS_EVERY ウェーブごとに 1 体出現する大型の強敵）
+const BOSS_TYPE = { id: "boss", color: "#e0245e", hpBase: 90, dmg: 11, reach: 74, atkCD: 1.6, speed: 0.44, scale: 1.5 };
+
 // 武器タイプ。装備するとパンチが「スイング」になり、リーチ/ダメージ/ノックバックが増す。
-// reach は基礎パンチ(70)への加算、dur は耐久（ヒット回数）、len は描画上の長さ。
+// reach は基礎パンチ(70)への加算、len は描画上の長さ。武器は壊れず拾うとずっと使える。
 const WEAPON_TYPES = [
-  { id: "bat",   name: "バット",   color: "#d8a866", reach: 26, dmg: 16, kb: 26, dur: 10, len: 30 },
-  { id: "pipe",  name: "鉄パイプ", color: "#c2c9d4", reach: 34, dmg: 13, kb: 22, dur: 12, len: 34 },
-  { id: "sword", name: "大剣",     color: "#9fe6ff", reach: 32, dmg: 22, kb: 18, dur: 8,  len: 36 },
+  { id: "bat",   name: "バット",   color: "#d8a866", reach: 26, dmg: 16, kb: 26, len: 30 },
+  { id: "pipe",  name: "鉄パイプ", color: "#c2c9d4", reach: 34, dmg: 13, kb: 22, len: 34 },
+  { id: "sword", name: "大剣",     color: "#9fe6ff", reach: 32, dmg: 22, kb: 18, len: 36 },
 ];
 const randWeapon = () => WEAPON_TYPES[Math.floor(Math.random() * WEAPON_TYPES.length)];
 
@@ -125,7 +129,7 @@ const sfx = {
   grab:  () => beep(330, 0.07, "triangle", 0.05),
   heal:  () => { beep(660, 0.10, "sine", 0.05); setTimeout(() => beep(880, 0.12, "sine", 0.05), 90); },
   wpick: () => { beep(520, 0.08, "square", 0.05); setTimeout(() => beep(700, 0.10, "square", 0.05), 70); },
-  wbreak:() => beep(170, 0.16, "square", 0.06),
+  wdrop: () => beep(240, 0.09, "triangle", 0.05),
   ko:    () => beep(80, 0.30, "sawtooth", 0.08),
   wave:  () => { beep(523, 0.12, "square", 0.05); setTimeout(() => beep(784, 0.18, "square", 0.05), 120); },
 };
@@ -147,6 +151,7 @@ function makeFighter(x, opts) {
   });
   return {
     team: opts.team,
+    isBoss: opts.isBoss || false,
     color: opts.color,
     scale,
     points,
@@ -189,10 +194,11 @@ function spawnPlayer() {
 
 function spawnEnemy(type, side) {
   const x = side < 0 ? WALL_PAD + 40 : W - WALL_PAD - 40;
-  const hp = type.hpBase + state.wave * 4;
+  const isBoss = type.id === "boss";
+  const hp = type.hpBase + state.wave * (isBoss ? 8 : 4);
   const f = makeFighter(x, {
-    team: "enemy", color: type.color, hp,
-    dmg: type.dmg + Math.floor(state.wave * 0.6),
+    team: "enemy", isBoss, color: type.color, hp,
+    dmg: type.dmg + Math.floor(state.wave * (isBoss ? 0.5 : 0.6)),
     reach: type.reach, atkCD: type.atkCD, speed: type.speed, scale: type.scale,
     facing: -side,
   });
@@ -418,14 +424,13 @@ function startPunch(f, dir) {
   if (dir) f.facing = dir;
   const w = f.weapon;
   if (w) {
-    // 武器スイング: 武器を持つ右手を大きく振る
+    // 武器スイング: 武器を持つ右手を大きく振る（武器は壊れない）
     f.punchArm = "R";
     f.punchT = 0.22;
     f.attackCD = 0.36;
     sfx.kick();
     applyImpulse(f, f.facing * 2.6, 0, "chest");
-    const landed = attackHit(f, (70 + w.reach) * f.scale, -5, w.dmg, w.kb, "kick");
-    if (landed) consumeWeapon(f);
+    attackHit(f, (70 + w.reach) * f.scale, -5, w.dmg, w.kb, "kick");
   } else {
     f.punchArm = f.punchArm === "R" ? "L" : "R";
     f.punchT = 0.18;
@@ -435,21 +440,6 @@ function startPunch(f, dir) {
     applyImpulse(f, f.facing * 2.2, 0, "chest");
     attackHit(f, 70 * f.scale, -3, 9, 11, "punch");
   }
-}
-
-// 武器を1ヒット消耗し、耐久が尽きたら壊す
-function consumeWeapon(f) {
-  const w = f.weapon;
-  if (!w) return;
-  w.dur -= 1;
-  if (w.dur <= 0) breakWeapon(f);
-}
-function breakWeapon(f) {
-  if (!f.weapon) return;
-  spawnHitFx(f.points.handR.x, f.points.handR.y, f.facing, "punch");
-  spawnPickFx(f.points.handR.x, f.points.handR.y - 10, "#888", "壊れた！");
-  f.weapon = null;
-  sfx.wbreak();
 }
 
 function startKick(f, dir) {
@@ -565,6 +555,7 @@ window.addEventListener("keydown", (e) => {
   if (k === " ") grabOrThrow(p);
   if (k === "j") startPunch(p, p.facing);
   if (k === "k") startKick(p, p.facing);
+  if (k === "g") dropWeapon(p);
   keys[k] = true;
 });
 window.addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
@@ -590,19 +581,26 @@ function togglePause() {
 // -------- ウェーブ管理 ------------------------------------------------------
 function startWave(n) {
   state.wave = n;
-  const count = 2 + Math.floor(n * 1.5);
+  const isBoss = n % BOSS_EVERY === 0;
+  // 全ステージ敵は最大 3 体。ボス回はボス 1 + 雑魚 2 で計 3 体。
+  const grunts = isBoss ? MAX_ENEMIES - 1 : MAX_ENEMIES;
   state.spawnQueue = [];
   let delay = 0.3;
-  for (let i = 0; i < count; i++) {
+  if (isBoss) {
+    state.spawnQueue.push({ type: BOSS_TYPE, side: -1, delay });
+    delay += rand(0.6, 1.0);
+  }
+  for (let i = 0; i < grunts; i++) {
     // 序盤は雑魚多め、ウェーブが進むと強敵が混ざる
     let pool = ENEMY_TYPES.slice(0, Math.min(ENEMY_TYPES.length, 1 + Math.floor(n / 2)));
     const type = pool[Math.floor(Math.random() * pool.length)];
-    state.spawnQueue.push({ type, side: i % 2 === 0 ? -1 : 1, delay });
+    state.spawnQueue.push({ type, side: i % 2 === 0 ? 1 : -1, delay });
     delay += rand(0.5, 1.1);
   }
   spawnStageItems();   // ステージごとに回復パックと武器を供給
   sfx.wave();
-  showMessage("WAVE " + n, count + " 体の敵が来るぞ！");
+  if (isBoss) showMessage("BOSS WAVE " + n, "ボスが現れた！");
+  else showMessage("WAVE " + n, state.spawnQueue.length + " 体の敵が来るぞ！");
   setTimeout(() => hideMessage(), 1600);
   updateHud();
 }
@@ -612,19 +610,22 @@ function enemiesRemaining() {
 }
 
 // -------- アイテム（武器 / 回復） --------------------------------------------
-function spawnItem(kind, wtype) {
+// x 省略時はランダム配置。pickupDelay はこの秒数が経つまで拾えない（捨てた直後の即回収防止）。
+function spawnItem(kind, wtype, x, pickupDelay) {
   state.items.push({
     kind, wtype: wtype || null,
-    x: rand(W * 0.22, W * 0.78), y: GROUND_Y - 22,
-    bob: rand(0, Math.PI * 2), picked: false,
+    x: x != null ? clamp(x, WALL_PAD + 12, W - WALL_PAD - 12) : rand(W * 0.22, W * 0.78),
+    y: GROUND_Y - 22,
+    bob: rand(0, Math.PI * 2),
+    pickupDelay: pickupDelay || 0,
+    picked: false,
   });
 }
 
-// ステージごとに供給: 回復パックと武器（重複が場に無いときだけ補充）
+// ステージごとに供給: 回復パックと武器（場に無ければ補充。装備中でも持ち替え用に出す）
 function spawnStageItems() {
   if (!state.items.some((i) => i.kind === "heart")) spawnItem("heart");
-  const hasWeapon = state.player && state.player.weapon;
-  if (!hasWeapon && !state.items.some((i) => i.kind === "weapon")) spawnItem("weapon", randWeapon());
+  if (!state.items.some((i) => i.kind === "weapon")) spawnItem("weapon", randWeapon());
 }
 
 function pickUpItem(p, it) {
@@ -633,19 +634,32 @@ function pickUpItem(p, it) {
     spawnPickFx(it.x, it.y, "#7ff07f", "+" + HEAL_AMOUNT);
     sfx.heal();
   } else if (it.kind === "weapon") {
-    p.weapon = { ...it.wtype };   // 個体コピー（耐久を独立管理）
+    // すでに武器を持っていたら、その場に落として持ち替える
+    if (p.weapon) spawnItem("weapon", p.weapon, it.x, 0.9);
+    p.weapon = { ...it.wtype };
     spawnPickFx(it.x, it.y, it.wtype.color, it.wtype.name);
     sfx.wpick();
   }
 }
 
+// 現在の武器を足元に捨てる（拾い直せるアイテムとして残す）
+function dropWeapon(f) {
+  if (!f.alive || !f.weapon) return;
+  spawnItem("weapon", f.weapon, f.points.pelvis.x, 0.9);
+  f.weapon = null;
+  sfx.wdrop();
+}
+
 function updateItems(dt) {
-  for (const it of state.items) it.bob += dt * 3;
+  for (const it of state.items) {
+    it.bob += dt * 3;
+    if (it.pickupDelay > 0) it.pickupDelay -= dt;
+  }
   const p = state.player;
   if (p && p.alive) {
     const px = p.points.pelvis.x, py = p.points.pelvis.y;
     for (const it of state.items) {
-      if (it.picked) continue;
+      if (it.picked || it.pickupDelay > 0) continue;
       const iy = it.y - Math.sin(it.bob) * 4;
       if (Math.abs(it.x - px) < 28 && Math.abs(iy - py) < 64) {
         it.picked = true;
@@ -962,13 +976,19 @@ function drawFighter(f) {
     ctx.fill();
   }
 
-  // 敵の HP バー
+  // 敵の HP バー（ボスは幅広 + ラベル）
   if (f.team === "enemy" && f.alive) {
-    const bw = 34 * s, bx = p.head.x - bw / 2, by = p.head.y - hr - 10;
+    const bw = (f.isBoss ? 54 : 34) * s, bx = p.head.x - bw / 2, by = p.head.y - hr - 10;
     ctx.fillStyle = "#000a";
     ctx.fillRect(bx - 1, by - 1, bw + 2, 6);
-    ctx.fillStyle = "#e0584f";
+    ctx.fillStyle = f.isBoss ? "#ff3b6b" : "#e0584f";
     ctx.fillRect(bx, by, bw * clamp(f.hp / f.maxHp, 0, 1), 4);
+    if (f.isBoss) {
+      ctx.fillStyle = "#ffd86b";
+      ctx.font = "bold 13px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("BOSS", p.head.x, by - 5);
+    }
   }
   // ウィンドアップ表示（!）
   if (f.team === "enemy" && f.ai && f.ai.mode === "windup") {
@@ -1116,7 +1136,7 @@ function updateHud() {
   scoreText.textContent = state.score;
   comboText.textContent = state.combo;
   if (weaponText) {
-    weaponText.textContent = p && p.weapon ? p.weapon.name + " ×" + p.weapon.dur : "素手";
+    weaponText.textContent = p && p.weapon ? p.weapon.name : "素手";
   }
 }
 
