@@ -2971,8 +2971,12 @@
             weaponWanted: -1, reloadEdge: false, grenadeEdge: false, interactEdge: false, parryEdge: false, shield: false,
           };
         }
+        const obstacles = G.obstacles.map((o) => ({
+          ...o,
+          hp: Number.isFinite(o.hp) ? o.hp : null,
+        }));
         conn.send({
-          t: "init", obstacles: G.obstacles, goal: G.goal, slotId: slot ? slot.id : -1,
+          t: "init", obstacles, goal: G.goal, slotId: slot ? slot.id : -1,
           armyNames: G.armyNames, you: { team: slot ? slot.team : 1 }, paused: matchPaused,
         });
         showRoomBanner();

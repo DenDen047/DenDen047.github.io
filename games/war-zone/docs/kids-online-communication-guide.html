@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>ゲームの通信って、どうなっているの？</title>
+  <style>
+    :root {
+      --paper: #f5fbff;
+      --ink: #17324a;
+      --soft-ink: #4f687c;
+      --surface: #ffffff;
+      --surface-2: #eaf6ff;
+      --line: #b8d7e8;
+      --blue: #1479bd;
+      --blue-soft: #d9efff;
+      --green: #278a5b;
+      --green-soft: #dcf6e8;
+      --orange: #b95e09;
+      --orange-soft: #fff0d8;
+      --purple: #7652b5;
+      --purple-soft: #eee7ff;
+      --red: #ae3d45;
+      --shadow: 0 12px 32px rgba(36, 91, 126, .12);
+      --radius: 22px;
+      font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 15% 0%, var(--blue-soft), transparent 28rem),
+        var(--paper);
+      font-size: 17px;
+      line-height: 1.8;
+    }
+    main { width: min(1060px, calc(100% - 28px)); margin: 0 auto; padding: 42px 0 70px; }
+    h1, h2, h3 { line-height: 1.35; }
+    h1 { margin: 10px 0 14px; font-size: clamp(2rem, 7vw, 3.8rem); letter-spacing: .02em; }
+    h2 { margin: 0 0 18px; font-size: clamp(1.45rem, 4vw, 2.2rem); }
+    h3 { margin: 0 0 8px; font-size: 1.15rem; }
+    p { margin: 9px 0; }
+    ruby rt { font-size: .55em; }
+    .hero { padding: 18px 4px 34px; }
+    strong { font-weight: 500; }
+    .hero-kicker { color: var(--blue); font-weight: 500; letter-spacing: .08em; }
+    .hero-copy { max-width: 780px; color: var(--soft-ink); font-size: 1.08rem; }
+    .section {
+      margin-top: 26px;
+      padding: clamp(22px, 5vw, 40px);
+      background: var(--surface);
+      border: 2px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .lead-box {
+      padding: 18px 20px;
+      background: var(--orange-soft);
+      border-left: 7px solid var(--orange);
+      border-radius: 14px;
+      font-size: 1.06rem;
+    }
+    .plain-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .plain-panel { padding: 20px; background: var(--surface-2); border-radius: 16px; }
+    .plain-panel.game-server { background: var(--green-soft); }
+    .big-icon { display: block; margin-bottom: 8px; font-size: 2.4rem; line-height: 1; }
+    .step-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    .step-count { color: var(--soft-ink); font-weight: 500; }
+    .step-dots { display: flex; gap: 7px; }
+    .step-dot { width: 12px; height: 12px; border: 0; border-radius: 50%; background: var(--line); padding: 0; cursor: pointer; }
+    .step-dot[aria-current="step"] { background: var(--blue); transform: scale(1.25); }
+    .network-stage { overflow: hidden; background: var(--surface-2); border-radius: 18px; }
+    .network-stage svg { display: block; width: 100%; height: auto; }
+    .network-stage .node { fill: var(--surface); stroke: var(--line); stroke-width: 3; }
+    .network-stage .server-node { fill: var(--green-soft); stroke: var(--green); }
+    .network-stage .github-node { fill: var(--purple-soft); stroke: var(--purple); }
+    .network-stage .road { stroke: var(--line); stroke-width: 8; stroke-linecap: round; }
+    .network-stage text { fill: var(--ink); font-family: inherit; font-weight: 500; text-anchor: middle; }
+    .network-stage .minor { fill: var(--soft-ink); font-size: 16px; font-weight: 500; }
+    .network-stage .packet { opacity: 0; transition: transform .55s ease, opacity .2s ease; }
+    .network-stage .packet rect { fill: var(--orange-soft); stroke: var(--orange); stroke-width: 2; }
+    .network-stage .packet text { fill: var(--orange); font-size: 15px; }
+    .network-stage .download { opacity: .14; transition: opacity .25s ease; }
+    .scene-step-0 .download { opacity: 1; }
+    .scene-step-1 .room-packet { opacity: 1; transform: translateX(145px); }
+    .scene-step-2 .join-packet { opacity: 1; transform: translateX(-145px); }
+    .scene-step-3 .input-left { opacity: 1; transform: translateX(145px); }
+    .scene-step-3 .input-right { opacity: 1; transform: translateX(-145px); }
+    .scene-step-4 .result-left { opacity: 1; transform: translateX(-145px); }
+    .scene-step-4 .result-right { opacity: 1; transform: translateX(145px); }
+    .step-message { min-height: 106px; padding: 18px 4px 8px; }
+    .step-message strong { color: var(--blue); font-size: 1.14rem; }
+    .step-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
+    button.action {
+      min-width: 108px;
+      padding: 11px 17px;
+      border: 2px solid var(--blue);
+      border-radius: 999px;
+      color: var(--blue);
+      background: var(--surface);
+      font: inherit;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    button.action.primary { color: #fff; background: var(--blue); }
+    button.action:disabled { cursor: not-allowed; opacity: .42; }
+    button:focus-visible { outline: 4px solid var(--orange-soft); outline-offset: 3px; }
+    .concept-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 20px; align-items: stretch; }
+    .concept-card { padding: 22px; background: var(--surface-2); border-radius: 18px; }
+    .concept-card.referee { background: var(--green-soft); }
+    .concept-card svg { display: block; width: 100%; max-height: 180px; margin: 0 auto 14px; }
+    .or { align-self: center; color: var(--soft-ink); font-weight: 500; }
+    .mini-line { stroke: var(--blue); stroke-width: 6; stroke-linecap: round; }
+    .mini-node { fill: var(--surface); stroke: var(--blue); stroke-width: 3; }
+    .mini-server { fill: var(--green-soft); stroke: var(--green); stroke-width: 3; }
+    .mini-label { fill: var(--ink); font-size: 15px; font-family: inherit; font-weight: 500; text-anchor: middle; }
+    .detour { display: grid; grid-template-columns: 1fr 1.25fr; gap: 20px; align-items: center; }
+    .detour-figure { padding: 16px; background: var(--purple-soft); border-radius: 18px; }
+    .detour-figure svg { display: block; width: 100%; height: auto; }
+    .reason-list { display: grid; gap: 12px; padding: 0; list-style: none; }
+    .reason-list li { padding: 14px 16px; background: var(--surface-2); border-radius: 13px; }
+    .reason-list strong { color: var(--red); }
+    .rules { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; counter-reset: rules; }
+    .rule { padding: 18px 14px; background: var(--surface-2); border-radius: 15px; counter-increment: rules; }
+    .rule::before { content: counter(rules); display: grid; place-items: center; width: 34px; height: 34px; margin-bottom: 10px; color: #fff; background: var(--blue); border-radius: 50%; font-weight: 500; }
+    .summary { background: var(--green-soft); border-color: #91d2b2; }
+    .summary-line { display: flex; align-items: flex-start; gap: 14px; margin-top: 14px; }
+    .summary-mark { flex: 0 0 auto; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; color: #fff; background: var(--green); font-weight: 500; }
+    .small-note { color: var(--soft-ink); font-size: .9rem; }
+    footer { margin-top: 22px; text-align: center; color: var(--soft-ink); font-size: .88rem; }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #091521;
+        --ink: #e8f4fb;
+        --soft-ink: #acc3d2;
+        --surface: #102334;
+        --surface-2: #162d40;
+        --line: #31536a;
+        --blue: #72c5ff;
+        --blue-soft: #153650;
+        --green: #76d6a6;
+        --green-soft: #173a2d;
+        --orange: #ffba6b;
+        --orange-soft: #412f1d;
+        --purple: #baa0ff;
+        --purple-soft: #30264b;
+        --red: #ff9da4;
+        --shadow: 0 12px 32px rgba(0, 0, 0, .22);
+      }
+      button.action.primary { color: #07131d; }
+      .summary-mark, .rule::before { color: #07131d; }
+    }
+    @media (max-width: 760px) {
+      body { font-size: 16px; }
+      main { width: min(100% - 20px, 1060px); padding-top: 24px; }
+      .plain-grid, .detour { grid-template-columns: 1fr; }
+      .concept-row { grid-template-columns: 1fr; }
+      .or { text-align: center; }
+      .rules { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .network-stage svg { min-height: 300px; }
+      .step-toolbar { align-items: flex-start; flex-direction: column; }
+    }
+    @media (max-width: 430px) {
+      .section { padding: 20px 16px; }
+      .rules { grid-template-columns: 1fr; }
+      .step-actions { justify-content: stretch; }
+      button.action { flex: 1; min-width: 0; }
+    }
+    @media print {
+      body { background: #fff; color: #17324a; }
+      main { width: 100%; padding: 0; }
+      .section { break-inside: avoid; box-shadow: none; }
+      .step-actions, .step-dots { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .network-stage .packet, .network-stage .download { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <main id="kids-network-guide">
+    <header class="hero">
+      <div class="hero-kicker">小学生のためのオンラインゲーム教室</div>
+      <h1>ゲームの<ruby>通信<rt>つうしん</rt></ruby>って、どうなっているの？</h1>
+      <p class="hero-copy">遠くにいる友だちと同じゲームで遊べるのは、コンピューターどうしが、小さな「お手紙」をものすごい速さで送り合っているからです。</p>
+    </header>
+
+    <section class="section" aria-labelledby="first-answer">
+      <h2 id="first-answer">まず、ひとことで言うと</h2>
+      <div class="lead-box">
+        オンライン対戦は、<strong>「自分がしたことを知らせる」</strong> → <strong>「みんなの今のようすを受け取る」</strong>、を何度もくり返しています。
+      </div>
+      <div class="plain-grid" style="margin-top:18px">
+        <div class="plain-panel">
+          <span class="big-icon" aria-hidden="true">✉️</span>
+          <h3>送るお手紙</h3>
+          <p>「右へ動いた」「鉄砲をうった」「戦車に乗った」など、自分がしたことを送ります。</p>
+        </div>
+        <div class="plain-panel game-server">
+          <span class="big-icon" aria-hidden="true">📬</span>
+          <h3>もらうお手紙</h3>
+          <p>「みんなはここにいる」「点数は3対2」など、ゲームの今のようすを受け取ります。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="step-title">
+      <h2 id="step-title">対戦が始まるまでを見てみよう</h2>
+      <div class="step-toolbar">
+        <div id="step-count" class="step-count">1 / 5</div>
+        <div class="step-dots" aria-label="説明のページ">
+          <button class="step-dot" type="button" data-step="0" aria-label="1ページ目" aria-current="step"></button>
+          <button class="step-dot" type="button" data-step="1" aria-label="2ページ目"></button>
+          <button class="step-dot" type="button" data-step="2" aria-label="3ページ目"></button>
+          <button class="step-dot" type="button" data-step="3" aria-label="4ページ目"></button>
+          <button class="step-dot" type="button" data-step="4" aria-label="5ページ目"></button>
+        </div>
+      </div>
+
+      <div class="network-stage">
+        <svg id="network-scene" class="scene-step-0" viewBox="0 0 900 410" role="img" aria-labelledby="scene-name scene-desc">
+          <title id="scene-name">2台のコンピューターとサーバーが通信する図</title>
+          <desc id="scene-desc">GitHub Pagesからゲームを受け取り、部屋を作り、参加し、入力と結果を送り合う5つの手順を示します。</desc>
+          <line class="road" x1="250" y1="285" x2="650" y2="285"></line>
+
+          <g class="download">
+            <line x1="450" y1="105" x2="230" y2="220" stroke="var(--purple)" stroke-width="5" stroke-linecap="round"></line>
+            <line x1="450" y1="105" x2="670" y2="220" stroke="var(--purple)" stroke-width="5" stroke-linecap="round"></line>
+            <circle cx="330" cy="167" r="16" fill="var(--purple-soft)" stroke="var(--purple)" stroke-width="2"></circle>
+            <text x="330" y="173" style="fill:var(--purple);font-size:13px">ゲーム</text>
+            <circle cx="570" cy="167" r="16" fill="var(--purple-soft)" stroke="var(--purple)" stroke-width="2"></circle>
+            <text x="570" y="173" style="fill:var(--purple);font-size:13px">ゲーム</text>
+          </g>
+
+          <g>
+            <rect class="node github-node" x="335" y="30" width="230" height="78" rx="22"></rect>
+            <text x="450" y="64" style="font-size:21px">GitHub Pages</text>
+            <text class="minor" x="450" y="88">ゲームを配る本だな</text>
+          </g>
+
+          <g>
+            <rect class="node" x="60" y="225" width="205" height="125" rx="24"></rect>
+            <text x="162" y="270" style="font-size:28px">💻 Aさん</text>
+            <text class="minor" x="162" y="303">ゲームをそうさ</text>
+            <text class="minor" x="162" y="328">部屋を作る人</text>
+          </g>
+
+          <g>
+            <rect class="node server-node" x="345" y="215" width="210" height="145" rx="26"></rect>
+            <text x="450" y="257" style="font-size:26px">🗼 サーバー</text>
+            <text class="minor" x="450" y="291">合言葉の部屋を管理</text>
+            <text class="minor" x="450" y="317">お手紙を受け取る</text>
+            <text class="minor" x="450" y="343">しんぱんもできる</text>
+          </g>
+
+          <g>
+            <rect class="node" x="635" y="225" width="205" height="125" rx="24"></rect>
+            <text x="737" y="270" style="font-size:28px">💻 Bさん</text>
+            <text class="minor" x="737" y="303">ゲームをそうさ</text>
+            <text class="minor" x="737" y="328">部屋に入る人</text>
+          </g>
+
+          <g class="packet room-packet" transform="translate(0 0)">
+            <rect x="240" y="247" width="92" height="42" rx="12"></rect>
+            <text x="286" y="274">部屋を作る</text>
+          </g>
+          <g class="packet join-packet" transform="translate(0 0)">
+            <rect x="568" y="247" width="92" height="42" rx="12"></rect>
+            <text x="614" y="274">部屋に入る</text>
+          </g>
+          <g class="packet input-left" transform="translate(0 35)">
+            <rect x="240" y="247" width="92" height="42" rx="12"></rect>
+            <text x="286" y="274">右へ動く</text>
+          </g>
+          <g class="packet input-right" transform="translate(0 35)">
+            <rect x="568" y="247" width="92" height="42" rx="12"></rect>
+            <text x="614" y="274">鉄砲をうつ</text>
+          </g>
+          <g class="packet result-left" transform="translate(0 72)">
+            <rect x="354" y="247" width="108" height="42" rx="12"></rect>
+            <text x="408" y="274">今のようす</text>
+          </g>
+          <g class="packet result-right" transform="translate(0 72)">
+            <rect x="438" y="247" width="108" height="42" rx="12"></rect>
+            <text x="492" y="274">今のようす</text>
+          </g>
+        </svg>
+      </div>
+
+      <div id="step-message" class="step-message" aria-live="polite">
+        <strong>① まず、ゲームを受け取る</strong>
+        <p>GitHub Pagesは「ゲームを置いておく本だな」です。AさんとBさんは、同じゲームを自分のコンピューターに読みこみます。</p>
+      </div>
+      <div class="step-actions">
+        <button id="prev-step" class="action" type="button" disabled>もどる</button>
+        <button id="next-step" class="action primary" type="button">つぎへ</button>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="two-questions">
+      <h2 id="two-questions">「どうつなぐ？」と「だれが決める？」</h2>
+      <p>この2つは、べつの問題です。道路としんぱんを分けて考えると、わかりやすくなります。</p>
+      <div class="concept-row" style="margin-top:18px">
+        <article class="concept-card">
+          <svg viewBox="0 0 360 170" role="img" aria-label="2台が直接つながる図">
+            <line class="mini-line" x1="100" y1="85" x2="260" y2="85"></line>
+            <circle class="mini-node" cx="75" cy="85" r="42"></circle>
+            <circle class="mini-node" cx="285" cy="85" r="42"></circle>
+            <text class="mini-label" x="75" y="91">Aさん</text>
+            <text class="mini-label" x="285" y="91">Bさん</text>
+            <text class="mini-label" x="180" y="60">ちょくせつ</text>
+          </svg>
+          <h3>つなぎ方① P2P</h3>
+          <p>友だちのコンピューターへ、できるだけ直接お手紙を送ります。近道ですが、家のネットの門が通れないことがあります。</p>
+        </article>
+        <div class="or">または</div>
+        <article class="concept-card referee">
+          <svg viewBox="0 0 360 170" role="img" aria-label="2台がサーバーを通してつながる図">
+            <line class="mini-line" x1="90" y1="85" x2="152" y2="85"></line>
+            <line class="mini-line" x1="208" y1="85" x2="270" y2="85"></line>
+            <circle class="mini-node" cx="65" cy="85" r="38"></circle>
+            <circle class="mini-server" cx="180" cy="85" r="43"></circle>
+            <circle class="mini-node" cx="295" cy="85" r="38"></circle>
+            <text class="mini-label" x="65" y="91">Aさん</text>
+            <text class="mini-label" x="180" y="91">サーバー</text>
+            <text class="mini-label" x="295" y="91">Bさん</text>
+          </svg>
+          <h3>つなぎ方② サーバーを通す</h3>
+          <p>まん中のサーバーが、お手紙の受けわたしをします。少し遠回りですが、つながりやすくなります。</p>
+        </article>
+      </div>
+
+      <div class="plain-grid" style="margin-top:18px">
+        <div class="plain-panel">
+          <h3>決め方① ホストがしんぱん</h3>
+          <p>1人のコンピューターが、「当たった」「点が入った」を決めます。その人がゲームを閉じると、対戦も止まりやすくなります。</p>
+        </div>
+        <div class="plain-panel game-server">
+          <h3>決め方② サーバーがしんぱん</h3>
+          <p>サーバーがみんなのそうさを見て、正しい結果を決めます。だれか1人がぬけても、試合を続けやすくなります。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="github-job">
+      <h2 id="github-job">GitHub Pagesだけでは、しんぱんはできない</h2>
+      <div class="plain-grid">
+        <div class="plain-panel">
+          <span class="big-icon" aria-hidden="true">📚</span>
+          <h3>GitHub Pagesの仕事</h3>
+          <p>ゲームの絵やプログラムを、みんなへ配ること。</p>
+          <p class="small-note">図書館が、同じルールブックをみんなへ貸すイメージです。</p>
+        </div>
+        <div class="plain-panel game-server">
+          <span class="big-icon" aria-hidden="true">🧑‍⚖️</span>
+          <h3>対戦サーバーの仕事</h3>
+          <p>試合中のお手紙を受け取り、部屋と結果を管理すること。</p>
+          <p class="small-note">運動場で、しんぱんが試合を見ているイメージです。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="turn-title">
+      <h2 id="turn-title">直接つながらないときは、どうするの？</h2>
+      <div class="detour">
+        <div>
+          <p>家や学校のネットには、知らない通信を止める「門」があります。P2Pの近道が通れないときは、<strong>TURN（ターン）</strong>という中つぎ所を使います。</p>
+          <p>TURNは、山道が通れないときに使う「う回路」のようなものです。</p>
+        </div>
+        <div class="detour-figure">
+          <svg viewBox="0 0 520 250" role="img" aria-labelledby="turn-name turn-desc">
+            <title id="turn-name">TURNを通るう回路</title>
+            <desc id="turn-desc">AさんとBさんの直接の道は門で止められ、TURN中継所を通る別の道でつながります。</desc>
+            <line x1="100" y1="185" x2="420" y2="185" stroke="var(--red)" stroke-width="7" stroke-linecap="round" stroke-dasharray="13 10"></line>
+            <text x="260" y="175" fill="var(--red)" text-anchor="middle" font-weight="500">門でストップ ×</text>
+            <path d="M100 165 C145 45, 375 45, 420 165" fill="none" stroke="var(--purple)" stroke-width="8" stroke-linecap="round"></path>
+            <circle cx="100" cy="185" r="47" fill="var(--surface)" stroke="var(--blue)" stroke-width="4"></circle>
+            <circle cx="420" cy="185" r="47" fill="var(--surface)" stroke="var(--blue)" stroke-width="4"></circle>
+            <rect x="205" y="35" width="110" height="64" rx="20" fill="var(--purple-soft)" stroke="var(--purple)" stroke-width="4"></rect>
+            <text x="100" y="192" fill="var(--ink)" text-anchor="middle" font-weight="500">Aさん</text>
+            <text x="420" y="192" fill="var(--ink)" text-anchor="middle" font-weight="500">Bさん</text>
+            <text x="260" y="75" fill="var(--ink)" text-anchor="middle" font-weight="500">TURN</text>
+            <text x="260" y="124" fill="var(--purple)" text-anchor="middle" font-weight="500">こちらへ、う回！</text>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="trouble-title">
+      <h2 id="trouble-title">通信がうまくいかない4つのわけ</h2>
+      <ul class="reason-list">
+        <li><strong>道が見つからない：</strong> ネットの門がP2Pを止めている。TURNなどのう回路が必要です。</li>
+        <li><strong>ホストがお休みする：</strong> ホストの画面を閉じたり、別のタブへ移ったりすると、ゲームの計算が遅くなることがあります。</li>
+        <li><strong>お手紙の順番がわからない：</strong> 番号がないと、新しい位置のあとに古い位置を使ってしまうことがあります。</li>
+        <li><strong>お手紙が届くまで時間がかかる：</strong> 遠い場所を通るほど、ボタンを押してから画面に出るまでの「ラグ」が大きくなります。</li>
+      </ul>
+    </section>
+
+    <section class="section" aria-labelledby="rules-title">
+      <h2 id="rules-title">じょうずな通信にする4つのくふう</h2>
+      <div class="rules">
+        <div class="rule"><strong>小さく送る</strong><br>必要な情報だけを、短いお手紙にします。</div>
+        <div class="rule"><strong>番号をつける</strong><br>新しいお手紙と古いお手紙を見分けます。</div>
+        <div class="rule"><strong>つなぎ直せる</strong><br>少し切れても、同じ部屋へもどれるようにします。</div>
+        <div class="rule"><strong>ひみつを守る</strong><br>パスワードや大切なカギを、ゲームの中へそのまま置きません。</div>
+      </div>
+    </section>
+
+    <section class="section summary" aria-labelledby="summary-title">
+      <h2 id="summary-title">これだけ覚えれば大丈夫</h2>
+      <div class="summary-line"><span class="summary-mark">1</span><div><strong>通信は、小さなお手紙のやりとり。</strong><br>自分のそうさを送り、みんなの今のようすを受け取ります。</div></div>
+      <div class="summary-line"><span class="summary-mark">2</span><div><strong>GitHub Pagesはゲームを配る本だな。</strong><br>試合中の部屋やしんぱんには、別の仕組みが必要です。</div></div>
+      <div class="summary-line"><span class="summary-mark">3</span><div><strong>安定させるなら、サーバーをしんぱんにする。</strong><br>みんなが入力を送り、サーバーが正しい結果を返す形がわかりやすくて公平です。</div></div>
+    </section>
+
+    <footer>War Zone オンライン対戦の通信説明資料</footer>
+  </main>
+
+  <script>
+    (() => {
+      const root = document.getElementById("kids-network-guide");
+      const scene = root.querySelector("#network-scene");
+      const count = root.querySelector("#step-count");
+      const message = root.querySelector("#step-message");
+      const prev = root.querySelector("#prev-step");
+      const next = root.querySelector("#next-step");
+      const dots = Array.from(root.querySelectorAll(".step-dot"));
+      const steps = [
+        {
+          title: "① まず、ゲームを受け取る",
+          body: "GitHub Pagesは『ゲームを置いておく本だな』です。AさんとBさんは、同じゲームを自分のコンピューターに読みこみます。"
+        },
+        {
+          title: "② Aさんが、部屋を作る",
+          body: "Aさんが『部屋を作る』ボタンを押すと、サーバーが合言葉を作ります。たとえば『AB12』のような短い部屋コードです。"
+        },
+        {
+          title: "③ Bさんが、同じ部屋に入る",
+          body: "Bさんが合言葉を入力します。サーバーは『同じ部屋のなかまですね』と確認して、AさんとBさんを同じ対戦へ入れます。"
+        },
+        {
+          title: "④ そうさを、小さなお手紙で送る",
+          body: "AさんとBさんは、『右へ動く』『鉄砲をうつ』などの入力をサーバーへ送ります。サーバーがしんぱんなら、当たりや点数もここで決めます。"
+        },
+        {
+          title: "⑤ 今のようすを、みんなへ返す",
+          body: "サーバーは『Aさんはここ、Bさんはここ、点数はこれ』という結果を返します。これを1秒に何度もくり返すので、同じ世界で動いて見えます。"
+        }
+      ];
+      let current = 0;
+
+      function renderStep() {
+        scene.setAttribute("class", `scene-step-${current}`);
+        count.textContent = `${current + 1} / ${steps.length}`;
+        message.innerHTML = `<strong>${steps[current].title}</strong><p>${steps[current].body}</p>`;
+        prev.disabled = current === 0;
+        next.disabled = current === steps.length - 1;
+        next.textContent = current === steps.length - 1 ? "ここまで！" : "つぎへ";
+        dots.forEach((dot, index) => {
+          if (index === current) dot.setAttribute("aria-current", "step");
+          else dot.removeAttribute("aria-current");
+        });
+      }
+
+      prev.addEventListener("click", () => {
+        current = Math.max(0, current - 1);
+        renderStep();
+      });
+      next.addEventListener("click", () => {
+        current = Math.min(steps.length - 1, current + 1);
+        renderStep();
+      });
+      dots.forEach((dot) => {
+        dot.addEventListener("click", () => {
+          current = Number(dot.dataset.step);
+          renderStep();
+        });
+      });
+      renderStep();
+    })();
+  </script>
+</body>
+</html>
