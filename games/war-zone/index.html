@@ -15,16 +15,21 @@
       <!-- HUD -->
       <div id="hud">
         <div class="hud-top">
-          <div class="score ally">
-            <span class="tag">味方</span>
+          <div class="score ally" title="味方軍の撃破数">
+            <span id="army-ally-name" class="tag">味方軍</span>
             <span id="score-ally" class="num">0</span>
           </div>
           <div class="objective">
-            <span id="objective-text">先に <b id="score-goal">30</b> キル</span>
+            <span id="objective-text"><b id="score-goal">敵基地を破壊</b></span>
+            <div class="base-hud">
+              <span class="base-hud-team ally">味方 <b id="base-ally-hp">2400</b></span>
+              <span class="base-hud-bar"><span id="base-ally-fill" class="ally"></span><span id="base-enemy-fill" class="enemy"></span></span>
+              <span class="base-hud-team enemy">敵 <b id="base-enemy-hp">2400</b></span>
+            </div>
           </div>
-          <div class="score enemy">
+          <div class="score enemy" title="敵軍の撃破数">
             <span id="score-enemy" class="num">0</span>
-            <span class="tag">敵</span>
+            <span id="army-enemy-name" class="tag">敵軍</span>
           </div>
         </div>
         <div class="hud-bottom">
@@ -33,6 +38,7 @@
               <span class="hp-bar"><span id="hp-fill" class="fill"></span></span>
               <span id="hp-text" class="hp-text">100</span>
             </div>
+            <div id="recovery-text" class="recovery-text">5秒間被弾なしで自動回復</div>
             <div class="xp-row">
               <span class="lv">Lv <b id="lv-text">1</b></span>
               <span class="xp-bar"><span id="xp-fill" class="fill"></span></span>
@@ -41,9 +47,17 @@
           <div class="weapon">
             <span id="weapon-name" class="wname">アサルトライフル</span>
             <span id="ammo-text" class="ammo">30 / 30</span>
+            <span id="grenade-text" class="grenade-count">💣 グレネード × 3</span>
+            <div class="equipment-status">
+              <div class="equip-row armor"><span class="equip-label">鎧</span><span class="equip-bar"><span id="armor-fill"></span></span><b id="armor-text">100</b></div>
+              <div class="equip-row shield"><span class="equip-label">盾</span><span class="equip-bar"><span id="shield-fill"></span></span><b id="shield-text">160</b></div>
+              <span id="shield-state" class="shield-state">Qを攻撃直前に押してパリィ</span>
+            </div>
           </div>
         </div>
       </div>
+
+      <div id="vehicle-hint" class="vehicle-hint hidden"></div>
 
       <!-- ミニマップ -->
       <canvas id="minimap" width="160" height="106"></canvas>
@@ -66,6 +80,9 @@
         <div id="stick-move" class="stick"><div class="knob"></div></div>
         <div id="stick-aim" class="stick"><div class="knob"></div></div>
         <div id="touch-btns">
+          <button id="t-grenade" class="tbtn action">💣 投げる</button>
+          <button id="t-tank" class="tbtn action">戦車</button>
+          <button id="t-shield" class="tbtn shield-btn">🛡 盾</button>
           <button id="t-reload" class="tbtn">リロード</button>
           <button id="t-swap" class="tbtn">武器</button>
         </div>
@@ -76,14 +93,20 @@
     <div id="menu" class="overlay">
       <div class="panel">
         <h1>WARZONE <span class="sub">2D ― 戦場</span></h1>
-        <p class="lead">見下ろし型の本格2D戦争シューター。銃を撃ち、敵を倒してレベルアップ。</p>
+        <p class="lead">見下ろし型の本格2D戦争シューター。基地と軍用犬を活用し、足音を察知して戦え。</p>
 
         <label class="field">
           <span>あなたの名前</span>
           <input id="name-input" type="text" maxlength="12" placeholder="Soldier" value="">
         </label>
 
+        <label class="field">
+          <span>あなたの軍の名前</span>
+          <input id="army-input" type="text" maxlength="16" placeholder="ブルー・フェニックス軍" value="">
+        </label>
+
         <div id="menu-main">
+          <p class="menu-wallet">所持金 <b id="menu-money">0</b> G</p>
           <button id="btn-solo" class="big-btn primary">ソロ戦（CPUと対戦）</button>
           <button id="btn-online" class="big-btn">オンライン対戦</button>
           <div class="diff-row">
@@ -113,6 +136,18 @@
       </div>
     </div>
 
+    <!-- ===== 一時停止 ===== -->
+    <div id="pause" class="overlay hidden">
+      <div class="panel pause-panel">
+        <p class="pause-kicker">MATCH PAUSED</p>
+        <h2>一時停止</h2>
+        <p class="lead">戦闘・復活・リロードなど、ゲーム内の時間は停止しています。</p>
+        <button id="btn-resume" class="big-btn primary">ゲームに戻る</button>
+        <button id="btn-pause-help" class="big-btn">🎮 操作方法</button>
+        <button id="btn-pause-quit" class="big-btn">メインメニューへ</button>
+      </div>
+    </div>
+
     <!-- ===== あそびかた ===== -->
     <div id="help" class="overlay hidden">
       <div class="panel">
@@ -125,7 +160,10 @@
               <li><b>マウス</b> … 照準</li>
               <li><b>左クリック長押し</b> … 射撃</li>
               <li><b>R</b> … リロード</li>
-              <li><b>1〜5</b> / ホイール … 武器切替</li>
+              <li><b>G</b> … グレネードを投げる</li>
+              <li><b>E</b> … 戦車に乗る / 降りる</li>
+              <li><b>Q</b> … 攻撃直前に押してパリィ / 長押しで防御</li>
+              <li><b>1〜6</b> / ホイール … 武器切替（6はナイフ）</li>
               <li><b>Shift</b> … ダッシュ</li>
             </ul>
           </div>
@@ -134,20 +172,33 @@
             <ul>
               <li><b>左スティック</b> … 移動</li>
               <li><b>右スティック</b> … 照準＆自動射撃</li>
+              <li><b>💣 投げる</b> … グレネード</li>
+              <li><b>戦車</b> … 近くの戦車に乗る / 降りる</li>
+              <li><b>🛡 盾</b> … 攻撃直前に押してパリィ / 長押しで防御</li>
               <li><b>リロード / 武器</b> … 右下ボタン</li>
             </ul>
           </div>
         </div>
-        <p class="help-rpg">敵を倒すと <b>EXP</b> 獲得。レベルアップで最大HPと火力が上昇し、全回復します。倒れても数秒で復活。先に目標キル数に到達したチームの勝ち。</p>
+        <p class="help-rpg">攻撃直前に盾を構えるとパリィ成功。銃弾は敵へ跳ね返し、ナイフや軍用犬の攻撃は相手をひるませます。パリィ受付は短く、成功後も約1秒の再使用待ちがあります。通常の盾防御は正面攻撃を軽減しますが、構え中は攻撃不可・移動速度低下。防弾鎧と盾はフィールド装備または基地で補給できます。視界外の足音はオレンジ色の波紋で察知できます。敵基地の耐久力を0にした軍の勝ちです。</p>
         <button id="btn-help-close" class="big-btn primary">とじる</button>
       </div>
     </div>
 
     <!-- ===== 結果 ===== -->
     <div id="result" class="overlay hidden">
-      <div class="panel">
+      <div class="panel result-panel">
         <h2 id="result-title">勝利！</h2>
+        <div id="reward-summary" class="reward-summary"></div>
         <div id="result-stats" class="result-stats"></div>
+        <section class="shop-panel" aria-labelledby="shop-title">
+          <div class="shop-head">
+            <h3 id="shop-title">補給ショップ</h3>
+            <span>所持金 <b id="shop-money">0</b> G</span>
+          </div>
+          <p class="shop-note">購入した強化は次の試合から適用されます。</p>
+          <div id="shop-items" class="shop-items"></div>
+          <p id="shop-message" class="shop-message" aria-live="polite"></p>
+        </section>
         <button id="btn-again" class="big-btn primary">もう一度</button>
         <button id="btn-tomenu" class="big-btn">メニューへ</button>
       </div>

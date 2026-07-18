@@ -68,9 +68,18 @@ html, body {
 .score .num { font-size: 22px; }
 .score.ally .num { color: var(--ally); }
 .score.enemy .num { color: var(--enemy); }
-.score .tag { font-size: 11px; opacity: 0.85; font-weight: 600; }
-.objective { font-size: 13px; opacity: 0.92; }
+.score .tag { font-size: 11px; opacity: 0.85; font-weight: 700; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.objective { min-width: 230px; font-size: 13px; opacity: 0.92; text-align: center; }
 .objective b { color: var(--you); }
+.base-hud { display: grid; grid-template-columns: auto minmax(90px, 1fr) auto; align-items: center; gap: 6px; margin-top: 3px; }
+.base-hud-team { font-size: 9px; font-weight: 800; white-space: nowrap; }
+.base-hud-team.ally { color: #9fc7ff; }
+.base-hud-team.enemy { color: #ffb0a6; }
+.base-hud-team b { color: inherit; font-variant-numeric: tabular-nums; }
+.base-hud-bar { position: relative; display: flex; gap: 2px; height: 5px; }
+.base-hud-bar > span { display: block; width: 50%; border-radius: 3px; transform-origin: center; }
+.base-hud-bar .ally { background: var(--ally); transform-origin: right center; }
+.base-hud-bar .enemy { background: var(--enemy); transform-origin: left center; }
 
 .hud-bottom {
   position: absolute;
@@ -97,6 +106,8 @@ html, body {
 .hp-bar .fill { position: absolute; inset: 0; width: 100%; background: linear-gradient(90deg, #46d36a, #8cf06a); transition: width 0.12s linear; }
 .xp-bar .fill { position: absolute; inset: 0; width: 0%; background: linear-gradient(90deg, #ffd23f, #ffa53f); transition: width 0.18s ease; }
 .hp-text { font-size: 13px; font-weight: 800; min-width: 30px; }
+.recovery-text { height: 12px; color: #8cf0a0; font-size: 10px; line-height: 12px; opacity: 0.78; }
+.recovery-text.waiting { color: #d9c88a; }
 .xp-row .lv { font-size: 12px; opacity: 0.92; min-width: 44px; }
 .xp-row .lv b { color: var(--you); }
 
@@ -112,6 +123,33 @@ html, body {
 .wname { display: block; font-size: 13px; opacity: 0.92; }
 .ammo { display: block; font-size: 26px; font-weight: 800; letter-spacing: 0.02em; }
 .ammo.low { color: var(--enemy); }
+.grenade-count { display: block; margin-top: 1px; font-size: 11px; color: #e8e1b2; font-weight: 700; }
+.equipment-status { width: 154px; margin-top: 5px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.13); }
+.equip-row { display: flex; align-items: center; gap: 5px; height: 14px; font-size: 9px; }
+.equip-label { width: 16px; font-weight: 800; text-align: left; }
+.equip-row b { width: 25px; text-align: right; font-size: 9px; }
+.equip-bar { position: relative; flex: 1; height: 5px; overflow: hidden; border-radius: 3px; background: rgba(255,255,255,0.14); }
+.equip-bar > span { position: absolute; inset: 0; transform-origin: left center; }
+.equip-row.armor .equip-bar > span { background: linear-gradient(90deg,#5596da,#a6cbf3); }
+.equip-row.shield .equip-bar > span { background: linear-gradient(90deg,#43c3c9,#9ef6ec); }
+.shield-state { display: block; margin-top: 2px; color: #9cece8; font-size: 9px; font-weight: 700; }
+.shield-state.raised { color: #fff2a0; }
+
+.vehicle-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 76px;
+  transform: translateX(-50%);
+  padding: 7px 13px;
+  border: 1px solid rgba(255, 210, 63, 0.45);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.68);
+  color: #ffe477;
+  font-size: 12px;
+  font-weight: 800;
+  pointer-events: none;
+}
+.vehicle-hint.hidden { display: none; }
 
 #minimap {
   position: absolute;
@@ -218,15 +256,15 @@ html, body {
 #touch-btns {
   position: absolute;
   right: 162px;
-  bottom: 30px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  bottom: 24px;
+  display: grid;
+  grid-template-columns: repeat(2, 72px);
+  gap: 8px;
   pointer-events: auto;
 }
 .tbtn {
-  width: 76px;
-  height: 44px;
+  width: 72px;
+  height: 40px;
   border-radius: 10px;
   border: none;
   background: rgba(0, 0, 0, 0.55);
@@ -234,9 +272,12 @@ html, body {
   font-size: 13px;
   font-weight: 700;
 }
+.tbtn.action { background: rgba(91, 111, 48, 0.78); border: 1px solid rgba(255, 226, 125, 0.26); }
+.tbtn.shield-btn { background: rgba(43, 105, 119, 0.8); border: 1px solid rgba(138, 238, 235, 0.32); }
+.tbtn.shield-btn.active { color: #202511; background: #a9efe5; }
 .tbtn:active { background: rgba(255, 255, 255, 0.25); }
 
-/* ===== オーバーレイ (メニュー / ヘルプ / 結果) ===== */
+/* ===== オーバーレイ (メニュー / 一時停止 / ヘルプ / 結果) ===== */
 .overlay {
   position: absolute;
   inset: 0;
@@ -269,8 +310,18 @@ html, body {
 .panel h1 .sub { display: block; font-size: 15px; letter-spacing: 0.3em; color: #b7c08a; margin-top: 2px; }
 .panel h2 { margin: 0 0 12px; font-size: 26px; }
 .panel h3 { margin: 0 0 6px; font-size: 15px; color: var(--you); }
+.pause-panel { width: min(380px, 94vw); }
+.pause-kicker {
+  margin: 0 0 5px;
+  color: var(--you);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+}
 .lead { font-size: 13px; opacity: 0.86; margin: 0 0 16px; line-height: 1.5; }
 .lead.small { font-size: 12px; }
+.menu-wallet { margin: 0 0 8px; color: #d8dfbd; font-size: 12px; }
+.menu-wallet b { color: var(--you); font-size: 15px; }
 
 .field { display: block; text-align: left; margin: 0 0 14px; }
 .field span { display: block; font-size: 12px; opacity: 0.8; margin-bottom: 4px; }
@@ -348,6 +399,25 @@ html, body {
 .result-stats { font-size: 14px; line-height: 1.9; margin-bottom: 16px; }
 .result-stats .row { display: flex; justify-content: space-between; padding: 0 6px; }
 .result-stats .row b { color: var(--you); }
+.result-panel { width: min(620px, 96vw); }
+.reward-summary { margin: -3px 0 10px; min-height: 20px; color: #d9e5b7; font-size: 13px; font-weight: 800; }
+.reward-summary.win { color: #ffe078; }
+.shop-panel { margin: 0 0 14px; padding: 12px; border: 1px solid rgba(255,255,255,0.13); border-radius: 12px; background: rgba(0,0,0,0.22); }
+.shop-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.shop-head h3 { margin: 0; }
+.shop-head span { color: #d8dfbd; font-size: 12px; font-weight: 700; }
+.shop-head span b { color: var(--you); font-size: 15px; }
+.shop-note { margin: 3px 0 10px; text-align: left; opacity: 0.62; font-size: 10px; }
+.shop-items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.shop-item { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 7px; padding: 8px; border-radius: 9px; background: rgba(255,255,255,0.055); text-align: left; }
+.shop-icon { font-size: 20px; text-align: center; }
+.shop-info { min-width: 0; }
+.shop-info b { display: block; color: #f2f2e8; font-size: 11px; }
+.shop-info span { display: block; margin-top: 1px; color: #c6c9b6; font-size: 9px; line-height: 1.25; }
+.shop-buy { min-width: 65px; padding: 7px 6px; border: 1px solid rgba(255,210,63,0.38); border-radius: 7px; background: rgba(255,210,63,0.1); color: #ffe279; font-size: 10px; font-weight: 900; cursor: pointer; }
+.shop-buy:disabled { border-color: rgba(255,255,255,0.1); color: #8e9182; cursor: default; }
+.shop-message { min-height: 14px; margin: 7px 0 0; color: #9fe78b; font-size: 10px; }
+.shop-message.err { color: #ff9a8d; }
 
 .hint { font-size: 11px; opacity: 0.55; margin: 14px 0 0; min-height: 14px; }
 
@@ -355,4 +425,12 @@ html, body {
   .panel h1 { font-size: 30px; }
   .hud-bottom { min-width: 180px; }
   #minimap { width: 116px; height: 77px; }
+  .score .tag { max-width: 72px; }
+  .hud-top { gap: 8px; padding: 5px 9px; }
+  .objective { min-width: 150px; }
+  .base-hud-team { font-size: 8px; }
+  .base-hud-team b { display: none; }
+  .shop-items { grid-template-columns: 1fr; }
+  #touch-btns { right: 154px; grid-template-columns: repeat(2, 64px); }
+  .tbtn { width: 64px; font-size: 11px; }
 }
