@@ -123,10 +123,17 @@
         <!-- オンラインのサブパネル -->
         <div id="menu-online" class="hidden">
           <p class="lead small">同じルームコードを共有すると、ブラウザ同士で対戦できます（P2P / サーバー不要）。</p>
-          <button id="btn-host" class="big-btn primary">ルームを作成（ホスト）</button>
-          <div class="join-row">
-            <input id="join-code" type="text" maxlength="8" placeholder="ルームコード" autocapitalize="characters">
-            <button id="btn-join" class="big-btn">参加</button>
+          <div id="online-actions">
+            <button id="btn-host" class="big-btn primary">ルームを作成（ホスト）</button>
+            <div class="join-row">
+              <input id="join-code" type="text" maxlength="8" placeholder="ルームコード" autocapitalize="characters">
+              <button id="btn-join" class="big-btn">参加</button>
+            </div>
+          </div>
+          <div id="room-lobby" class="room-lobby hidden" aria-live="polite">
+            <span class="room-lobby-label">ルームコード</span>
+            <strong id="room-code">----</strong>
+            <p id="lobby-status">参加者を待っています…</p>
           </div>
           <div id="net-status" class="net-status"></div>
           <button id="btn-back" class="link-btn">← もどる</button>

@@ -322,6 +322,7 @@ html, body {
 .lead.small { font-size: 12px; }
 .menu-wallet { margin: 0 0 8px; color: #d8dfbd; font-size: 12px; }
 .menu-wallet b { color: var(--you); font-size: 15px; }
+#menu-main.hidden, #menu-online.hidden, #online-actions.hidden, .room-lobby.hidden { display: none; }
 
 .field { display: block; text-align: left; margin: 0 0 14px; }
 .field span { display: block; font-size: 12px; opacity: 0.8; margin-bottom: 4px; }
@@ -386,6 +387,30 @@ html, body {
 .join-row { display: flex; gap: 8px; align-items: stretch; }
 .join-row input { flex: 1; text-transform: uppercase; letter-spacing: 0.15em; }
 .join-row .big-btn { width: auto; margin: 0; padding: 11px 18px; }
+.room-lobby {
+  margin: 4px 0 2px;
+  padding: 16px;
+  border: 1px solid rgba(255, 210, 63, 0.34);
+  border-radius: 12px;
+  background: rgba(255, 210, 63, 0.07);
+}
+.room-lobby-label {
+  display: block;
+  color: #c9cfb0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+.room-lobby strong {
+  display: block;
+  margin: 4px 0 8px;
+  color: var(--you);
+  font-size: 34px;
+  letter-spacing: 0.18em;
+  text-indent: 0.18em;
+}
+.room-lobby p { margin: 0; color: #dfe5ca; font-size: 13px; font-weight: 700; }
+.room-lobby.counting p { color: #ffe078; font-size: 16px; }
 .net-status { font-size: 12px; min-height: 18px; margin: 10px 0 0; color: #b7c08a; white-space: pre-line; }
 .net-status.err { color: var(--enemy); }
 .net-status.ok { color: #8cf06a; }

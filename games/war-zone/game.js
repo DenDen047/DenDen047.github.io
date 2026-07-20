@@ -34,6 +34,7 @@
   const MAX_PARTICLES = 800;
   const SNAP_HZ = 20;             // ホストの状態送信レート
   const INPUT_HZ = 30;            // クライアントの入力送信レート
+  const MATCH_COUNTDOWN_SECONDS = 3;
 
   const TEAM_ALLY = 0, TEAM_ENEMY = 1;
   const COL = {
@@ -147,6 +148,10 @@
     armyInput: document.getElementById("army-input"),
     netStatus: document.getElementById("net-status"),
     joinCode: document.getElementById("join-code"),
+    onlineActions: document.getElementById("online-actions"),
+    roomLobby: document.getElementById("room-lobby"),
+    roomCode: document.getElementById("room-code"),
+    lobbyStatus: document.getElementById("lobby-status"),
     touch: document.getElementById("touch"),
     btnMute: document.getElementById("btn-mute"),
   };
@@ -2907,6 +2912,9 @@
     const clientInputs = {}; // peerId -> input
     let roomCode = "";
     let pauseOwner = null;
+    let lobbyOpen = false;
+    let countdownTimer = null;
+    let joinRejected = false;
 
     function loadPeerJS() {
       return new Promise((resolve, reject) => {
@@ -2932,17 +2940,14 @@
       roomCode = genCode();
       peer = new window.Peer("wz-" + roomCode, { debug: 0 });
       peer.on("open", () => {
-        // ホストとしてマッチ開始(SP相当 + 後から参加可能)
         mode = "host";
-        startHostMatch();
-        netMsg("");
-        showRoomBanner();
+        prepareHostLobby();
       });
       peer.on("connection", (conn) => onClientConnect(conn));
       peer.on("error", (e) => netMsg("エラー: " + e.type, true));
     }
 
-    function startHostMatch() {
+    function prepareHostLobby() {
       G = emptyState();
       G.obstacles = genMap();
       G.goal = BASE_MAX_HP;
@@ -2952,12 +2957,90 @@
       spawnMedkits();
       el.scoreGoal.textContent = "敵基地を破壊";
       resize();
+      G.running = false; G.over = false;
+      lobbyOpen = true;
+      showLobby(roomCode, "参加者を待っています…");
+    }
+
+    function showLobby(code, status, counting = false) {
+      el.onlineActions.classList.add("hidden");
+      el.roomLobby.classList.remove("hidden");
+      el.roomLobby.classList.toggle("counting", counting);
+      el.roomCode.textContent = code || "----";
+      el.lobbyStatus.textContent = status;
+      netMsg("");
+    }
+
+    function resetLobbyView() {
+      el.onlineActions.classList.remove("hidden");
+      el.roomLobby.classList.add("hidden");
+      el.roomLobby.classList.remove("counting");
+      el.roomCode.textContent = "----";
+      el.lobbyStatus.textContent = "参加者を待っています…";
+    }
+
+    function sendInit(conn) {
+      const slot = G.soldiers.find((s) => s.controller === conn.peer);
+      const obstacles = G.obstacles.map((o) => ({
+        ...o,
+        hp: Number.isFinite(o.hp) ? o.hp : null,
+      }));
+      conn.send({
+        t: "init", obstacles, goal: G.goal, slotId: slot ? slot.id : -1,
+        armyNames: G.armyNames, you: { team: slot ? slot.team : 1 }, paused: matchPaused,
+      });
+    }
+
+    function announceCountdown(remaining) {
+      const status = `ゲーム開始まで ${remaining} 秒`;
+      showLobby(roomCode, status, true);
+      for (const c of conns) {
+        try { c.send({ t: "countdown", n: remaining }); } catch (e) {}
+      }
+    }
+
+    function beginCountdown() {
+      if (!lobbyOpen || countdownTimer || conns.length === 0) return;
+      let remaining = MATCH_COUNTDOWN_SECONDS;
+      announceCountdown(remaining);
+      countdownTimer = setInterval(() => {
+        remaining--;
+        if (remaining > 0) announceCountdown(remaining);
+        else startHostMatch();
+      }, 1000);
+    }
+
+    function cancelCountdown() {
+      clearInterval(countdownTimer);
+      countdownTimer = null;
+      if (lobbyOpen) showLobby(roomCode, "参加者を待っています…");
+    }
+
+    function startHostMatch() {
+      if (!lobbyOpen || conns.length === 0) {
+        cancelCountdown();
+        return;
+      }
+      clearInterval(countdownTimer);
+      countdownTimer = null;
+      lobbyOpen = false;
+
+      // 初期状態をここまで送らず、ホストと参加者の戦闘時間を同じにする。
+      for (const c of conns) {
+        try { sendInit(c); } catch (e) {}
+      }
       hideOverlays();
       G.running = true; G.over = false;
+      showRoomBanner();
     }
 
     function onClientConnect(conn) {
       conn.on("open", () => {
+        if (!lobbyOpen || (G && G.running)) {
+          try { conn.send({ t: "reject", reason: "このルームのゲームは開始済みです" }); } catch (e) {}
+          setTimeout(() => conn.close(), 250);
+          return;
+        }
         conns.push(conn);
         // ボットを1体クライアントに割り当て(チームバランス: 人数の少ない方=敵側優先で対戦に)
         const slot = pickSlotForClient();
@@ -2971,15 +3054,13 @@
             weaponWanted: -1, reloadEdge: false, grenadeEdge: false, interactEdge: false, parryEdge: false, shield: false,
           };
         }
-        const obstacles = G.obstacles.map((o) => ({
-          ...o,
-          hp: Number.isFinite(o.hp) ? o.hp : null,
-        }));
-        conn.send({
-          t: "init", obstacles, goal: G.goal, slotId: slot ? slot.id : -1,
-          armyNames: G.armyNames, you: { team: slot ? slot.team : 1 }, paused: matchPaused,
-        });
-        showRoomBanner();
+        if (!slot) {
+          conns = conns.filter((c) => c !== conn);
+          try { conn.send({ t: "reject", reason: "このルームは満員です" }); } catch (e) {}
+          setTimeout(() => conn.close(), 250);
+          return;
+        }
+        beginCountdown();
       });
       conn.on("data", (d) => {
         if (d.t === "hello") {
@@ -3009,6 +3090,7 @@
         applyNetworkPause(false);
         broadcastPause(false);
       }
+      if (lobbyOpen && conns.length === 0) cancelCountdown();
     }
 
     function pickSlotForClient() {
@@ -3024,19 +3106,21 @@
       netMsg("PeerJS を読み込み中…");
       await loadPeerJS();
       mode = "client";
+      roomCode = code.toUpperCase();
+      joinRejected = false;
       peer = new window.Peer({ debug: 0 });
       peer.on("open", () => {
         netMsg("ホストへ接続中…");
-        hostConn = peer.connect("wz-" + code.toUpperCase(), { reliable: false });
+        hostConn = peer.connect("wz-" + roomCode, { reliable: false });
         hostConn.on("open", () => {
+          showLobby(roomCode, "接続しました。開始を待っています…");
           hostConn.send({ t: "hello", name: playerName, army: armyName, upgrades: shopLevels });
-          netMsg("接続しました。開始を待っています…", false, true);
         });
         hostConn.on("data", (d) => onHostData(d));
-        hostConn.on("close", () => netMsg("ホストとの接続が切れました", true));
+        hostConn.on("close", () => { if (!joinRejected) netMsg("ホストとの接続が切れました", true); });
         hostConn.on("error", () => netMsg("接続エラー", true));
         setTimeout(() => {
-          if (!G || !hostConn || hostConn.open !== true) netMsg("ホストが見つかりません。コードを確認してください", true);
+          if (!joinRejected && (!hostConn || hostConn.open !== true)) netMsg("ホストが見つかりません。コードを確認してください", true);
         }, 8000);
       });
       peer.on("error", (e) => netMsg("ルームが見つかりません (" + e.type + ")", true));
@@ -3054,6 +3138,12 @@
         hideOverlays();
         G.running = true; G.over = false;
         if (d.paused) applyNetworkPause(true);
+      } else if (d.t === "countdown") {
+        showLobby(roomCode, `ゲーム開始まで ${d.n} 秒`, true);
+      } else if (d.t === "reject") {
+        joinRejected = true;
+        showLobby(roomCode, d.reason || "このルームには参加できません");
+        netMsg(d.reason || "このルームには参加できません", true);
       } else if (d.t === "snap") {
         applySnapshot(d);
       } else if (d.t === "pause") {
@@ -3233,11 +3323,17 @@
     }
 
     function shutdown() {
+      clearInterval(countdownTimer);
+      countdownTimer = null;
+      lobbyOpen = false;
       try { conns.forEach((c) => c.close()); } catch (e) {}
       try { hostConn && hostConn.close(); } catch (e) {}
       try { peer && peer.destroy(); } catch (e) {}
       peer = null; conns = []; hostConn = null;
+      roomCode = "";
       pauseOwner = null;
+      joinRejected = false;
+      resetLobbyView();
     }
 
     return { host, join, broadcastSnapshot, broadcastEnd, sendInput, setPause, shutdown, clientInputs, get code() { return roomCode; } };
@@ -3304,6 +3400,7 @@
       netMsg("");
     });
     document.getElementById("btn-back").addEventListener("click", () => {
+      Net.shutdown();
       el.menuOnline.classList.add("hidden");
       el.menuMain.classList.remove("hidden");
     });
