@@ -11,7 +11,8 @@
   //  定数
   // ============================================================
   const WORLD_W = 2600, WORLD_H = 1800;
-  const TEAM_SIZE = 4;            // 1チームあたりの人数 (4v4)
+  const TEAM_COUNT = 4;           // 4軍による多国籍戦
+  const TEAM_SIZE = 4;            // 1チームあたりの人数
   const BASE_MAX_HP = 2400;
   const BASE_CORE_R = 72;
   const WIN_REWARD = 300;
@@ -21,8 +22,24 @@
   const DOG_RESPAWN_MS = 7000;
   const TANK_R = 34;
   const TANK_RESPAWN_MS = 9000;
+  // 固定式の重機関銃座。中立で、先に取り付いた者が使える。
+  const TURRET_R = 22;
+  const TURRET_RESPAWN_MS = 20000;
+  const TURRET_MOUNT_R = 62;
+  const TURRET_DAMAGE_TAKEN = 0.5;   // 防盾のぶん射手の被弾を軽減
+  const TURRET_GUN = { interval: 95, dmg: 21, speed: 1500, range: 900, spread: 0.03 };
   const GRENADE_FUSE_MS = 1500;
   const GRENADE_RADIUS = 145;
+  const MINE_ARM_MS = 1100;       // 設置してから作動するまで(自爆防止)
+  const MINE_TRIGGER_R = 30;      // 踏んだ判定の半径
+  const MINE_BLAST_R = 140;
+  const MINE_DAMAGE = 155;
+  const MINE_SPOT_R = 95;         // 敵がこの距離まで近づくと見える
+  const MINE_PLACE_COOLDOWN = 600;
+  const WIRE_R = 52;              // 有刺鉄線の効果半径
+  const WIRE_DPS = 14;            // 中にいる敵への毎秒ダメージ
+  const WIRE_SLOW = 0.42;         // 中にいる敵の移動速度倍率
+  const WIRE_PLACE_COOLDOWN = 900;
   const AUTO_HEAL_DELAY_MS = 5000;
   const AUTO_HEAL_PER_SEC = 5;
   const MEDKIT_HEAL = 45;
@@ -30,25 +47,61 @@
   const BASE_REPAIR_PER_SEC = 7;
   const PLAYER_VISION_R = 350;
   const TANK_VISION_R = 465;
+  const DAY_LENGTH_MS = 150000;   // 1日 = 2分30秒
+  const NIGHT_VISION_MUL = 0.55;  // 真夜中の視界倍率
+  const DAY_VISION_MUL = 1.15;    // 真昼の視界倍率
   const MAX_BULLETS = 600;
   const MAX_PARTICLES = 800;
   const SNAP_HZ = 20;             // ホストの状態送信レート
   const INPUT_HZ = 30;            // クライアントの入力送信レート
   const MATCH_COUNTDOWN_SECONDS = 3;
 
-  const TEAM_ALLY = 0, TEAM_ENEMY = 1;
-  const COL = {
-    allyUniform: "#2f5fa6", allyAccent: "#7fb0ff",
-    enemyUniform: "#9e3528", enemyAccent: "#ff8a6a",
-    youUniform: "#7a6420", youAccent: "#ffd23f",
-  };
+  // 4軍の見た目と既定名。配列の添字がそのままチーム番号。
+  const TEAM_DEFS = [
+    {
+      key: "blue", name: "ブルー・フェニックス軍", short: "ブルー軍",
+      uniform: "#2f5fa6", accent: "#7fb0ff", flag: "#4ea3ff", text: "#bfe4ff",
+      baseFill: "rgba(55,115,155,0.22)", baseStroke: "rgba(105,190,235,0.62)",
+      coreDark: "#385b64", coreLight: "#527c82",
+      dogHarness: "#4f9ed7", dogFur: "#554536", dogBar: "#55c879",
+      tankBody: "#365c66", tankLight: "#588a91", tankBar: "#65c2d0",
+    },
+    {
+      key: "red", name: "レッド・コブラ軍", short: "レッド軍",
+      uniform: "#9e3528", accent: "#ff8a6a", flag: "#ff5a4e", text: "#ffd0c8",
+      baseFill: "rgba(150,65,48,0.22)", baseStroke: "rgba(245,110,82,0.62)",
+      coreDark: "#70423a", coreLight: "#925648",
+      dogHarness: "#d85445", dogFur: "#49362f", dogBar: "#ee6a55",
+      tankBody: "#713e35", tankLight: "#9a5b48", tankBar: "#ef745e",
+    },
+    {
+      key: "green", name: "グリーン・ジャッカル軍", short: "グリーン軍",
+      uniform: "#2f7a45", accent: "#7fe6a4", flag: "#46d36a", text: "#c8ffdb",
+      baseFill: "rgba(48,125,72,0.22)", baseStroke: "rgba(96,225,140,0.62)",
+      coreDark: "#2f5c40", coreLight: "#417f57",
+      dogHarness: "#48b96e", dogFur: "#3d4a33", dogBar: "#5fd189",
+      tankBody: "#32603f", tankLight: "#4f8a5d", tankBar: "#62d08a",
+    },
+    {
+      key: "violet", name: "バイオレット・ライノ軍", short: "バイオレット軍",
+      uniform: "#6a3f9e", accent: "#c79cff", flag: "#a76bff", text: "#e6d5ff",
+      baseFill: "rgba(103,63,158,0.22)", baseStroke: "rgba(183,138,255,0.62)",
+      coreDark: "#4a3568", coreLight: "#6a4d90",
+      dogHarness: "#9a6ce0", dogFur: "#453a4d", dogBar: "#b78cf0",
+      tankBody: "#553a76", tankLight: "#7a5aa0", tankBar: "#b48cef",
+    },
+  ];
+  // 自分だけは金色でハイライトする(チーム色とは別枠)。
+  const YOU_UNIFORM = "#7a6420", YOU_ACCENT = "#ffd23f";
+
+  const TEAMS = TEAM_DEFS.map((_, i) => i);
+  const teamDef = (team) => TEAM_DEFS[team] || TEAM_DEFS[0];
 
   const BOT_NAMES = [
     "Cobra", "Viper", "Ghost", "Hawk", "Raptor", "Bishop", "Reaper", "Onyx",
     "Falcon", "Wolf", "Striker", "Ranger", "Nomad", "Echo", "Zero", "Blaze",
     "Saber", "Frost", "Joker", "Maverick", "Titan", "Specter", "Diesel", "Kilo",
   ];
-  const ENEMY_ARMY_NAMES = ["レッド・コブラ軍", "アイアン・ウルフ軍", "クリムゾン軍団", "ブラック・ホーク軍"];
 
   const SHOP_ITEMS = [
     { key: "health", icon: "❤", name: "強化体力", desc: "最大HP +10", max: 5, baseCost: 120, step: 80 },
@@ -56,6 +109,7 @@
     { key: "shield", icon: "🛡", name: "強化シールド", desc: "盾耐久 +20", max: 5, baseCost: 130, step: 90 },
     { key: "damage", icon: "🎯", name: "武器改修", desc: "武器ダメージ +5%", max: 5, baseCost: 180, step: 110 },
     { key: "grenade", icon: "💣", name: "弾薬ポーチ", desc: "グレネード所持数 +1", max: 3, baseCost: 220, step: 160 },
+    { key: "mine", icon: "🧨", name: "地雷ポーチ", desc: "地雷の所持数 +1", max: 3, baseCost: 240, step: 170 },
   ];
 
   const WEAPONS = [
@@ -64,9 +118,62 @@
     { key: "rifle",   name: "アサルトライフル", dmg: 26, interval: 128, mag: 30, reload: 1650, spread: 0.05,  pellets: 1, auto: true,  speed: 1320, range: 780,  len: 18, kick: 2.0, snd: "rifle" },
     { key: "shotgun", name: "ショットガン",     dmg: 11, interval: 680, mag: 6,  reload: 2150, spread: 0.34,  pellets: 8, auto: false, speed: 940,  range: 360,  len: 16, kick: 5.5, snd: "shotgun" },
     { key: "sniper",  name: "スナイパー",       dmg: 96, interval: 1120, mag: 5, reload: 2350, spread: 0.006, pellets: 1, auto: false, speed: 2200, range: 1250, len: 26, kick: 6.0, pierce: 2, snd: "sniper" },
-    { key: "knife",   name: "コンバットナイフ", dmg: 58, interval: 430, mag: 1, reload: 0, spread: 0, pellets: 1, auto: false, speed: 0, range: 68, len: 15, kick: 3.0, melee: true, snd: "melee" },
+    // ここから近接武器。arc = 攻撃が届く左右の角度、style = 見た目。
+    { key: "knife",   name: "コンバットナイフ", dmg: 58, interval: 430, mag: 1, reload: 0, spread: 0, pellets: 1, auto: false, speed: 0, range: 68, len: 15, kick: 3.0, melee: true, arc: 0.82, style: "knife",   snd: "melee" },
+    { key: "bayonet", name: "銃剣",             dmg: 42, interval: 290, mag: 1, reload: 0, spread: 0, pellets: 1, auto: true,  speed: 0, range: 96, len: 24, kick: 2.2, melee: true, arc: 0.48, style: "bayonet", snd: "melee" },
+    { key: "hatchet", name: "戦斧",             dmg: 80, interval: 660, mag: 1, reload: 0, spread: 0, pellets: 1, auto: false, speed: 0, range: 64, len: 17, kick: 4.4, melee: true, arc: 1.05, style: "hatchet", snd: "melee" },
+    { key: "shovel",  name: "軍用シャベル",     dmg: 98, interval: 900, mag: 1, reload: 0, spread: 0, pellets: 1, auto: false, speed: 0, range: 80, len: 19, kick: 5.6, melee: true, arc: 1.35, style: "shovel",  snd: "melee" },
+    { key: "katana",  name: "打刀",             dmg: 86, interval: 470, mag: 1, reload: 0, spread: 0, pellets: 1, auto: false, speed: 0, range: 106, len: 30, kick: 3.8, melee: true, arc: 1.2, style: "katana", snd: "melee" },
+    // ロケットランチャー: 弾速が遅く避けられるが、着弾すると戦車・基地に大ダメージ
+    { key: "rocket",  name: "ロケットランチャー", dmg: 130, interval: 1800, mag: 1, reload: 2600, spread: 0.02, pellets: 1, auto: false, speed: 640, range: 920, len: 34, kick: 7.0, rocket: true, snd: "sniper" },
   ];
   const WKEY = {}; WEAPONS.forEach((w, i) => (WKEY[w.key] = i));
+
+  // ============================================================
+  //  キャラクター(兵科)
+  //  倍率はすべて基準値に対する掛け算。1 = 標準。
+  // ============================================================
+  const CLASSES = [
+    {
+      key: "soldier", name: "兵士", icon: "🎖️",
+      desc: "アサルトライフル・ハンドガン・銃剣。撃ち合いに強い標準型。",
+      hpBonus: 0, speedMul: 1, gunMul: 1, meleeMul: 1,
+      grenades: 3, mines: 2, wires: 0,
+      parryWindowMul: 1, parryCooldownMul: 1,
+      mineArmMul: 1, mineBlastMul: 1, mineStealthMul: 1, seesEnemyMines: false,
+      weapons: ["rifle", "pistol", "bayonet"],
+    },
+    {
+      key: "samurai", name: "侍", icon: "⚔️",
+      desc: "打刀・戦斧・ナイフの近接専用。銃は一切持てないが、体力と足が速くパリィが得意。",
+      hpBonus: 30, speedMul: 1.18, gunMul: 0.72, meleeMul: 1.4,
+      grenades: 2, mines: 1, wires: 0,
+      parryWindowMul: 1.7, parryCooldownMul: 0.6,
+      mineArmMul: 1, mineBlastMul: 1, mineStealthMul: 1, seesEnemyMines: false,
+      weapons: ["katana", "hatchet", "knife"],
+    },
+    {
+      key: "trapper", name: "罠師", icon: "🪤",
+      desc: "サブマシンガン・ショットガン・シャベル。地雷5個は敵から見えにくく、有刺鉄線(Cキー)も張れる。体力は低め。",
+      hpBonus: -12, speedMul: 0.97, gunMul: 0.92, meleeMul: 0.9,
+      grenades: 2, mines: 5, wires: 3,
+      parryWindowMul: 1, parryCooldownMul: 1,
+      mineArmMul: 0.55, mineBlastMul: 1.25, mineStealthMul: 0.5, seesEnemyMines: true,
+      weapons: ["smg", "shotgun", "shovel"],
+    },
+    {
+      key: "heavy", name: "重火器兵", icon: "🚀",
+      desc: "ロケットランチャー・スナイパー・ハンドガン。戦車と基地に滅法強いが、足が遅く接近戦は苦手。",
+      hpBonus: 10, speedMul: 0.86, gunMul: 1, meleeMul: 0.7,
+      grenades: 3, mines: 1, wires: 0,
+      parryWindowMul: 0.8, parryCooldownMul: 1.2,
+      mineArmMul: 1, mineBlastMul: 1, mineStealthMul: 1, seesEnemyMines: false,
+      weapons: ["rocket", "sniper", "pistol"],
+    },
+  ];
+  const CLASS_BY_KEY = {};
+  CLASSES.forEach((c) => (CLASS_BY_KEY[c.key] = c));
+  const classDef = (key) => CLASS_BY_KEY[key] || CLASSES[0];
 
   const DIFF = {
     easy:   { aimErr: 0.17, react: 430, fireChance: 0.68, hpMul: 0.85, dmgMul: 0.85, sniperChance: 0.05 },
@@ -90,11 +197,37 @@
     return a + d * t;
   };
 
+  // 4隅に1つずつ。heading はマップ中央を向く方向。
+  const BASE_SPOTS = [
+    { x: 220, y: WORLD_H - 220, heading: -Math.PI / 4 },        // 左下
+    { x: WORLD_W - 220, y: 220, heading: Math.PI * 3 / 4 },     // 右上
+    { x: 220, y: 220, heading: Math.PI / 4 },                   // 左上
+    { x: WORLD_W - 220, y: WORLD_H - 220, heading: -Math.PI * 3 / 4 }, // 右下
+  ];
+
   function makeBases() {
-    return [
-      { kind: "base", team: TEAM_ALLY, x: 220, y: WORLD_H - 220, r: 185, heading: -Math.PI / 4, hp: BASE_MAX_HP, maxHp: BASE_MAX_HP, hitFlash: 0 },
-      { kind: "base", team: TEAM_ENEMY, x: WORLD_W - 220, y: 220, r: 185, heading: Math.PI * 3 / 4, hp: BASE_MAX_HP, maxHp: BASE_MAX_HP, hitFlash: 0 },
-    ];
+    return TEAMS.map((team) => ({
+      kind: "base", team,
+      x: BASE_SPOTS[team].x, y: BASE_SPOTS[team].y, r: 185, heading: BASE_SPOTS[team].heading,
+      hp: BASE_MAX_HP, maxHp: BASE_MAX_HP, hitFlash: 0,
+    }));
+  }
+
+  // 基地が健在な軍だけが復活でき、勝利できる。
+  function teamAlive(team) {
+    const base = G.bases[team];
+    return !!base && base.hp > 0;
+  }
+
+  // 敵チーム(= 自分以外)の、まだ健在な基地のうち一番近いもの。
+  function nearestEnemyBase(x, y, team) {
+    let best = null, bestD = Infinity;
+    for (const base of G.bases) {
+      if (base.team === team || base.hp <= 0) continue;
+      const d = dist2(x, y, base.x, base.y);
+      if (d < bestD) { bestD = d; best = base; }
+    }
+    return best;
   }
 
   // ============================================================
@@ -105,13 +238,9 @@
   const mini = document.getElementById("minimap");
   const mctx = mini.getContext("2d");
   const el = {
-    scoreAlly: document.getElementById("score-ally"),
-    scoreEnemy: document.getElementById("score-enemy"),
+    teamBoard: document.getElementById("team-board"),
     scoreGoal: document.getElementById("score-goal"),
-    baseAllyHp: document.getElementById("base-ally-hp"),
-    baseEnemyHp: document.getElementById("base-enemy-hp"),
-    baseAllyFill: document.getElementById("base-ally-fill"),
-    baseEnemyFill: document.getElementById("base-enemy-fill"),
+    daytime: document.getElementById("daytime"),
     hpFill: document.getElementById("hp-fill"),
     hpText: document.getElementById("hp-text"),
     recovery: document.getElementById("recovery-text"),
@@ -126,8 +255,6 @@
     shieldText: document.getElementById("shield-text"),
     shieldState: document.getElementById("shield-state"),
     vehicleHint: document.getElementById("vehicle-hint"),
-    armyAlly: document.getElementById("army-ally-name"),
-    armyEnemy: document.getElementById("army-enemy-name"),
     killfeed: document.getElementById("killfeed"),
     levelup: document.getElementById("levelup"),
     menu: document.getElementById("menu"),
@@ -135,6 +262,8 @@
     menuOnline: document.getElementById("menu-online"),
     menuHint: document.getElementById("menu-hint"),
     pause: document.getElementById("pause"),
+    eliminated: document.getElementById("eliminated"),
+    eliminatedDetail: document.getElementById("eliminated-detail"),
     help: document.getElementById("help"),
     result: document.getElementById("result"),
     resultTitle: document.getElementById("result-title"),
@@ -152,6 +281,10 @@
     roomLobby: document.getElementById("room-lobby"),
     roomCode: document.getElementById("room-code"),
     lobbyStatus: document.getElementById("lobby-status"),
+    lobbyRoster: document.getElementById("lobby-roster"),
+    lobbyStart: document.getElementById("btn-lobby-start"),
+    teamSeg: document.getElementById("team-seg"),
+    classSeg: document.getElementById("class-seg"),
     touch: document.getElementById("touch"),
     btnMute: document.getElementById("btn-mute"),
   };
@@ -273,10 +406,84 @@
       g.gain.setValueAtTime(0.24, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
       o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.16);
     }
+    // ---- BGM ----
+    // 効果音より控えめの音量で流す。OGG が使えるブラウザなら継ぎ目なくループする
+    // (MP3 はエンコーダの余白ぶん、ループ点にごく短い間が入る)。
+    const BGM_VOLUME = 0.34;
+    let bgmBuffer = null, bgmSource = null, bgmGain = null;
+    let bgmLoading = false, bgmWanted = false;
+    let bgmStartedAt = 0, bgmOffset = 0;
+
+    function bgmUrl() {
+      const probe = document.createElement("audio");
+      return probe.canPlayType && probe.canPlayType('audio/ogg; codecs="vorbis"')
+        ? "audio/bgm-battle.ogg"
+        : "audio/bgm-battle.mp3";
+    }
+
+    function loadBgm() {
+      if (bgmBuffer || bgmLoading || !actx) return;
+      bgmLoading = true;
+      fetch(bgmUrl())
+        .then((res) => res.arrayBuffer())
+        .then((data) => actx.decodeAudioData(data))
+        .then((buf) => {
+          bgmBuffer = buf;
+          bgmLoading = false;
+          if (bgmWanted) playBgm();
+        })
+        .catch(() => { bgmLoading = false; });   // 音楽が無くてもゲームは続行する
+    }
+
+    function playBgm() {
+      if (!actx || !bgmBuffer || bgmSource) return;
+      bgmGain = actx.createGain();
+      bgmGain.gain.value = muted ? 0 : BGM_VOLUME;
+      bgmGain.connect(master);
+      bgmSource = actx.createBufferSource();
+      bgmSource.buffer = bgmBuffer;
+      bgmSource.loop = true;
+      bgmSource.connect(bgmGain);
+      bgmSource.start(0, bgmOffset % bgmBuffer.duration);
+      bgmStartedAt = actx.currentTime;
+    }
+
+    // 再生位置を覚えたまま止める。再開時に続きから鳴らすため。
+    function haltBgm(keepPosition) {
+      if (bgmSource) {
+        if (keepPosition && bgmBuffer) {
+          bgmOffset = (bgmOffset + (actx.currentTime - bgmStartedAt)) % bgmBuffer.duration;
+        }
+        try { bgmSource.stop(); } catch (e) {}
+        try { bgmSource.disconnect(); } catch (e) {}
+      }
+      bgmSource = null;
+      bgmGain = null;
+      if (!keepPosition) bgmOffset = 0;
+    }
+
     return {
-      unlock() { ensure(); if (actx && actx.state === "suspended") actx.resume(); },
+      unlock() {
+        ensure();
+        if (actx && actx.state === "suspended") actx.resume();
+        loadBgm();   // 最初の操作でダウンロードだけ先に済ませておく
+      },
       shot, boom, hurt, levelup, heal, melee, footstep, parry,
-      toggle() { muted = !muted; return muted; },
+      startBgm() {
+        bgmWanted = true;
+        ensure();
+        if (actx && actx.state === "suspended") actx.resume();
+        if (!bgmBuffer) { loadBgm(); return; }
+        playBgm();
+      },
+      stopBgm() { bgmWanted = false; haltBgm(false); },
+      pauseBgm() { if (bgmWanted) haltBgm(true); },
+      resumeBgm() { if (bgmWanted) playBgm(); },
+      toggle() {
+        muted = !muted;
+        if (bgmGain) bgmGain.gain.value = muted ? 0 : BGM_VOLUME;
+        return muted;
+      },
       get muted() { return muted; },
     };
   })();
@@ -285,6 +492,7 @@
   //  入力
   // ============================================================
   const isTouch = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
+  if (isTouch) document.body.classList.add("touch-ui");
   const keys = {};
   const mouse = { x: 0, y: 0, down: false, over: false };
   const stickMove = { x: 0, y: 0, active: false };
@@ -297,8 +505,15 @@
     if (e.key === "r" || e.key === "R") localInput.reloadEdge = true;
     if (!e.repeat && (e.key === "g" || e.key === "G")) localInput.grenadeEdge = true;
     if (!e.repeat && (e.key === "e" || e.key === "E")) localInput.interactEdge = true;
+    if (!e.repeat && (e.key === "f" || e.key === "F")) localInput.mineEdge = true;
+    if (!e.repeat && (e.key === "c" || e.key === "C")) localInput.wireEdge = true;
     if (!e.repeat && (e.key === "q" || e.key === "Q")) localInput.parryEdge = true;
-    if (e.key >= "1" && e.key <= "6") localInput.weaponWanted = parseInt(e.key, 10) - 1;
+    // 数字キーは「所持している武器の何番目か」。全武器の通し番号ではない。
+    if (e.key >= "1" && e.key <= "9") {
+      const me = localSoldier();
+      const slot = parseInt(e.key, 10) - 1;
+      if (me && me.loadout && slot < me.loadout.length) localInput.weaponWanted = me.loadout[slot];
+    }
     if ([" ", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) e.preventDefault();
   });
   window.addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
@@ -316,11 +531,8 @@
   canvas.addEventListener("wheel", (e) => {
     if (!G || !G.running) return;
     e.preventDefault();
-    const me = localSoldier();
-    if (!me) return;
-    let w = me.weapon + (e.deltaY > 0 ? 1 : -1);
-    w = (w + WEAPONS.length) % WEAPONS.length;
-    localInput.weaponWanted = w;
+    const next = cycleWeapon(localSoldier(), e.deltaY > 0 ? 1 : -1);
+    if (next != null) localInput.weaponWanted = next;
   }, { passive: false });
 
   // タッチ用スティック
@@ -361,6 +573,9 @@
   bindStick(document.getElementById("stick-aim"), stickAim);
   document.getElementById("t-reload").addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.reloadEdge = true; });
   document.getElementById("t-grenade").addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.grenadeEdge = true; });
+  document.getElementById("t-mine").addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.mineEdge = true; });
+  const wireBtn = document.getElementById("t-wire");
+  wireBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.wireEdge = true; });
   document.getElementById("t-tank").addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.interactEdge = true; });
   const touchShieldBtn = document.getElementById("t-shield");
   touchShieldBtn.addEventListener("pointerdown", (e) => {
@@ -374,14 +589,14 @@
   touchShieldBtn.addEventListener("pointercancel", releaseTouchShield);
   document.getElementById("t-swap").addEventListener("pointerdown", (e) => {
     e.preventDefault();
-    const me = localSoldier();
-    if (me) localInput.weaponWanted = (me.weapon + 1) % WEAPONS.length;
+    const next = cycleWeapon(localSoldier(), 1);
+    if (next != null) localInput.weaponWanted = next;
   });
 
   // ローカルプレイヤーの入力(SP=自分のsoldierに適用 / client=送信)
   const localInput = {
     mvx: 0, mvy: 0, aimx: 1, aimy: 0, shoot: false, dash: false,
-    reloadEdge: false, grenadeEdge: false, interactEdge: false, parryEdge: false,
+    reloadEdge: false, grenadeEdge: false, interactEdge: false, parryEdge: false, mineEdge: false, wireEdge: false,
     weaponWanted: -1, aimAngle: 0, shield: false,
   };
 
@@ -403,20 +618,48 @@
     if (stickAim.active) {
       const am = Math.hypot(stickAim.x, stickAim.y);
       if (am > 0.25) {
-        localInput.aimAngle = Math.atan2(stickAim.y, stickAim.x);
+        localInput.aimAngle = assistAim(me, Math.atan2(stickAim.y, stickAim.x));
         shoot = true;
       }
-    } else if (me && mouse.over) {
+      // デッドゾーン内はスティックを倒し切っていないだけ → 直前の向きを保つ
+    } else if (!isTouch && me && mouse.over) {
       const sx = me.x - camX, sy = me.y - camY;
       localInput.aimAngle = Math.atan2(mouse.y - sy, mouse.x - sx);
       shoot = mouse.down;
-    } else if (me) {
-      // フォールバック: 移動方向を向く
-      if (mm > 0.05) localInput.aimAngle = Math.atan2(mvy, mvx);
+    } else if (!isTouch && me && mm > 0.05) {
+      // PCでマウスが画面外のときのフォールバック: 移動方向を向く
+      localInput.aimAngle = Math.atan2(mvy, mvx);
     }
+    // タッチ操作では上のどれにも当たらない = 最後に向いた方向をそのまま維持する
     localInput.aimx = Math.cos(localInput.aimAngle);
     localInput.aimy = Math.sin(localInput.aimAngle);
     localInput.shoot = shoot;
+  }
+
+  // タッチ操作の照準補助。狙った方向のすぐ近くに敵が居れば少しだけ吸い付く。
+  const AIM_ASSIST_CONE = 0.30;   // 約17°以内
+  const AIM_ASSIST_PULL = 0.55;   // どれだけ引き寄せるか
+  function assistAim(me, angle) {
+    if (!isTouch || !me || me.dead) return angle;
+    const range = me.vehicleId >= 0 ? 900 : WEAPONS[me.weapon].range;
+    let bestAngle = null, bestGap = AIM_ASSIST_CONE;
+    const consider = (e, radius) => {
+      const d2 = dist2(me.x, me.y, e.x, e.y);
+      if (d2 > (range + radius) ** 2) return;
+      if (!lineClear(me.x, me.y, e.x, e.y)) return;
+      const a = Math.atan2(e.y - me.y, e.x - me.x);
+      const gap = angleGap(angle, a);
+      if (gap < bestGap) { bestGap = gap; bestAngle = a; }
+    };
+    for (const e of G.soldiers) {
+      if (e.dead || e.vehicleId >= 0 || e.team === me.team) continue;
+      consider(e, SOLDIER_R);
+    }
+    for (const e of G.tanks) {
+      if (e.dead || e.team === me.team) continue;
+      consider(e, TANK_R);
+    }
+    return bestAngle == null ? angle : angLerp(angle, bestAngle, AIM_ASSIST_PULL);
   }
 
   // ============================================================
@@ -428,8 +671,15 @@
   let mode = "sp";          // 'sp' | 'host' | 'client'
   let difficulty = "normal";
   let playerName = "Soldier";
-  let armyName = "ブルー・フェニックス軍";
+  let playerTeam = 0;
+  let playerClass = "soldier";
+  let armyName = TEAM_DEFS[0].name;
   let matchPaused = false;
+  // 自軍が全滅したときの「観戦するか、やめるか」の状態
+  let eliminationPrompted = false;
+  let spectating = false;
+  let spectateTargetId = -1;
+  let spectateSwitchAt = 0;
   let pauseStartedAt = 0;
   let helpOrigin = "menu";
   let money = 0;
@@ -441,12 +691,15 @@
       dogs: [],
       bullets: [],
       grenades: [],
+      mines: [],
+      wires: [],
       tanks: [],
+      turrets: [],
       particles: [],
       pickups: [],
       obstacles: [],
       bases: makeBases(),
-      score: [0, 0],
+      score: TEAMS.map(() => 0),
       goal: BASE_MAX_HP,
       running: false,
       over: false,
@@ -454,7 +707,8 @@
       nextId: 1,
       killfeed: [],
       soundPings: [],
-      armyNames: [armyName, pick(ENEMY_ARMY_NAMES)],
+      clock: DAY_START_CLOCK,
+      armyNames: TEAM_DEFS.map((def, team) => (team === playerTeam ? armyName : def.name)),
       rewardClaimed: false,
     };
   }
@@ -462,6 +716,55 @@
   function localSoldier() {
     if (!G) return null;
     return G.soldiers.find((s) => s.id === G.localId) || null;
+  }
+
+  // 自分の所属チーム。まだ兵士が居ない(ロビー等)なら選択中のチーム。
+  function localTeam() {
+    const me = localSoldier();
+    return me ? me.team : playerTeam;
+  }
+
+  // ============================================================
+  //  昼夜サイクル
+  //  clock は経過ミリ秒。0 = 真夜中、DAY_LENGTH_MS/2 = 真昼。
+  //  試合は朝(明るくなる途中)から始まる。
+  // ============================================================
+  const DAY_START_CLOCK = DAY_LENGTH_MS * 0.28;
+
+  // 0 = 真夜中, 1 = 真昼
+  function daylight() {
+    const p = ((G ? G.clock : DAY_START_CLOCK) % DAY_LENGTH_MS) / DAY_LENGTH_MS;
+    return 0.5 - 0.5 * Math.cos(p * Math.PI * 2);
+  }
+
+  // 明るくなっている途中か(= 朝側)
+  function daylightRising() {
+    const p = ((G ? G.clock : DAY_START_CLOCK) % DAY_LENGTH_MS) / DAY_LENGTH_MS;
+    return Math.sin(p * Math.PI * 2) > 0;
+  }
+
+  // 視界にかかる倍率。夜は狭く、昼は広い。
+  function daylightVisionMul() {
+    return NIGHT_VISION_MUL + daylight() * (DAY_VISION_MUL - NIGHT_VISION_MUL);
+  }
+
+  function dayPhase() {
+    const light = daylight();
+    if (light >= 0.78) return { key: "noon", label: "☀ 昼", note: "視界が最も広い" };
+    if (light >= 0.34) return daylightRising()
+      ? { key: "morning", label: "🌅 朝", note: "視界が広がっていく" }
+      : { key: "dusk", label: "🌇 夕方", note: "視界が狭まっていく" };
+    return { key: "night", label: "🌙 夜", note: "視界が狭い・奇襲のチャンス" };
+  }
+
+  let lastPhaseKey = "";
+  function updateDayCycle(dt) {
+    G.clock = (G.clock + dt * 1000) % DAY_LENGTH_MS;
+    const phase = dayPhase();
+    if (phase.key !== lastPhaseKey) {
+      if (lastPhaseKey) banner(`${phase.label}　${phase.note}`);
+      lastPhaseKey = phase.key;
+    }
   }
 
   function sanitizeShopLevels(value) {
@@ -499,8 +802,11 @@
     s.maxShield += lv.shield * 20;
     s.shield = s.maxShield;
     s.dmgMul *= 1 + lv.damage * 0.05;
-    s.maxGrenades = 3 + lv.grenade;
+    // 兵科で決まった所持数を土台にして、ショップ強化を上乗せする
+    s.maxGrenades = (s.maxGrenades == null ? 3 : s.maxGrenades) + lv.grenade;
     s.grenades = s.maxGrenades;
+    s.maxMines = (s.maxMines == null ? 2 : s.maxMines) + lv.mine;
+    s.mines = s.maxMines;
     s.shopApplied = true;
   }
 
@@ -542,6 +848,26 @@
     renderShop(`${item.name}をLv.${level + 1}へ強化しました。`);
   }
 
+  // ---- 障害物の種類 ----
+  // solid: 通り抜けられない / opaque: 視線を遮る / stopsBullets: 弾を止める
+  // 茂みだけは「通れるが見通せない」= 隠れられる場所として特別扱いする。
+  const OBSTACLE_KINDS = {
+    wall:     { solid: true,  opaque: true,  stopsBullets: true },
+    ruin:     { solid: true,  opaque: true,  stopsBullets: true },
+    crate:    { solid: true,  opaque: true,  stopsBullets: true },
+    sandbag:  { solid: true,  opaque: true,  stopsBullets: true },
+    rock:     { solid: true,  opaque: true,  stopsBullets: true },
+    wreck:    { solid: true,  opaque: true,  stopsBullets: true },
+    tree:     { solid: true,  opaque: true,  stopsBullets: true },
+    tires:    { solid: true,  opaque: true,  stopsBullets: true },
+    hedgehog: { solid: true,  opaque: false, stopsBullets: false },
+    bush:     { solid: false, opaque: true,  stopsBullets: false },
+    barrel:   { solid: true,  opaque: false, stopsBullets: true },
+  };
+  const isSolid = (o) => OBSTACLE_KINDS[o.type] ? OBSTACLE_KINDS[o.type].solid : true;
+  const isOpaque = (o) => OBSTACLE_KINDS[o.type] ? OBSTACLE_KINDS[o.type].opaque : true;
+  const stopsBullets = (o) => OBSTACLE_KINDS[o.type] ? OBSTACLE_KINDS[o.type].stopsBullets : true;
+
   // ---- マップ生成 ----
   function genMap() {
     const obs = [];
@@ -558,21 +884,38 @@
       const w = rand(80, 240), h = rand(70, 200);
       const x = rand(160, WORLD_W - 160 - w);
       const y = rand(160, WORLD_H - 160 - h);
-      // スポーン地点を塞がない
-      if (x < 360 && y > WORLD_H - 460) continue;
-      if (x > WORLD_W - 560 && y < 460) continue;
+      // 4隅のスポーン地点を塞がない
+      if (BASE_SPOTS.some((spot) => dist2(x + w / 2, y + h / 2, spot.x, spot.y) < 330 ** 2)) continue;
       obs.push({ x, y, w, h, type: "wall", hp: Infinity });
     }
-    // 散在カバー(コンテナ/土嚢/岩)
-    const covers = 26;
+    // 崩れた壁(見た目違いの遮蔽)
+    for (let i = 0; i < 6; i++) {
+      const w = rand(90, 190), h = rand(24, 40);
+      const vertical = Math.random() < 0.5;
+      const rw = vertical ? h : w, rh = vertical ? w : h;
+      const x = rand(180, WORLD_W - 180 - rw);
+      const y = rand(180, WORLD_H - 180 - rh);
+      if (BASE_SPOTS.some((spot) => dist2(x + rw / 2, y + rh / 2, spot.x, spot.y) < 300 ** 2)) continue;
+      obs.push({ x, y, w: rw, h: rh, type: "ruin", hp: Infinity, seed: Math.random() });
+    }
+
+    // 散在カバー。茂みは通り抜けられるが視線を遮る = 隠れ場所。
+    const coverTypes = ["crate", "crate", "sandbag", "rock", "tree", "tree", "bush", "bush", "wreck", "tires", "hedgehog"];
+    const covers = 46;
     for (let i = 0; i < covers; i++) {
-      const t = pick(["crate", "crate", "sandbag", "rock"]);
-      const w = t === "sandbag" ? rand(70, 120) : rand(34, 60);
-      const h = t === "sandbag" ? rand(26, 36) : rand(34, 60);
+      const t = pick(coverTypes);
+      let w, h;
+      if (t === "sandbag") { w = rand(70, 120); h = rand(26, 36); }
+      else if (t === "bush") { w = rand(58, 104); h = rand(50, 88); }
+      else if (t === "wreck") { w = rand(74, 96); h = rand(40, 50); }
+      else if (t === "tree") { w = h = rand(46, 68); }
+      else if (t === "tires") { w = h = rand(38, 52); }
+      else if (t === "hedgehog") { w = h = rand(40, 54); }
+      else { w = rand(34, 60); h = rand(34, 60); }
       const x = rand(120, WORLD_W - 120 - w);
       const y = rand(120, WORLD_H - 120 - h);
       if (G.bases.some((base) => dist2(x + w / 2, y + h / 2, base.x, base.y) < (base.r + 55) ** 2)) continue;
-      obs.push({ x, y, w, h, type: t, hp: Infinity });
+      obs.push({ x, y, w, h, type: t, hp: Infinity, seed: Math.random() });
     }
     // 爆発バレル
     for (let i = 0; i < 9; i++) {
@@ -592,6 +935,41 @@
     };
   }
 
+  // 兵科の能力値を反映する。ショップ強化より先に呼ぶこと。
+  function applyClass(s, key) {
+    const c = classDef(key);
+    s.classKey = c.key;
+    s.maxHp = Math.max(40, s.maxHp + c.hpBonus);
+    s.hp = s.maxHp;
+    s.speed *= c.speedMul;
+    s.gunMul = c.gunMul;
+    s.meleeMul = c.meleeMul;
+    s.maxGrenades = c.grenades;
+    s.grenades = c.grenades;
+    s.maxMines = c.mines;
+    s.mines = c.mines;
+    s.maxWires = c.wires;
+    s.wires = c.wires;
+    s.parryWindowMul = c.parryWindowMul;
+    s.parryCooldownMul = c.parryCooldownMul;
+    s.mineArmMul = c.mineArmMul;
+    s.mineBlastMul = c.mineBlastMul;
+    s.mineStealthMul = c.mineStealthMul;
+    s.seesEnemyMines = c.seesEnemyMines;
+    // 兵科ごとに持てる武器は限定。数字キーはこの並び順に対応する。
+    s.loadout = c.weapons.map((key) => WKEY[key]).filter((i) => i != null);
+    s.weapon = s.loadout[0];
+    s.ammo = WEAPONS[s.weapon].mag;
+  }
+
+  // 装備している武器の中で next 方向へ1つずらす
+  function cycleWeapon(s, dir) {
+    if (!s || !s.loadout || s.loadout.length < 2) return null;
+    const cur = s.loadout.indexOf(s.weapon);
+    const next = ((cur < 0 ? 0 : cur) + dir + s.loadout.length) % s.loadout.length;
+    return s.loadout[next];
+  }
+
   function makeSoldier(opt) {
     const team = opt.team;
     const sp = teamSpawn(team);
@@ -599,10 +977,15 @@
       id: opt.id,
       team,
       name: opt.name,
+      classKey: "soldier",
+      gunMul: 1, meleeMul: 1,
+      parryWindowMul: 1, parryCooldownMul: 1,
+      mineArmMul: 1, mineBlastMul: 1, mineStealthMul: 1, seesEnemyMines: false,
+      wires: 0, maxWires: 0, lastWire: -99999,
       isHuman: !!opt.isHuman,
       controller: opt.controller || "cpu", // 'cpu' | 'local' | peerId
       x: sp.x, y: sp.y, vx: 0, vy: 0,
-      angle: team === TEAM_ALLY ? -Math.PI / 4 : (Math.PI * 3) / 4,
+      angle: BASE_SPOTS[team].heading,
       aimAngle: 0,
       hp: 100, maxHp: 100, dead: false, respawnAt: 0,
       lastDamagedAt: -99999,
@@ -614,7 +997,8 @@
       ammo: WEAPONS[opt.weapon != null ? opt.weapon : WKEY.rifle].mag,
       reloading: false, reloadUntil: 0, lastShot: 0,
       kills: 0, deaths: 0,
-      grenades: 3, maxGrenades: 3, lastGrenade: -99999, vehicleId: -1,
+      grenades: 3, maxGrenades: 3, lastGrenade: -99999, vehicleId: -1, turretId: -1,
+      mines: 2, maxMines: 2, lastMine: -99999,
       lastBaseSupplyAt: -99999,
       lastFootstepAt: -99999, noiseRadius: 0, heardUntil: 0,
       hitFlash: 0, recoil: 0, legPhase: Math.random() * 6.28, moving: false, muzzle: 0,
@@ -627,46 +1011,52 @@
   function spawnTeams() {
     const D = DIFF[difficulty];
     let id = G.nextId;
-    const allyBots = [], enemyBots = [];
-    // ローカルプレイヤー (ally)
-    const me = makeSoldier({ id: id++, team: TEAM_ALLY, name: playerName || "あなた", isHuman: true, controller: "local", weapon: WKEY.rifle });
-    me.allWeapons = true; // プレイヤーは全武器所持
+    // ローカルプレイヤーは選択したチームへ
+    const me = makeSoldier({ id: id++, team: playerTeam, name: playerName || "あなた", isHuman: true, controller: "local" });
+    applyClass(me, playerClass);
     applyShopUpgrades(me, shopLevels);
     G.localId = me.id;
     G.soldiers.push(me);
+    // タッチ操作は照準を保持するので、開始時から敵陣を向かせておく
+    localInput.aimAngle = me.angle;
     const used = new Set([me.name]);
     function botName() { let n; do { n = pick(BOT_NAMES); } while (used.has(n) && used.size < BOT_NAMES.length); used.add(n); return n; }
-    function botWeapon() {
-      if (Math.random() < D.sniperChance) return WKEY.sniper;
-      return pick([WKEY.rifle, WKEY.rifle, WKEY.smg, WKEY.shotgun, WKEY.pistol, WKEY.knife]);
-    }
-    for (let i = 0; i < TEAM_SIZE - 1; i++) {
-      const b = makeSoldier({ id: id++, team: TEAM_ALLY, name: botName(), weapon: botWeapon() });
-      b.maxHp = Math.round(100 * D.hpMul * 0.95); b.hp = b.maxHp; b.dmgMul = D.dmgMul * 0.9;
-      G.soldiers.push(b);
-    }
-    for (let i = 0; i < TEAM_SIZE; i++) {
-      const b = makeSoldier({ id: id++, team: TEAM_ENEMY, name: botName(), weapon: botWeapon() });
-      b.maxHp = Math.round(100 * D.hpMul); b.hp = b.maxHp; b.dmgMul = D.dmgMul;
-      G.soldiers.push(b);
+    for (const team of TEAMS) {
+      // プレイヤーが埋めた1枠ぶんだけ自軍のボットを減らす
+      const count = team === playerTeam ? TEAM_SIZE - 1 : TEAM_SIZE;
+      // 自軍のボットだけ僅かに弱くして、プレイヤーの見せ場を残す
+      const friendly = team === playerTeam;
+      for (let i = 0; i < count; i++) {
+        const b = makeSoldier({ id: id++, team, name: botName() });
+        b.maxHp = Math.round(100 * D.hpMul * (friendly ? 0.95 : 1));
+        b.hp = b.maxHp;
+        b.dmgMul = D.dmgMul * (friendly ? 0.9 : 1);
+        // ボットにも兵科をばらけさせる
+        const roll = Math.random();
+        applyClass(b, roll < 0.22 ? "samurai" : roll < 0.40 ? "trapper" : roll < 0.56 ? "heavy" : "soldier");
+        // 装備の中からランダムに1つ選んで持たせる
+        b.weapon = pick(b.loadout);
+        b.ammo = WEAPONS[b.weapon].mag;
+        G.soldiers.push(b);
+      }
     }
     G.nextId = id;
   }
 
   function spawnDogs() {
-    const dogNames = ["Rex", "Fang"];
-    G.dogs = [TEAM_ALLY, TEAM_ENEMY].map((team, id) => {
-      const handler = G.soldiers.find((s) => s.team === team && (team === TEAM_ENEMY || s.id === G.localId)) ||
+    const dogNames = ["Rex", "Fang", "Bruno", "Kaiser"];
+    G.dogs = TEAMS.map((team, id) => {
+      const handler = G.soldiers.find((s) => s.team === team && s.id === G.localId) ||
         G.soldiers.find((s) => s.team === team);
       let x = handler ? handler.x + rand(-45, 45) : teamSpawn(team).x;
       let y = handler ? handler.y + rand(-45, 45) : teamSpawn(team).y;
       for (let attempt = 0; attempt < 30; attempt++) {
-        if (!G.obstacles.some((o) => circleRect(x, y, DOG_R + 3, o.x, o.y, o.w, o.h))) break;
+        if (!G.obstacles.some((o) => isSolid(o) && circleRect(x, y, DOG_R + 3, o.x, o.y, o.w, o.h))) break;
         const sp = teamSpawn(team); x = sp.x; y = sp.y;
       }
       return {
-        kind: "dog", id, team, name: dogNames[id], handlerId: handler ? handler.id : -1,
-        x, y, rx: x, ry: y, spawnX: x, spawnY: y, angle: team === TEAM_ALLY ? -0.7 : 2.4,
+        kind: "dog", id, team, name: dogNames[id] || `K9-${id}`, handlerId: handler ? handler.id : -1,
+        x, y, rx: x, ry: y, spawnX: x, spawnY: y, angle: BASE_SPOTS[team].heading,
         hp: 90, maxHp: 90, dead: false, respawnAt: 0, speed: 242,
         damage: 30, lastAttack: -99999, biteAt: 0, kills: 0, stunnedUntil: 0,
       };
@@ -674,30 +1064,55 @@
   }
 
   function findTankSpawn(team) {
-    const base = team === TEAM_ALLY
-      ? { x: 260, y: WORLD_H - 250 }
-      : { x: WORLD_W - 260, y: 250 };
+    const spot = BASE_SPOTS[team];
+    // 基地からマップ中央寄りに少しずらした位置を基準にする
+    const home = { x: spot.x + Math.cos(spot.heading) * 55, y: spot.y + Math.sin(spot.heading) * 55 };
     for (let i = 0; i < 50; i++) {
-      const x = clamp(base.x + rand(-150, 150), 70, WORLD_W - 70);
-      const y = clamp(base.y + rand(-150, 150), 70, WORLD_H - 70);
-      if (!G.obstacles.some((o) => circleRect(x, y, TANK_R + 8, o.x, o.y, o.w, o.h))) return { x, y };
+      const x = clamp(home.x + rand(-150, 150), 70, WORLD_W - 70);
+      const y = clamp(home.y + rand(-150, 150), 70, WORLD_H - 70);
+      if (!G.obstacles.some((o) => isSolid(o) && circleRect(x, y, TANK_R + 8, o.x, o.y, o.w, o.h))) return { x, y };
     }
-    return base;
+    return home;
   }
 
   function spawnTanks() {
-    G.tanks = [TEAM_ALLY, TEAM_ENEMY].map((team, id) => {
+    G.tanks = TEAMS.map((team, id) => {
       const sp = findTankSpawn(team);
+      const heading = BASE_SPOTS[team].heading;
       return {
-        kind: "tank", id, team, name: team === TEAM_ALLY ? "味方戦車" : "敵戦車",
+        kind: "tank", id, team, name: `${teamDef(team).name}の戦車`,
         x: sp.x, y: sp.y, rx: sp.x, ry: sp.y, spawnX: sp.x, spawnY: sp.y,
-        angle: team === TEAM_ALLY ? -Math.PI / 4 : Math.PI * 3 / 4,
-        turretAngle: team === TEAM_ALLY ? -Math.PI / 4 : Math.PI * 3 / 4,
+        angle: heading, turretAngle: heading,
         hp: 420, maxHp: 420, dead: false, respawnAt: 0, driverId: -1,
-        speed: 105, lastShot: -99999, muzzle: 0, kills: 0,
+        speed: 105, lastShot: -99999, muzzle: 0, kills: 0, weapon: 0,
         ai: { think: 0, targetId: -1 },
       };
     });
+  }
+
+  // 中立の機関銃座をマップ中央寄りに散らす。基地のすぐ前には置かない。
+  function spawnTurrets() {
+    G.turrets = [];
+    const count = 8;
+    for (let id = 0; id < count; id++) {
+      let placed = null;
+      for (let attempt = 0; attempt < 90; attempt++) {
+        const x = rand(320, WORLD_W - 320), y = rand(280, WORLD_H - 280);
+        if (G.bases.some((base) => dist2(x, y, base.x, base.y) < (base.r + 130) ** 2)) continue;
+        if (G.obstacles.some((o) => isSolid(o) && circleRect(x, y, TURRET_R + 12, o.x, o.y, o.w, o.h))) continue;
+        if (G.turrets.some((tr) => dist2(x, y, tr.x, tr.y) < 420 ** 2)) continue;
+        placed = { x, y };
+        break;
+      }
+      if (!placed) continue;
+      // 初期の向きはマップ中央へ
+      const angle = Math.atan2(WORLD_H / 2 - placed.y, WORLD_W / 2 - placed.x);
+      G.turrets.push({
+        kind: "turret", id, x: placed.x, y: placed.y, angle,
+        hp: 260, maxHp: 260, dead: false, respawnAt: 0,
+        gunnerId: -1, team: -1, lastShot: -99999, muzzle: 0, hitFlash: 0,
+      });
+    }
   }
 
   function spawnMedkits() {
@@ -711,7 +1126,7 @@
       let placed = null;
       for (let attempt = 0; attempt < 80; attempt++) {
         const x = rand(90, WORLD_W - 90), y = rand(90, WORLD_H - 90);
-        const blocked = G.obstacles.some((o) => circleRect(x, y, 18, o.x, o.y, o.w, o.h)) ||
+        const blocked = G.obstacles.some((o) => isSolid(o) && circleRect(x, y, 18, o.x, o.y, o.w, o.h)) ||
           G.tanks.some((tank) => dist2(x, y, tank.x, tank.y) < (TANK_R + 28) ** 2);
         const crowded = G.pickups.some((p) => dist2(x, y, p.x, p.y) < 130 ** 2);
         if (!blocked && !crowded) { placed = { x, y }; break; }
@@ -737,7 +1152,7 @@
     // X
     let tx = nx;
     for (const o of G.obstacles) {
-      if (circleRect(tx, y, SOLDIER_R, o.x, o.y, o.w, o.h)) { tx = x; break; }
+      if (isSolid(o) && circleRect(tx, y, SOLDIER_R, o.x, o.y, o.w, o.h)) { tx = x; break; }
     }
     for (const tank of G.tanks) {
       if (!tank.dead && tank.id !== s.vehicleId && dist2(tx, y, tank.x, tank.y) < (TANK_R + SOLDIER_R) ** 2) { tx = x; break; }
@@ -745,7 +1160,7 @@
     x = tx;
     let ty = ny;
     for (const o of G.obstacles) {
-      if (circleRect(x, ty, SOLDIER_R, o.x, o.y, o.w, o.h)) { ty = y; break; }
+      if (isSolid(o) && circleRect(x, ty, SOLDIER_R, o.x, o.y, o.w, o.h)) { ty = y; break; }
     }
     for (const tank of G.tanks) {
       if (!tank.dead && tank.id !== s.vehicleId && dist2(x, ty, tank.x, tank.y) < (TANK_R + SOLDIER_R) ** 2) { ty = y; break; }
@@ -758,11 +1173,11 @@
   function resolveTankMovement(tank, nx, ny) {
     let x = tank.x, y = tank.y;
     let tx = clamp(nx, TANK_R, WORLD_W - TANK_R);
-    if (G.obstacles.some((o) => circleRect(tx, y, TANK_R, o.x, o.y, o.w, o.h)) ||
+    if (G.obstacles.some((o) => isSolid(o) && circleRect(tx, y, TANK_R, o.x, o.y, o.w, o.h)) ||
         G.tanks.some((o) => o !== tank && !o.dead && dist2(tx, y, o.x, o.y) < (TANK_R * 2 + 4) ** 2)) tx = x;
     x = tx;
     let ty = clamp(ny, TANK_R, WORLD_H - TANK_R);
-    if (G.obstacles.some((o) => circleRect(x, ty, TANK_R, o.x, o.y, o.w, o.h)) ||
+    if (G.obstacles.some((o) => isSolid(o) && circleRect(x, ty, TANK_R, o.x, o.y, o.w, o.h)) ||
         G.tanks.some((o) => o !== tank && !o.dead && dist2(x, ty, o.x, o.y) < (TANK_R * 2 + 4) ** 2)) ty = y;
     tank.x = x; tank.y = ty;
   }
@@ -770,11 +1185,11 @@
   function resolveDogMovement(dog, nx, ny) {
     let x = dog.x, y = dog.y;
     let tx = clamp(nx, DOG_R, WORLD_W - DOG_R);
-    if (G.obstacles.some((o) => circleRect(tx, y, DOG_R, o.x, o.y, o.w, o.h)) ||
+    if (G.obstacles.some((o) => isSolid(o) && circleRect(tx, y, DOG_R, o.x, o.y, o.w, o.h)) ||
         G.tanks.some((tank) => !tank.dead && dist2(tx, y, tank.x, tank.y) < (TANK_R + DOG_R) ** 2)) tx = x;
     x = tx;
     let ty = clamp(ny, DOG_R, WORLD_H - DOG_R);
-    if (G.obstacles.some((o) => circleRect(x, ty, DOG_R, o.x, o.y, o.w, o.h)) ||
+    if (G.obstacles.some((o) => isSolid(o) && circleRect(x, ty, DOG_R, o.x, o.y, o.w, o.h)) ||
         G.tanks.some((tank) => !tank.dead && dist2(x, ty, tank.x, tank.y) < (TANK_R + DOG_R) ** 2)) ty = y;
     dog.x = x; dog.y = ty;
   }
@@ -782,7 +1197,7 @@
   // 視線が遮蔽物で遮られていないか
   function lineClear(ax, ay, bx, by) {
     for (const o of G.obstacles) {
-      if (o.type === "barrel") continue;
+      if (!isOpaque(o)) continue;
       if (segRect(ax, ay, bx, by, o.x, o.y, o.w, o.h)) return false;
     }
     return true;
@@ -824,9 +1239,12 @@
       const a = s.aimAngle + (Math.random() - 0.5) * w.spread * 2;
       if (G.bullets.length < MAX_BULLETS) {
         G.bullets.push({
+          // ロケット弾は戦車砲と同じ「着弾して爆発する」弾種として扱う
+          kind: w.rocket ? "shell" : "bullet",
+          rocket: !!w.rocket,
           x: mx, y: my,
           vx: Math.cos(a) * w.speed, vy: Math.sin(a) * w.speed,
-          dmg: w.dmg * s.dmgMul, team: s.team, owner: s.id,
+          dmg: w.dmg * s.dmgMul * (s.gunMul || 1), team: s.team, owner: s.id,
           range: w.range, traveled: 0, pierce: w.pierce || 0,
           col: w.key === "sniper" ? "#bfe6ff" : "#ffe49a",
           len: w.len,
@@ -845,6 +1263,8 @@
     s.lastShot = t;
     s.muzzle = t;
     s.recoil = Math.min(8, s.recoil + w.kick);
+    const arc = w.arc || 0.82;
+    const dmg = w.dmg * s.dmgMul * (s.meleeMul || 1);
     let target = null, best = Infinity;
     for (const enemy of G.soldiers) {
       if (enemy.dead || enemy.vehicleId >= 0 || enemy.team === s.team) continue;
@@ -852,7 +1272,7 @@
       if (d2v > w.range ** 2 || d2v >= best || !lineClear(s.x, s.y, enemy.x, enemy.y)) continue;
       const a = Math.atan2(enemy.y - s.y, enemy.x - s.x);
       const gap = Math.abs(((a - s.aimAngle + Math.PI) % (Math.PI * 2)) - Math.PI);
-      if (gap < 0.82) { target = enemy; best = d2v; }
+      if (gap < arc) { target = enemy; best = d2v; }
     }
     for (const dog of G.dogs) {
       if (dog.dead || dog.team === s.team) continue;
@@ -860,7 +1280,7 @@
       if (d2v > w.range ** 2 || d2v >= best || !lineClear(s.x, s.y, dog.x, dog.y)) continue;
       const a = Math.atan2(dog.y - s.y, dog.x - s.x);
       const gap = Math.abs(((a - s.aimAngle + Math.PI) % (Math.PI * 2)) - Math.PI);
-      if (gap < 0.82) { target = dog; best = d2v; }
+      if (gap < arc) { target = dog; best = d2v; }
     }
     for (const tank of G.tanks) {
       if (tank.dead || tank.team === s.team) continue;
@@ -868,31 +1288,30 @@
       if (d2v > (w.range + TANK_R) ** 2 || d2v >= best || !lineClear(s.x, s.y, tank.x, tank.y)) continue;
       const a = Math.atan2(tank.y - s.y, tank.x - s.x);
       const gap = Math.abs(((a - s.aimAngle + Math.PI) % (Math.PI * 2)) - Math.PI);
-      if (gap < 0.82) { target = tank; best = d2v; }
+      if (gap < arc) { target = tank; best = d2v; }
     }
-    const enemyBase = G.bases[1 - s.team];
-    if (enemyBase && enemyBase.hp > 0) {
+    for (const enemyBase of G.bases) {
+      if (enemyBase.team === s.team || enemyBase.hp <= 0) continue;
       const d2v = dist2(s.x, s.y, enemyBase.x, enemyBase.y);
-      if (d2v < (w.range + BASE_CORE_R) ** 2 && d2v < best && lineClear(s.x, s.y, enemyBase.x, enemyBase.y)) {
-        const a = Math.atan2(enemyBase.y - s.y, enemyBase.x - s.x);
-        const gap = Math.abs(((a - s.aimAngle + Math.PI) % (Math.PI * 2)) - Math.PI);
-        if (gap < 0.82) { target = enemyBase; best = d2v; }
-      }
+      if (d2v >= (w.range + BASE_CORE_R) ** 2 || d2v >= best || !lineClear(s.x, s.y, enemyBase.x, enemyBase.y)) continue;
+      const a = Math.atan2(enemyBase.y - s.y, enemyBase.x - s.x);
+      const gap = Math.abs(((a - s.aimAngle + Math.PI) % (Math.PI * 2)) - Math.PI);
+      if (gap < arc) { target = enemyBase; best = d2v; }
     }
     const sx = s.x + Math.cos(s.aimAngle) * 28, sy = s.y + Math.sin(s.aimAngle) * 28;
-    addParticle(sx, sy, { kind: "slash", life: 150, size: 30, a: s.aimAngle });
+    addParticle(sx, sy, { kind: "slash", life: 150, size: w.range * 0.44, a: s.aimAngle, arc });
     if (target) {
       if (target.kind === "base") {
-        damageBase(target, w.dmg * s.dmgMul * 0.75, s, s.team);
+        damageBase(target, dmg * 0.75, s, s.team);
         addParticle(sx, sy, { kind: "spark", vx: rand(-70, 70), vy: rand(-70, 70), life: 180, size: 3 });
       } else if (target.kind === "tank") {
-        damageTank(target, 16 * s.dmgMul, s);
+        damageTank(target, 16 * s.dmgMul * (s.meleeMul || 1), s);
         addParticle(target.x, target.y, { kind: "spark", vx: rand(-70, 70), vy: rand(-70, 70), life: 180, size: 3 });
       } else if (target.kind === "dog") {
-        damageDog(target, w.dmg * s.dmgMul, s);
+        damageDog(target, dmg, s);
         addParticle(target.x, target.y, { kind: "dust", vx: rand(-80, 80), vy: rand(-80, 80), life: 300, size: 3 });
       } else {
-        const result = damageSoldier(target, w.dmg * s.dmgMul, s, { x: s.x, y: s.y, type: "melee" });
+        const result = damageSoldier(target, dmg, s, { x: s.x, y: s.y, type: "melee" });
         if (result !== "parried") {
           for (let i = 0; i < 6; i++) {
             addParticle(target.x, target.y, { kind: "blood", vx: rand(-110, 110), vy: rand(-110, 110), life: rand(220, 420), size: rand(1.5, 3.5) });
@@ -903,23 +1322,31 @@
     if (s.id === G.localId || dist2(s.x, s.y, camX + viewW() / 2, camY + viewH() / 2) < 550 ** 2) Audio.melee();
   }
 
+  // 戦車の武器。0 = 120mm主砲(爆発・対戦車)、1 = 同軸機関銃(連射・対歩兵)
+  const TANK_WEAPONS = [
+    { name: "120mm主砲", interval: 1450, dmg: 125, speed: 720, range: 900, spread: 0, shell: true, flash: 20, snd: "sniper" },
+    { name: "同軸機関銃", interval: 85, dmg: 16, speed: 1250, range: 720, spread: 0.055, shell: false, flash: 10, snd: "smg" },
+  ];
+
   function tryTankShoot(tank, t) {
-    if (tank.dead || t - tank.lastShot < 1450) return;
+    if (tank.dead) return;
+    const w = TANK_WEAPONS[tank.weapon || 0];
+    if (t - tank.lastShot < w.interval) return;
     tank.lastShot = t;
     tank.muzzle = t;
-    const a = tank.turretAngle;
+    const a = tank.turretAngle + (Math.random() - 0.5) * w.spread * 2;
     const mx = tank.x + Math.cos(a) * 48;
     const my = tank.y + Math.sin(a) * 48;
     const driver = G.soldiers.find((s) => s.id === tank.driverId) || null;
     G.bullets.push({
-      kind: "shell", x: mx, y: my,
-      vx: Math.cos(a) * 720, vy: Math.sin(a) * 720,
-      dmg: 125, team: tank.team, owner: driver ? driver.id : -1, tankOwner: tank.id,
-      range: 900, traveled: 0, pierce: 0, col: "#ffcf62", len: 12,
+      kind: w.shell ? "shell" : "bullet", x: mx, y: my,
+      vx: Math.cos(a) * w.speed, vy: Math.sin(a) * w.speed,
+      dmg: w.dmg, team: tank.team, owner: driver ? driver.id : -1, tankOwner: tank.id,
+      range: w.range, traveled: 0, pierce: 0, col: w.shell ? "#ffcf62" : "#ffe49a", len: w.shell ? 12 : 15,
     });
-    addParticle(mx, my, { kind: "flash", life: 100, size: 20, a });
-    if (driver && driver.id === G.localId) shake = Math.min(14, shake + 8);
-    if (dist2(tank.x, tank.y, camX + viewW() / 2, camY + viewH() / 2) < 850 * 850) Audio.shot("sniper");
+    addParticle(mx, my, { kind: "flash", life: w.shell ? 100 : 55, size: w.flash, a });
+    if (driver && driver.id === G.localId) shake = Math.min(14, shake + (w.shell ? 8 : 1.2));
+    if (dist2(tank.x, tank.y, camX + viewW() / 2, camY + viewH() / 2) < 850 * 850) Audio.shot(w.snd);
   }
 
   function tryThrowGrenade(s, t, angle) {
@@ -935,6 +1362,104 @@
     });
   }
 
+  // 地雷は自分の足元に置く。設置後しばらくは作動しないので踏み逃げできる。
+  function tryPlaceMine(s, t) {
+    if (s.dead || s.vehicleId >= 0 || s.mines <= 0 || t - s.lastMine < MINE_PLACE_COOLDOWN) return;
+    s.mines--;
+    s.lastMine = t;
+    G.mines.push({
+      id: G.nextId++, x: s.x, y: s.y, team: s.team, owner: s.id,
+      armAt: t + MINE_ARM_MS * (s.mineArmMul || 1), placedAt: t,
+      blastMul: s.mineBlastMul || 1, stealthMul: s.mineStealthMul || 1,
+    });
+    for (let i = 0; i < 5; i++) {
+      addParticle(s.x + rand(-8, 8), s.y + rand(-8, 8), {
+        kind: "dust", vx: rand(-25, 25), vy: rand(-25, 25), life: rand(250, 420), size: rand(2, 4),
+      });
+    }
+    if (s.id === G.localId) banner(`地雷を設置（残り ${s.mines}）`);
+  }
+
+  function explodeMine(m) {
+    Audio.boom();
+    const radius = MINE_BLAST_R * (m.blastMul || 1);
+    createExplosionFx(m.x, m.y, 34);
+    const attacker = G.soldiers.find((s) => s.id === m.owner) || null;
+    if (dist2(m.x, m.y, camX + viewW() / 2, camY + viewH() / 2) < 900 ** 2) shake = Math.min(16, shake + 9);
+    for (const s of G.soldiers) {
+      if (s.dead || s.vehicleId >= 0 || s.team === m.team) continue;
+      const d = Math.sqrt(dist2(s.x, s.y, m.x, m.y));
+      if (d < radius) damageSoldier(s, MINE_DAMAGE * (1 - d / radius * 0.7), attacker, { x: m.x, y: m.y, type: "explosion" });
+    }
+    for (const dog of G.dogs) {
+      if (dog.dead || dog.team === m.team) continue;
+      const d = Math.sqrt(dist2(dog.x, dog.y, m.x, m.y));
+      if (d < radius) damageDog(dog, MINE_DAMAGE * (1 - d / radius * 0.7), attacker);
+    }
+    for (const tank of G.tanks) {
+      if (tank.dead || tank.team === m.team) continue;
+      const d = Math.sqrt(dist2(tank.x, tank.y, m.x, m.y));
+      // 地雷は対戦車兵器。車両には減衰なしで効く。
+      if (d < radius + TANK_R) damageTank(tank, MINE_DAMAGE * 1.3, attacker);
+    }
+    for (const o of G.obstacles) {
+      if (o.type === "barrel" && dist2(o.x + o.w / 2, o.y + o.h / 2, m.x, m.y) < radius ** 2) o.hp = 0;
+    }
+  }
+
+  // ---- 有刺鉄線 (罠師専用) ----
+  // 踏んだ敵の足を止め、じわじわ削る。壊れないが数に限りがある。
+  function tryPlaceWire(s, t) {
+    if (s.dead || s.vehicleId >= 0 || (s.wires || 0) <= 0 || t - s.lastWire < WIRE_PLACE_COOLDOWN) return;
+    s.wires--;
+    s.lastWire = t;
+    G.wires.push({ id: G.nextId++, x: s.x, y: s.y, team: s.team, owner: s.id, seed: Math.random() });
+    if (s.id === G.localId) banner(`有刺鉄線を張った（残り ${s.wires}）`);
+  }
+
+  function updateWires(dt, t) {
+    for (const s of G.soldiers) {
+      s.snared = false;
+      if (s.dead || s.vehicleId >= 0) continue;
+      for (const wire of G.wires) {
+        if (wire.team === s.team) continue;
+        if (dist2(s.x, s.y, wire.x, wire.y) > WIRE_R ** 2) continue;
+        s.snared = true;
+        const owner = G.soldiers.find((o) => o.id === wire.owner) || null;
+        damageSoldier(s, WIRE_DPS * dt, owner, { x: wire.x, y: wire.y, type: "explosion", bypassEquipment: true });
+        break;
+      }
+    }
+  }
+
+  function updateMines(t) {
+    for (let i = G.mines.length - 1; i >= 0; i--) {
+      const m = G.mines[i];
+      if (t < m.armAt) continue;
+      let triggered = false;
+      for (const s of G.soldiers) {
+        if (s.dead || s.vehicleId >= 0 || s.team === m.team) continue;
+        if (dist2(s.x, s.y, m.x, m.y) < MINE_TRIGGER_R ** 2) { triggered = true; break; }
+      }
+      if (!triggered) {
+        for (const tank of G.tanks) {
+          if (tank.dead || tank.team === m.team) continue;
+          if (dist2(tank.x, tank.y, m.x, m.y) < (MINE_TRIGGER_R + TANK_R) ** 2) { triggered = true; break; }
+        }
+      }
+      if (!triggered) {
+        for (const dog of G.dogs) {
+          if (dog.dead || dog.team === m.team) continue;
+          if (dist2(dog.x, dog.y, m.x, m.y) < (MINE_TRIGGER_R + DOG_R) ** 2) { triggered = true; break; }
+        }
+      }
+      if (triggered) {
+        explodeMine(m);
+        G.mines.splice(i, 1);
+      }
+    }
+  }
+
   function startReload(s, t) {
     if (s.reloading || s.shieldRaised || t < s.stunnedUntil) return;
     const w = WEAPONS[s.weapon];
@@ -946,7 +1471,7 @@
 
   function performParry(target, attacker, hit) {
     target.parryUntil = 0;
-    target.parryCooldownUntil = Math.max(target.parryCooldownUntil, now() + 850);
+    target.parryCooldownUntil = Math.max(target.parryCooldownUntil, now() + 850 * (target.parryCooldownMul || 1));
     const px = target.x + Math.cos(target.aimAngle) * 22;
     const py = target.y + Math.sin(target.aimAngle) * 22;
     addParticle(px, py, { kind: "parry", life: 260, size: 27, a: target.aimAngle });
@@ -995,6 +1520,8 @@
         if (absorbed > 0) addParticle(target.x, target.y, { kind: "armorHit", life: 160, size: 15, a: 0 });
       }
     }
+    // 銃座の防盾に守られている射手は被弾が軽い
+    if (target.turretId >= 0) dmg *= TURRET_DAMAGE_TAKEN;
     if (dmg <= 0.01) { target.hitFlash = Math.max(target.hitFlash, 0.25); return "blocked"; }
     target.hp -= dmg;
     target.lastDamagedAt = now();
@@ -1020,7 +1547,7 @@
   function damageBase(base, dmg, attacker, sourceTeam) {
     if (!base || G.over || base.hp <= 0) return;
     const team = sourceTeam == null && attacker ? attacker.team : sourceTeam;
-    if (team !== TEAM_ALLY && team !== TEAM_ENEMY) return;
+    if (!(team >= 0 && team < TEAM_COUNT)) return;
     if (team === base.team) return;
     base.hp = Math.max(0, base.hp - Math.max(0, dmg));
     base.hitFlash = 1;
@@ -1028,16 +1555,18 @@
       kind: "spark", vx: rand(-110, 110), vy: rand(-130, 40), life: rand(180, 360), size: rand(2, 5),
     });
     const stamp = now();
-    if (base.team === localSoldier()?.team && stamp - (base.lastWarningAt || -99999) > 2200) {
+    if (base.team === localTeam() && stamp - (base.lastWarningAt || -99999) > 2200) {
       base.lastWarningAt = stamp;
       banner("警告：味方基地が攻撃されています！");
     }
     if (base.hp <= 0) destroyBase(base, team);
   }
 
-  function destroyBase(base, winnerTeam) {
-    if (G.over) return;
+  // 基地陥落 = その軍はもう復活できない。生き残りが倒されたら完全に脱落。
+  function destroyBase(base, killerTeam) {
+    if (G.over || base.destroyed) return;
     base.hp = 0;
+    base.destroyed = true;
     Audio.boom();
     shake = Math.min(24, shake + 18);
     createExplosionFx(base.x, base.y, 70);
@@ -1045,7 +1574,30 @@
       const a = i * Math.PI * 2 / 5;
       createExplosionFx(base.x + Math.cos(a) * 55, base.y + Math.sin(a) * 42, 18);
     }
-    endMatch(winnerTeam);
+    const survivors = G.soldiers.filter((s) => s.team === base.team && !s.dead).length;
+    if (base.team === localTeam()) banner("味方基地が陥落！　もう復活できません。生き残れ！");
+    else banner(`${G.armyNames[base.team]}の基地が陥落！　残存兵 ${survivors} 名`);
+    checkVictory();
+  }
+
+  // 生き残っているのが1軍だけになったら決着。
+  // 「参戦中」= 基地が健在(復活できる) or 兵士がまだ生きている。
+  function teamInPlay(team) {
+    if (teamAlive(team)) return true;
+    return G.soldiers.some((s) => s.team === team && !s.dead);
+  }
+
+  function checkVictory() {
+    if (G.over) return;
+    const inPlay = TEAMS.filter(teamInPlay);
+    if (inPlay.length === 1) {
+      endMatch(inPlay[0]);
+    } else if (inPlay.length === 0) {
+      // 相打ちで全滅した場合は撃破数が最も多い軍の勝ちとする
+      let best = 0;
+      for (const team of TEAMS) if (G.score[team] > G.score[best]) best = team;
+      endMatch(best);
+    }
   }
 
   function destroyDog(dog, attacker) {
@@ -1101,6 +1653,11 @@
     } else {
       addKillfeed(null, target);
     }
+    // 基地を失った軍の兵士が倒されたら、その軍は脱落したかもしれない
+    if (!teamAlive(target.team)) {
+      if (!teamInPlay(target.team)) banner(`${G.armyNames[target.team]} 全滅！`);
+      checkVictory();
+    }
   }
 
   function gainXp(s, amount) {
@@ -1131,14 +1688,17 @@
     s.armor = s.maxArmor; s.shield = s.maxShield; s.shieldRaised = false;
     s.parryUntil = 0; s.parryCooldownUntil = 0; s.stunnedUntil = 0;
     s.ammo = WEAPONS[s.weapon].mag; s.reloading = false;
-    s.grenades = s.maxGrenades || 3; s.vehicleId = -1;
+    s.grenades = s.maxGrenades || 3; s.vehicleId = -1; s.turretId = -1;
+    s.mines = s.maxMines || 2;
+    s.wires = s.maxWires || 0;
+    s.snared = false;
     s.ai.targetId = -1; s.ai.think = 0;
   }
 
   function respawnTank(tank) {
     tank.x = tank.spawnX; tank.y = tank.spawnY; tank.rx = tank.x; tank.ry = tank.y;
     tank.hp = tank.maxHp; tank.dead = false; tank.driverId = -1;
-    tank.angle = tank.team === TEAM_ALLY ? -Math.PI / 4 : Math.PI * 3 / 4;
+    tank.angle = BASE_SPOTS[tank.team].heading;
     tank.turretAngle = tank.angle; tank.ai.targetId = -1; tank.ai.think = 0;
   }
 
@@ -1216,6 +1776,11 @@
       const d = Math.sqrt(dist2(tank.x, tank.y, b.x, b.y));
       if (d < radius + TANK_R) damageTank(tank, b.dmg * 0.85 * (1 - clamp(d / (radius + TANK_R), 0, 0.8)), attacker);
     }
+    for (const turret of G.turrets) {
+      if (turret.dead || (turret.team >= 0 && turret.team === b.team)) continue;
+      const d = Math.sqrt(dist2(turret.x, turret.y, b.x, b.y));
+      if (d < radius + TURRET_R) damageTurret(turret, b.dmg * 0.7 * (1 - clamp(d / (radius + TURRET_R), 0, 0.8)), attacker);
+    }
     for (const base of G.bases) {
       if (base.team === b.team || base.hp <= 0) continue;
       const d = Math.sqrt(dist2(base.x, base.y, b.x, b.y));
@@ -1248,6 +1813,11 @@
       const d = Math.sqrt(dist2(tank.x, tank.y, g.x, g.y));
       if (d < GRENADE_RADIUS + TANK_R) damageTank(tank, 95 * (1 - clamp(d / (GRENADE_RADIUS + TANK_R), 0, 0.8)), attacker);
     }
+    for (const turret of G.turrets) {
+      if (turret.dead || (turret.team >= 0 && turret.team === g.team)) continue;
+      const d = Math.sqrt(dist2(turret.x, turret.y, g.x, g.y));
+      if (d < GRENADE_RADIUS + TURRET_R) damageTurret(turret, 85 * (1 - clamp(d / (GRENADE_RADIUS + TURRET_R), 0, 0.8)), attacker);
+    }
     for (const base of G.bases) {
       if (base.team === g.team || base.hp <= 0) continue;
       const d = Math.sqrt(dist2(base.x, base.y, g.x, g.y));
@@ -1270,9 +1840,9 @@
       }
       const ox = g.x, oy = g.y;
       g.x += g.vx * dt;
-      if (G.obstacles.some((o) => circleRect(g.x, g.y, 5, o.x, o.y, o.w, o.h))) { g.x = ox; g.vx *= -0.5; }
+      if (G.obstacles.some((o) => isSolid(o) && circleRect(g.x, g.y, 5, o.x, o.y, o.w, o.h))) { g.x = ox; g.vx *= -0.5; }
       g.y += g.vy * dt;
-      if (G.obstacles.some((o) => circleRect(g.x, g.y, 5, o.x, o.y, o.w, o.h))) { g.y = oy; g.vy *= -0.5; }
+      if (G.obstacles.some((o) => isSolid(o) && circleRect(g.x, g.y, 5, o.x, o.y, o.w, o.h))) { g.y = oy; g.vy *= -0.5; }
       const drag = Math.pow(0.2, dt);
       g.vx *= drag; g.vy *= drag; g.rotation += Math.hypot(g.vx, g.vy) * dt * 0.08;
     }
@@ -1326,7 +1896,7 @@
     G.particles.push({
       x, y, vx: opt.vx || 0, vy: opt.vy || 0,
       life: opt.life, maxLife: opt.life, size: opt.size || 3,
-      kind: opt.kind, a: opt.a || 0,
+      kind: opt.kind, a: opt.a || 0, arc: opt.arc,
     });
   }
 
@@ -1344,39 +1914,104 @@
   }
 
   // ============================================================
+  //  索敵 (AI が敵に気づく条件)
+  //  ・壁の裏にいれば見つからない (視線が通っていることが必須)
+  //  ・正面の視野角の外にいれば見つからない
+  //  ・ただし至近距離だけは向きに関係なく気づく (真横をすり抜けられないように)
+  // ============================================================
+  const AI_SIGHT_R = 470;       // 昼夜倍率をかける前の索敵距離
+  const AI_FOV = 1.15;          // 正面から左右 ±約66°
+  const AI_AWARE_R = 105;       // この距離まで近づくと向き無関係で気づく
+
+  function angleGap(from, to) {
+    return Math.abs(((to - from + Math.PI) % (Math.PI * 2)) - Math.PI);
+  }
+
+  // 目視。fov に null を渡すと全方位(軍用犬など)。
+  function canSee(watcher, target, sightR, fov) {
+    const d2 = dist2(watcher.x, watcher.y, target.x, target.y);
+    if (d2 > sightR * sightR) return false;
+    if (!lineClear(watcher.x, watcher.y, target.x, target.y)) return false;
+    if (d2 < AI_AWARE_R * AI_AWARE_R) return true;
+    if (fov == null) return true;
+    const a = Math.atan2(target.y - watcher.y, target.x - watcher.x);
+    return angleGap(watcher.aimAngle == null ? watcher.angle : watcher.aimAngle, a) < fov;
+  }
+
+  // 足音。向きは問わないが、壁が音を遮る。
+  function canHear(watcher, target, bonus) {
+    if (!target.moving) return false;
+    const r = (target.noiseRadius || 390) + (bonus || 0);
+    const d2 = dist2(watcher.x, watcher.y, target.x, target.y);
+    if (d2 > r * r) return false;
+    return lineClear(watcher.x, watcher.y, target.x, target.y);
+  }
+
+  // ============================================================
   //  AI
   // ============================================================
   function updateAI(s, t, dt) {
     const a = s.ai;
     const D = DIFF[difficulty];
+
+    // 銃座に取り付いている間は撃つだけ。敵を見失って少し経ったら離れる。
+    if (s.turretId >= 0) {
+      const turret = G.turrets.find((x) => x.id === s.turretId && !x.dead);
+      if (!turret) { s.turretId = -1; }
+      else {
+        const target = a.targetId >= 0 ? G.soldiers.find((x) => x.id === a.targetId && !x.dead) : null;
+        if (target && canSee(s, target, TURRET_GUN.range, null)) {
+          a.lastSeen = t;
+          const aim = Math.atan2(target.y - s.y, target.x - s.x);
+          turret.angle = angLerp(turret.angle, aim, clamp(dt * 7, 0, 1));
+          s.aimAngle = turret.angle;
+          if (angleGap(turret.angle, aim) < 0.12 && Math.random() < D.fireChance) tryTurretShoot(turret, t);
+          return;
+        }
+        // 索敵しなおす
+        if (t > a.think) {
+          a.think = t + rand(150, 300);
+          let best = -1, bestD = Infinity;
+          for (const e of G.soldiers) {
+            if (e.dead || e.team === s.team) continue;
+            const d2 = dist2(s.x, s.y, e.x, e.y);
+            if (d2 < bestD && canSee(s, e, TURRET_GUN.range, null)) { bestD = d2; best = e.id; }
+          }
+          if (best >= 0) { a.targetId = best; a.lastSeen = t; }
+        }
+        if (t - a.lastSeen > 5000) { dismountTurret(s); a.targetId = -1; }
+        return;
+      }
+    }
     if (t > a.think) {
       a.think = t + rand(120, 240);
-      // 視界は短いが、走る敵の足音なら遮蔽物越しでも察知する
+      // 壁の裏 or 視野角の外なら気づかれない。足音も壁で遮られる。
+      const sight = AI_SIGHT_R * daylightVisionMul();
       let best = -1, bestD = Infinity;
       for (const e of G.soldiers) {
         if (e.dead || e.team === s.team) continue;
         const d2 = dist2(s.x, s.y, e.x, e.y);
-        const vis = lineClear(s.x, s.y, e.x, e.y);
-        const seen = vis && d2 < 420 ** 2;
-        const heard = e.moving && d2 < (e.noiseRadius || 390) ** 2;
-        if ((seen || heard) && d2 < bestD) { bestD = d2; best = e.id; }
+        if (d2 >= bestD) continue;
+        if (canSee(s, e, sight, AI_FOV) || canHear(s, e)) { bestD = d2; best = e.id; }
       }
       if (best >= 0) { a.targetId = best; a.lastSeen = t; }
       else if (t - a.lastSeen > 1400) a.targetId = -1;
 
-      // ターゲット無し → 敵基地へ進軍
+      // ターゲット無し → 一番近い敵基地へ進軍
       if (a.targetId < 0) {
-        const objective = G.bases[1 - s.team];
-        a.wx = objective.x + rand(-45, 45);
-        a.wy = objective.y + rand(-45, 45);
+        const objective = nearestEnemyBase(s.x, s.y, s.team);
+        if (objective) {
+          a.wx = objective.x + rand(-45, 45);
+          a.wy = objective.y + rand(-45, 45);
+        }
       }
       if (t > a.strafeUntil) { a.strafe = Math.random() < 0.5 ? 1 : -1; a.strafeUntil = t + rand(500, 1100); }
     }
 
     const w = WEAPONS[s.weapon];
     const soldierTarget = a.targetId >= 0 ? G.soldiers.find((x) => x.id === a.targetId) : null;
-    const baseTarget = G.bases[1 - s.team];
-    const target = soldierTarget && !soldierTarget.dead ? soldierTarget : (baseTarget && baseTarget.hp > 0 ? baseTarget : null);
+    const baseTarget = nearestEnemyBase(s.x, s.y, s.team);
+    const target = soldierTarget && !soldierTarget.dead ? soldierTarget : baseTarget;
     const targetIsBase = !!target && target.kind === "base";
     let mvx = 0, mvy = 0;
     let desiredAim = s.aimAngle;
@@ -1414,6 +2049,19 @@
         tryThrowGrenade(s, t, desiredAim);
       }
       if (s.ammo <= 0) startReload(s, t);
+      // 近くに空いている銃座があれば取り付いて撃つ
+      if (s.vehicleId < 0 && !targetIsBase && t - (a.turretTry || 0) > 2500) {
+        a.turretTry = t;
+        for (const turret of G.turrets) {
+          if (turret.dead || turret.gunnerId >= 0) continue;
+          if (dist2(s.x, s.y, turret.x, turret.y) > 130 ** 2) continue;
+          turret.gunnerId = s.id; turret.team = s.team; s.turretId = turret.id;
+          s.x = turret.x - Math.cos(turret.angle) * 16;
+          s.y = turret.y - Math.sin(turret.angle) * 16;
+          a.lastSeen = t;
+          return;
+        }
+      }
     } else {
       s.shieldRaised = false;
       const dx = a.wx - s.x, dy = a.wy - s.y;
@@ -1421,13 +2069,15 @@
       mvx = dx / d; mvy = dy / d;
       if (d < 60) { mvx = 0; mvy = 0; }
       if (Math.hypot(mvx, mvy) > 0.05) desiredAim = Math.atan2(mvy, mvx);
+      // 敵が見えていないときだけ、進路に地雷を仕掛ける
+      if (s.mines > 0 && t - s.lastMine > 9000 && Math.random() < 0.004) tryPlaceMine(s, t);
     }
 
     // 障害物回避(前方に壁があれば横へ)
     const probe = 40;
     const px = s.x + mvx * probe, py = s.y + mvy * probe;
     for (const o of G.obstacles) {
-      if (circleRect(px, py, SOLDIER_R + 4, o.x, o.y, o.w, o.h)) {
+      if (isSolid(o) && circleRect(px, py, SOLDIER_R + 4, o.x, o.y, o.w, o.h)) {
         const tmp = mvx; mvx = -mvy * a.strafe; mvy = tmp * a.strafe;
         break;
       }
@@ -1443,14 +2093,104 @@
     s.moving = m > 0.05;
     s.noiseRadius = s.moving ? (dash ? 680 : 430) : 0;
     if (m > 1) { mvx /= m; mvy /= m; }
-    const sp = s.speed * (dash ? 1.55 : 1) * (s.shieldRaised ? 0.62 : 1);
+    const sp = s.speed * (dash ? 1.55 : 1) * (s.shieldRaised ? 0.62 : 1) * (s.snared ? WIRE_SLOW : 1);
     const nx = s.x + mvx * sp * dt;
     const ny = s.y + mvy * sp * dt;
     resolveMovement(s, nx, ny);
     if (s.moving) s.legPhase += dt * 12;
   }
 
+  // ---- 機関銃座 ----
+  function tryTurretShoot(turret, t) {
+    if (turret.dead || t - turret.lastShot < TURRET_GUN.interval) return;
+    turret.lastShot = t;
+    turret.muzzle = t;
+    const a = turret.angle + (Math.random() - 0.5) * TURRET_GUN.spread * 2;
+    const mx = turret.x + Math.cos(a) * 34;
+    const my = turret.y + Math.sin(a) * 34;
+    G.bullets.push({
+      kind: "bullet", x: mx, y: my,
+      vx: Math.cos(a) * TURRET_GUN.speed, vy: Math.sin(a) * TURRET_GUN.speed,
+      dmg: TURRET_GUN.dmg, team: turret.team, owner: turret.gunnerId,
+      range: TURRET_GUN.range, traveled: 0, pierce: 0, col: "#ffe0a0", len: 18,
+    });
+    addParticle(mx, my, { kind: "flash", life: 55, size: 12, a });
+    if (turret.gunnerId === G.localId) shake = Math.min(9, shake + 1.1);
+    if (dist2(turret.x, turret.y, camX + viewW() / 2, camY + viewH() / 2) < 700 ** 2) Audio.shot("rifle");
+  }
+
+  function dismountTurret(s) {
+    const turret = G.turrets.find((x) => x.id === s.turretId);
+    if (turret) { turret.gunnerId = -1; turret.team = -1; }
+    s.turretId = -1;
+  }
+
+  function damageTurret(turret, dmg, attacker) {
+    if (turret.dead) return;
+    // 味方が使っている銃座は撃てない
+    if (attacker && turret.team >= 0 && attacker.team === turret.team) return;
+    turret.hp -= dmg;
+    turret.hitFlash = 1;
+    if (turret.hp <= 0) destroyTurret(turret, attacker);
+  }
+
+  function destroyTurret(turret, attacker) {
+    if (turret.dead) return;
+    turret.dead = true;
+    turret.hp = 0;
+    turret.respawnAt = now() + TURRET_RESPAWN_MS;
+    Audio.boom();
+    createExplosionFx(turret.x, turret.y, 22);
+    const gunner = G.soldiers.find((s) => s.id === turret.gunnerId);
+    turret.gunnerId = -1;
+    turret.team = -1;
+    if (gunner) {
+      gunner.turretId = -1;
+      damageSoldier(gunner, 55, attacker, { x: turret.x, y: turret.y, type: "explosion" });
+    }
+  }
+
+  function updateTurrets(dt, t) {
+    for (const turret of G.turrets) {
+      if (turret.hitFlash > 0) turret.hitFlash = Math.max(0, turret.hitFlash - dt * 4);
+      if (turret.dead) {
+        if (t >= turret.respawnAt) {
+          turret.dead = false; turret.hp = turret.maxHp; turret.gunnerId = -1; turret.team = -1;
+        }
+        continue;
+      }
+      // 射手が死んだ / 離れたら銃座を解放する
+      const gunner = G.soldiers.find((s) => s.id === turret.gunnerId);
+      if (turret.gunnerId >= 0 && (!gunner || gunner.dead || gunner.turretId !== turret.id)) {
+        if (gunner) gunner.turretId = -1;
+        turret.gunnerId = -1;
+        turret.team = -1;
+      }
+    }
+  }
+
+  // E キーは戦車と銃座の両方に使う。近いほうへ乗り降りする。
   function enterOrExitTank(s) {
+    if (s.turretId >= 0) { dismountTurret(s); return; }
+    if (s.vehicleId < 0) {
+      let nearestTurret = null, bestTurret = TURRET_MOUNT_R * TURRET_MOUNT_R;
+      for (const turret of G.turrets) {
+        if (turret.dead || turret.gunnerId >= 0) continue;
+        const d = dist2(s.x, s.y, turret.x, turret.y);
+        if (d < bestTurret) { bestTurret = d; nearestTurret = turret; }
+      }
+      // 戦車が同じくらい近ければ戦車を優先する
+      const nearTank = G.tanks.some((tank) => !tank.dead && tank.team === s.team && tank.driverId < 0 && dist2(s.x, s.y, tank.x, tank.y) < 78 * 78);
+      if (nearestTurret && !nearTank) {
+        nearestTurret.gunnerId = s.id;
+        nearestTurret.team = s.team;
+        s.turretId = nearestTurret.id;
+        s.x = nearestTurret.x - Math.cos(nearestTurret.angle) * 16;
+        s.y = nearestTurret.y - Math.sin(nearestTurret.angle) * 16;
+        s.moving = false;
+        return;
+      }
+    }
     if (s.vehicleId >= 0) {
       const tank = G.tanks.find((x) => x.id === s.vehicleId);
       if (tank) {
@@ -1461,7 +2201,7 @@
           const a = tank.angle + offset;
           const x = tank.x + Math.cos(a) * (TANK_R + SOLDIER_R + 8);
           const y = tank.y + Math.sin(a) * (TANK_R + SOLDIER_R + 8);
-          const blocked = G.obstacles.some((o) => circleRect(x, y, SOLDIER_R, o.x, o.y, o.w, o.h)) ||
+          const blocked = G.obstacles.some((o) => isSolid(o) && circleRect(x, y, SOLDIER_R, o.x, o.y, o.w, o.h)) ||
             G.tanks.some((o) => o !== tank && !o.dead && dist2(x, y, o.x, o.y) < (TANK_R + SOLDIER_R) ** 2);
           if (!blocked) { s.x = x; s.y = y; placed = true; break; }
         }
@@ -1485,6 +2225,10 @@
 
   function applyTankInput(tank, s, inp, t) {
     s.shieldRaised = false;
+    // 乗車中の武器切替は主砲 / 機関銃の2択
+    if (inp.weaponWanted != null && inp.weaponWanted >= 0) {
+      tank.weapon = tank.weapon ? 0 : 1;
+    }
     tank.turretAngle = inp.aimAngle != null ? inp.aimAngle : tank.turretAngle;
     const m = Math.hypot(inp.mvx, inp.mvy);
     if (m > 0.05) {
@@ -1495,6 +2239,8 @@
     if (inp.shoot) tryTankShoot(tank, t);
     inp.reloadEdge = false;
     inp.grenadeEdge = false;
+    inp.mineEdge = false;
+    inp.wireEdge = false;
     inp.parryEdge = false;
     inp.weaponWanted = -1;
     s.x = tank.x; s.y = tank.y; s.aimAngle = tank.turretAngle; s.moving = m > 0.05;
@@ -1503,7 +2249,7 @@
   function updateTanks(dt, t) {
     for (const tank of G.tanks) {
       if (tank.dead) {
-        if (t >= tank.respawnAt) respawnTank(tank);
+        if (t >= tank.respawnAt && teamAlive(tank.team)) respawnTank(tank);
         continue;
       }
       const driver = G.soldiers.find((s) => s.id === tank.driverId && !s.dead);
@@ -1513,18 +2259,19 @@
       }
       if (tank.driverId >= 0) tank.driverId = -1;
 
-      const enemyBase = G.bases[1 - tank.team];
-      let target = enemyBase && enemyBase.hp > 0 ? enemyBase : null;
+      let target = nearestEnemyBase(tank.x, tank.y, tank.team);
       let best = target ? dist2(tank.x, tank.y, target.x, target.y) : Infinity;
+      // 兵士・犬は視線が通っているときだけ捕捉する(壁の裏は狙われない)
+      const tankSight = 880 * daylightVisionMul();
       for (const s of G.soldiers) {
         if (s.dead || s.vehicleId >= 0 || s.team === tank.team) continue;
         const d = dist2(tank.x, tank.y, s.x, s.y);
-        if (d < best) { best = d; target = s; }
+        if (d < best && canSee(tank, s, tankSight, null)) { best = d; target = s; }
       }
       for (const dog of G.dogs) {
         if (dog.dead || dog.team === tank.team) continue;
         const d = dist2(tank.x, tank.y, dog.x, dog.y);
-        if (d < best) { best = d; target = dog; }
+        if (d < best && canSee(tank, dog, tankSight, null)) { best = d; target = dog; }
       }
       for (const other of G.tanks) {
         if (other.dead || other.team === tank.team) continue;
@@ -1540,15 +2287,19 @@
         tank.angle = angLerp(tank.angle, aim, clamp(dt * 2.2, 0, 1));
         resolveTankMovement(tank, tank.x + Math.cos(tank.angle) * tank.speed * 0.7 * dt, tank.y + Math.sin(tank.angle) * tank.speed * 0.7 * dt);
       }
+      // 相手が装甲なら主砲、生身の歩兵や犬なら機関銃に持ち替える
+      const armored = target.kind === "tank" || target.kind === "base";
+      tank.weapon = armored ? 0 : 1;
       const aimGap = Math.abs(((aim - tank.turretAngle + Math.PI) % (Math.PI * 2)) - Math.PI);
-      if (d < 880 + (target.kind === "base" ? BASE_CORE_R : 0) && aimGap < 0.09 && lineClear(tank.x, tank.y, target.x, target.y)) tryTankShoot(tank, t);
+      const gapNeeded = tank.weapon === 0 ? 0.09 : 0.2;
+      if (d < 880 + (target.kind === "base" ? BASE_CORE_R : 0) && aimGap < gapNeeded && lineClear(tank.x, tank.y, target.x, target.y)) tryTankShoot(tank, t);
     }
   }
 
   function updateDogs(dt, t) {
     for (const dog of G.dogs) {
       if (dog.dead) {
-        if (t >= dog.respawnAt) respawnDog(dog);
+        if (t >= dog.respawnAt && teamAlive(dog.team)) respawnDog(dog);
         continue;
       }
       if (dog.hitFlash > 0) dog.hitFlash = Math.max(0, dog.hitFlash - dt * 5);
@@ -1559,24 +2310,27 @@
         if (handler) dog.handlerId = handler.id;
       }
 
+      // 犬は全方位を見る(視野角の制限なし)が、壁の裏までは分からない
+      const dogSight = 430 * daylightVisionMul();
       let target = null, best = Infinity;
       for (const enemy of G.soldiers) {
         if (enemy.dead || enemy.vehicleId >= 0 || enemy.team === dog.team) continue;
         const d2v = dist2(dog.x, dog.y, enemy.x, enemy.y);
-        const seen = d2v < 430 ** 2 && lineClear(dog.x, dog.y, enemy.x, enemy.y);
-        const heard = enemy.moving && d2v < ((enemy.noiseRadius || 390) + 130) ** 2;
-        if ((seen || heard) && d2v < best) { best = d2v; target = enemy; }
+        if (d2v >= best) continue;
+        if (canSee(dog, enemy, dogSight, null) || canHear(dog, enemy, 130)) { best = d2v; target = enemy; }
       }
       for (const enemyDog of G.dogs) {
         if (enemyDog === dog || enemyDog.dead || enemyDog.team === dog.team) continue;
         const d2v = dist2(dog.x, dog.y, enemyDog.x, enemyDog.y);
-        if (d2v < 330 ** 2 && d2v < best && lineClear(dog.x, dog.y, enemyDog.x, enemyDog.y)) { best = d2v; target = enemyDog; }
+        if (d2v < best && canSee(dog, enemyDog, 330 * daylightVisionMul(), null)) { best = d2v; target = enemyDog; }
       }
-      const enemyBase = G.bases[1 - dog.team];
-      if (!target && enemyBase && enemyBase.hp > 0 &&
-          (dist2(dog.x, dog.y, enemyBase.x, enemyBase.y) < 390 ** 2 ||
-           (handler && dist2(handler.x, handler.y, enemyBase.x, enemyBase.y) < 430 ** 2))) {
-        target = enemyBase;
+      if (!target) {
+        const enemyBase = nearestEnemyBase(dog.x, dog.y, dog.team);
+        if (enemyBase &&
+            (dist2(dog.x, dog.y, enemyBase.x, enemyBase.y) < 390 ** 2 ||
+             (handler && dist2(handler.x, handler.y, enemyBase.x, enemyBase.y) < 430 ** 2))) {
+          target = enemyBase;
+        }
       }
 
       let dx = 0, dy = 0, desired = dog.angle;
@@ -1621,9 +2375,10 @@
     }
   }
 
+  // 陥落した基地は補給・回復の機能を失う
   function inFriendlyBase(entity) {
     const base = G.bases[entity.team];
-    return !!base && dist2(entity.x, entity.y, base.x, base.y) < base.r ** 2;
+    return !!base && base.hp > 0 && dist2(entity.x, entity.y, base.x, base.y) < base.r ** 2;
   }
 
   function updateBases(dt, t) {
@@ -1637,11 +2392,13 @@
       if (s.shield < s.maxShield) s.shield = Math.min(s.maxShield, s.shield + 24 * dt);
       const w = WEAPONS[s.weapon];
       const maxGrenades = s.maxGrenades || 3;
-      const needsSupply = (!w.melee && s.ammo < w.mag) || s.grenades < maxGrenades;
+      const maxMines = s.maxMines || 2;
+      const maxWires = s.maxWires || 0;
+      const needsSupply = (!w.melee && s.ammo < w.mag) || s.grenades < maxGrenades || s.mines < maxMines || s.wires < maxWires;
       if (needsSupply && t - s.lastBaseSupplyAt >= 3000) {
         if (!w.melee) s.ammo = w.mag;
-        s.grenades = maxGrenades; s.reloading = false; s.lastBaseSupplyAt = t;
-        if (s.id === G.localId) { Audio.heal(); banner("基地で弾薬・グレネードを補給"); }
+        s.grenades = maxGrenades; s.mines = maxMines; s.wires = maxWires; s.reloading = false; s.lastBaseSupplyAt = t;
+        if (s.id === G.localId) { Audio.heal(); banner("基地で弾薬・グレネード・地雷を補給"); }
       }
     }
     for (const dog of G.dogs) {
@@ -1683,6 +2440,7 @@
   //  シミュレーション (host / sp)
   // ============================================================
   function simulate(dt, t) {
+    updateDayCycle(dt);
     // ローカルプレイヤー入力反映
     const me = localSoldier();
     if (me && !me.dead) {
@@ -1704,6 +2462,7 @@
       if (!human) updateAI(s, t, dt);
     }
     updateTanks(dt, t);
+    updateTurrets(dt, t);
     updateDogs(dt, t);
     updateFootsteps(dt, t);
     // リロード完了
@@ -1714,11 +2473,14 @@
       }
       if (s.hitFlash > 0) s.hitFlash = Math.max(0, s.hitFlash - dt * 4);
       if (s.recoil > 0) s.recoil = Math.max(0, s.recoil - dt * 26);
-      if (s.dead && t >= s.respawnAt) respawn(s);
+      // 基地を失った軍は復活できない(サバイバル形式)
+      if (s.dead && t >= s.respawnAt && teamAlive(s.team)) respawn(s);
     }
     // 弾
     updateBullets(dt);
     updateGrenades(dt, t);
+    updateMines(t);
+    updateWires(dt, t);
     updateHealthRecovery(dt, t);
     updateMedkits(t);
     updateBases(dt, t);
@@ -1733,8 +2495,30 @@
     updateParticles(dt);
   }
 
+  // 銃座に取り付いている間は動けない。照準と射撃だけ。
+  function applyTurretInput(turret, s, inp, t) {
+    turret.angle = inp.aimAngle != null ? inp.aimAngle : turret.angle;
+    s.aimAngle = turret.angle;
+    s.x = turret.x - Math.cos(turret.angle) * 16;
+    s.y = turret.y - Math.sin(turret.angle) * 16;
+    s.moving = false;
+    s.shieldRaised = false;
+    if (inp.shoot) tryTurretShoot(turret, t);
+    inp.reloadEdge = false;
+    inp.grenadeEdge = false;
+    inp.parryEdge = false;
+    inp.mineEdge = false;
+    inp.wireEdge = false;
+    inp.weaponWanted = -1;
+  }
+
   function applyLocalToSoldier(s, inp, t) {
     if (inp.interactEdge) { enterOrExitTank(s); inp.interactEdge = false; }
+    if (s.turretId >= 0) {
+      const turret = G.turrets.find((x) => x.id === s.turretId && !x.dead);
+      if (turret) { applyTurretInput(turret, s, inp, t); return; }
+      s.turretId = -1;
+    }
     if (s.vehicleId >= 0) {
       const tank = G.tanks.find((x) => x.id === s.vehicleId && !x.dead);
       if (tank) { applyTankInput(tank, s, inp, t); return; }
@@ -1742,8 +2526,8 @@
     }
     if (inp.parryEdge) {
       if (s.shield > 0 && t >= s.parryCooldownUntil && t >= s.stunnedUntil) {
-        s.parryUntil = t + 240;
-        s.parryCooldownUntil = t + 950;
+        s.parryUntil = t + 240 * (s.parryWindowMul || 1);
+        s.parryCooldownUntil = t + 950 * (s.parryCooldownMul || 1);
       }
       inp.parryEdge = false;
     }
@@ -1751,7 +2535,8 @@
     if (s.shieldRaised) s.reloading = false;
     // 武器変更
     if (inp.weaponWanted != null && inp.weaponWanted >= 0 && inp.weaponWanted !== s.weapon) {
-      if (s.allWeapons || s.weapon === inp.weaponWanted) {
+      // 兵科の装備に無い武器は選べない
+      if (s.loadout && s.loadout.indexOf(inp.weaponWanted) >= 0) {
         const oldWeapon = WEAPONS[s.weapon];
         s.weapon = inp.weaponWanted;
         const newWeapon = WEAPONS[s.weapon];
@@ -1766,6 +2551,8 @@
     s.aimAngle = inp.aimAngle != null ? inp.aimAngle : Math.atan2(inp.aimy, inp.aimx);
     if (inp.reloadEdge) { startReload(s, t); inp.reloadEdge = false; }
     if (inp.grenadeEdge) { tryThrowGrenade(s, t); inp.grenadeEdge = false; }
+    if (inp.mineEdge) { tryPlaceMine(s, t); inp.mineEdge = false; }
+    if (inp.wireEdge) { tryPlaceWire(s, t); inp.wireEdge = false; }
     if (inp.shoot) tryShoot(s, t);
     applyMove(s, inp.mvx, inp.mvy, dtGlobal, inp.dash && !s.shieldRaised);
   }
@@ -1785,8 +2572,9 @@
         dead = true;
       }
       if (!dead) {
-        // 障害物
+        // 障害物 (茂みや対戦車バリケードは弾が抜ける)
         for (const o of G.obstacles) {
+          if (!stopsBullets(o)) continue;
           if (b.x >= o.x && b.x <= o.x + o.w && b.y >= o.y && b.y <= o.y + o.h) {
             if (o.type === "barrel") { o.hp -= b.dmg; }
             if (b.kind === "shell") explodeProjectile(b);
@@ -1821,6 +2609,21 @@
             else {
               damageTank(tank, b.dmg * 0.55, attacker);
               addParticle(b.x, b.y, { kind: "spark", vx: rand(-80, 80), vy: rand(-80, 80), life: 220, size: 3.2 });
+            }
+            dead = true; break;
+          }
+        }
+      }
+      if (!dead) {
+        // 機関銃座 (中立のものは誰の弾でも当たる)
+        for (const turret of G.turrets) {
+          if (turret.dead || (turret.team >= 0 && turret.team === b.team)) continue;
+          if (dist2(b.x, b.y, turret.x, turret.y) < (TURRET_R + 3) ** 2) {
+            const attacker = projectileAttacker(b);
+            if (b.kind === "shell") explodeProjectile(b);
+            else {
+              damageTurret(turret, b.dmg * 0.8, attacker);
+              addParticle(b.x, b.y, { kind: "spark", vx: rand(-80, 80), vy: rand(-80, 80), life: 200, size: 3 });
             }
             dead = true; break;
           }
@@ -1888,8 +2691,25 @@
   }
   window.addEventListener("resize", resize);
 
+  // 観戦中は生き残っている誰かを追う。数秒ごとに切り替えて戦況が見えるようにする。
+  function spectateTarget() {
+    const t = now();
+    let target = G.soldiers.find((s) => s.id === spectateTargetId && !s.dead);
+    if (!target || t > spectateSwitchAt) {
+      const alive = G.soldiers.filter((s) => !s.dead);
+      if (alive.length) {
+        // 撃破数が多い兵士ほど戦況の中心にいる
+        const lead = alive.reduce((a, b) => (b.kills > a.kills ? b : a), alive[0]);
+        target = lead;
+        spectateTargetId = lead.id;
+        spectateSwitchAt = t + 4000;
+      }
+    }
+    return target;
+  }
+
   function updateCamera() {
-    const me = localSoldier();
+    const me = spectating ? spectateTarget() : localSoldier();
     let tx, ty;
     if (me) { tx = me.x - viewW() / 2; ty = me.y - viewH() / 2; }
     else { tx = WORLD_W / 2 - viewW() / 2; ty = WORLD_H / 2 - viewH() / 2; }
@@ -1914,14 +2734,19 @@
     // 影 → 車両 → 兵士 → 投擲物/弾 → パーティクル
     drawStains();
     drawObstaclesBack();
+    drawWires();
+    drawMines();
     drawPickups();
+    for (const turret of G.turrets) if (!turret.dead && isEntityVisible(turret)) drawTurretShadow(turret);
     for (const tank of G.tanks) if (!tank.dead && isEntityVisible(tank)) drawTankShadow(tank);
     for (const dog of G.dogs) if (!dog.dead && isEntityVisible(dog)) drawDogShadow(dog);
     for (const s of G.soldiers) if (!s.dead && s.vehicleId < 0 && isEntityVisible(s)) drawSoldierShadow(s);
     drawParticlesUnder();
+    for (const turret of G.turrets) if (!turret.dead && isEntityVisible(turret)) drawTurret(turret);
     for (const tank of G.tanks) if (!tank.dead && isEntityVisible(tank)) drawTank(tank);
     for (const dog of G.dogs) if (!dog.dead && isEntityVisible(dog)) drawDog(dog);
     for (const s of G.soldiers) if (!s.dead && s.vehicleId < 0 && isEntityVisible(s)) drawSoldier(s);
+    drawObstaclesOver();
     drawGrenades();
     drawBullets();
     drawParticlesOver();
@@ -1931,6 +2756,7 @@
     ctx.restore();
 
     if (shake > 0) shake = Math.max(0, shake - 0.6);
+    drawNightTint(vw, vh);
     drawVisionMask(vw, vh);
     drawFootstepIndicators(vw, vh);
     drawMinimap();
@@ -1948,60 +2774,78 @@
         ctx.fillRect(x, y, TS, TS);
       }
     }
-    // スポーンゾーンの色付け
-    ctx.fillStyle = "rgba(78,163,255,0.06)";
-    ctx.fillRect(0, WORLD_H - 380, 400, 380);
-    ctx.fillStyle = "rgba(255,90,78,0.06)";
-    ctx.fillRect(WORLD_W - 400, 0, 400, 380);
+    // 4隅のスポーンゾーンをチーム色で薄く塗る
+    for (const base of G.bases) {
+      const def = teamDef(base.team);
+      ctx.fillStyle = hexToRgba(def.flag, base.hp > 0 ? 0.06 : 0.02);
+      ctx.fillRect(base.x - 200, base.y - 190, 400, 380);
+    }
+  }
+
+  function hexToRgba(hex, alpha) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
   }
 
   function drawBases() {
     for (const base of G.bases) {
-      const ally = base.team === TEAM_ALLY;
+      const def = teamDef(base.team);
+      const fallen = base.hp <= 0;
       ctx.save();
+      ctx.globalAlpha = fallen ? 0.45 : 1;
       ctx.translate(base.x, base.y);
-      ctx.fillStyle = ally ? "rgba(55,115,155,0.22)" : "rgba(150,65,48,0.22)";
-      ctx.strokeStyle = ally ? "rgba(105,190,235,0.62)" : "rgba(245,110,82,0.62)";
+      ctx.fillStyle = def.baseFill;
+      ctx.strokeStyle = def.baseStroke;
       ctx.lineWidth = 4; ctx.setLineDash([15, 10]);
       ctx.beginPath(); ctx.arc(0, 0, base.r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       ctx.setLineDash([]);
       // 司令区画と補給パッド
       ctx.rotate(base.heading);
-      ctx.fillStyle = base.hitFlash > 0 ? "#fff0bd" : ally ? "#385b64" : "#70423a";
+      ctx.fillStyle = base.hitFlash > 0 ? "#fff0bd" : fallen ? "#3a3a33" : def.coreDark;
       ctx.fillRect(-72, -48, 110, 96);
-      ctx.fillStyle = base.hitFlash > 0 ? "#ffc26f" : ally ? "#527c82" : "#925648";
+      ctx.fillStyle = base.hitFlash > 0 ? "#ffc26f" : fallen ? "#54544a" : def.coreLight;
       ctx.beginPath(); ctx.moveTo(-78, -53); ctx.lineTo(44, -53); ctx.lineTo(58, 0); ctx.lineTo(44, 53); ctx.lineTo(-78, 53); ctx.closePath(); ctx.fill();
       ctx.strokeStyle = "rgba(255,255,255,0.22)"; ctx.lineWidth = 3; ctx.stroke();
       ctx.fillStyle = "rgba(15,20,14,0.7)"; ctx.fillRect(-58, -19, 34, 38);
       ctx.restore();
 
-      // 軍旗
+      ctx.save();
+      ctx.globalAlpha = fallen ? 0.55 : 1;
+      // 軍旗(陥落時は半旗)
+      const flagTop = fallen ? base.y - 48 : base.y - 88;
       ctx.strokeStyle = "#d5d2b0"; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.moveTo(base.x + 55, base.y - 18); ctx.lineTo(base.x + 55, base.y - 88); ctx.stroke();
-      ctx.fillStyle = ally ? "#4ea3ff" : "#ff5a4e";
-      ctx.beginPath(); ctx.moveTo(base.x + 57, base.y - 86); ctx.lineTo(base.x + 112, base.y - 73); ctx.lineTo(base.x + 57, base.y - 56); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = fallen ? "#5d5d52" : def.flag;
+      ctx.beginPath(); ctx.moveTo(base.x + 57, flagTop + 2); ctx.lineTo(base.x + 112, flagTop + 15); ctx.lineTo(base.x + 57, flagTop + 32); ctx.closePath(); ctx.fill();
       ctx.font = "bold 14px -apple-system, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,0.75)";
-      const label = `${G.armyNames[base.team]} 基地`;
-      ctx.strokeText(label, base.x, base.y + base.r - 18); ctx.fillStyle = ally ? "#bfe4ff" : "#ffd0c8"; ctx.fillText(label, base.x, base.y + base.r - 18);
+      const label = fallen ? `${G.armyNames[base.team]} 基地 陥落` : `${G.armyNames[base.team]} 基地`;
+      ctx.strokeText(label, base.x, base.y + base.r - 18);
+      ctx.fillStyle = fallen ? "#b6b6a8" : def.text;
+      ctx.fillText(label, base.x, base.y + base.r - 18);
       const bw = 164, bh = 9, by = base.y + base.r - 4;
       const ratio = clamp(base.hp / base.maxHp, 0, 1);
       ctx.fillStyle = "rgba(0,0,0,0.72)"; ctx.fillRect(base.x - bw / 2 - 2, by - 2, bw + 4, bh + 4);
-      ctx.fillStyle = ally ? "#4ea3ff" : "#ff5a4e"; ctx.fillRect(base.x - bw / 2, by, bw * ratio, bh);
+      ctx.fillStyle = def.flag; ctx.fillRect(base.x - bw / 2, by, bw * ratio, bh);
       ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.lineWidth = 1; ctx.strokeRect(base.x - bw / 2, by, bw, bh);
       ctx.font = "bold 9px -apple-system, sans-serif"; ctx.fillStyle = "#fff";
       ctx.fillText(`${Math.ceil(base.hp)} / ${base.maxHp}`, base.x, by + 5);
+      ctx.restore();
     }
   }
 
   function currentVisionRadius() {
     const me = localSoldier();
     const shortSide = Math.min(viewW(), viewH());
-    if (me && me.vehicleId >= 0) return Math.min(TANK_VISION_R, Math.max(300, shortSide * 0.78));
-    return Math.min(PLAYER_VISION_R, Math.max(210, shortSide * 0.6));
+    // 画面サイズで頭打ちにしたうえで、時間帯の倍率をかける
+    const base = me && me.vehicleId >= 0
+      ? Math.min(TANK_VISION_R, Math.max(300, shortSide * 0.78))
+      : Math.min(PLAYER_VISION_R, Math.max(210, shortSide * 0.6));
+    return base * daylightVisionMul();
   }
 
   function isEntityVisible(entity) {
+    if (spectating) return true;   // 観戦中は全部見える
     const me = localSoldier();
     if (!me || entity.team === me.team) return true;
     const bonus = entity.kind === "tank" ? 65 : 0;
@@ -2020,8 +2864,19 @@
     }
   }
 
+  // 木と茂みは兵士より手前に描く。茂みに入った兵士が隠れて見えるようにするため。
+  const OVERHEAD_TYPES = { tree: 1, bush: 1 };
+
   function drawObstaclesBack() {
-    for (const o of G.obstacles) drawObstacle(o);
+    for (const o of G.obstacles) {
+      if (!OVERHEAD_TYPES[o.type]) drawObstacle(o);
+    }
+  }
+
+  function drawObstaclesOver() {
+    for (const o of G.obstacles) {
+      if (OVERHEAD_TYPES[o.type]) drawObstacle(o);
+    }
   }
 
   function drawPickups() {
@@ -2090,13 +2945,96 @@
       ctx.beginPath(); ctx.arc(o.x + o.w / 2, o.y + o.h / 2, (o.r || 15) - 4, 0, 6.283); ctx.stroke();
       ctx.fillStyle = "#ffd23f"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText("⚠", o.x + o.w / 2, o.y + o.h / 2 + 1);
+    } else if (o.type === "ruin") {
+      // 崩れかけたコンクリート壁。上辺をギザギザにして瓦礫感を出す。
+      const seg = Math.max(3, Math.round(o.w / 18));
+      ctx.fillStyle = "#5d5951";
+      for (let i = 0; i < seg; i++) {
+        const sw = o.w / seg;
+        const drop = ((Math.sin((o.seed || 0) * 40 + i * 2.3) + 1) / 2) * o.h * 0.4;
+        ctx.fillRect(o.x + i * sw, o.y + drop, sw + 0.5, o.h - drop);
+      }
+      ctx.fillStyle = "rgba(0,0,0,0.24)"; ctx.fillRect(o.x, o.y + o.h - 5, o.w, 5);
+      ctx.strokeStyle = "rgba(30,28,25,0.5)"; ctx.lineWidth = 1;
+      ctx.strokeRect(o.x + 0.5, o.y + 0.5, o.w - 1, o.h - 1);
+    } else if (o.type === "tree") {
+      const cx = o.x + o.w / 2, cy = o.y + o.h / 2, r = o.w / 2;
+      ctx.fillStyle = "rgba(0,0,0,0.2)";
+      ctx.beginPath(); ctx.ellipse(cx + 4, cy + 6, r, r * 0.82, 0, 0, 6.283); ctx.fill();
+      ctx.fillStyle = "#5a4029";
+      ctx.beginPath(); ctx.arc(cx, cy, r * 0.28, 0, 6.283); ctx.fill();
+      // 葉は3枚重ねて厚みを出す
+      const leaves = ["#2f5127", "#3a6330", "#46753a"];
+      for (let i = 0; i < 3; i++) {
+        ctx.fillStyle = leaves[i];
+        ctx.beginPath();
+        ctx.arc(cx - i * 2, cy - i * 3, r * (1 - i * 0.18), 0, 6.283);
+        ctx.fill();
+      }
+    } else if (o.type === "bush") {
+      // 通り抜けられるが視線は通らない = 伏兵に使える
+      const cx = o.x + o.w / 2, cy = o.y + o.h / 2;
+      const blobs = 5;
+      for (let i = 0; i < blobs; i++) {
+        const a = i * Math.PI * 2 / blobs + (o.seed || 0) * 6;
+        ctx.fillStyle = i % 2 ? "rgba(52,92,44,0.86)" : "rgba(63,108,52,0.86)";
+        ctx.beginPath();
+        ctx.ellipse(cx + Math.cos(a) * o.w * 0.2, cy + Math.sin(a) * o.h * 0.2, o.w * 0.34, o.h * 0.34, a, 0, 6.283);
+        ctx.fill();
+      }
+      ctx.fillStyle = "rgba(126,176,102,0.35)";
+      ctx.beginPath(); ctx.ellipse(cx - o.w * 0.1, cy - o.h * 0.12, o.w * 0.2, o.h * 0.16, 0, 0, 6.283); ctx.fill();
+    } else if (o.type === "wreck") {
+      // 焼け落ちた車両
+      const cx = o.x + o.w / 2, cy = o.y + o.h / 2;
+      ctx.save();
+      ctx.translate(cx, cy); ctx.rotate(((o.seed || 0) - 0.5) * 0.7);
+      ctx.fillStyle = "#3b3630";
+      ctx.fillRect(-o.w / 2, -o.h / 2, o.w, o.h);
+      ctx.fillStyle = "#57504533"; ctx.fillRect(-o.w / 2, -o.h / 2, o.w, o.h * 0.3);
+      ctx.fillStyle = "#26221e";
+      ctx.fillRect(-o.w * 0.18, -o.h * 0.34, o.w * 0.4, o.h * 0.68);
+      ctx.fillStyle = "#6b4a2c";
+      ctx.fillRect(-o.w / 2 + 3, -o.h / 2 - 3, o.w * 0.3, 4);
+      ctx.fillStyle = "#181513";
+      ctx.beginPath(); ctx.arc(-o.w * 0.28, -o.h / 2, 6, 0, 6.283); ctx.fill();
+      ctx.beginPath(); ctx.arc(o.w * 0.3, o.h / 2, 6, 0, 6.283); ctx.fill();
+      ctx.restore();
+    } else if (o.type === "tires") {
+      const cx = o.x + o.w / 2, cy = o.y + o.h / 2;
+      for (let i = 2; i >= 0; i--) {
+        const r = o.w / 2 - i * 3;
+        ctx.fillStyle = i === 0 ? "#33322f" : "#232220";
+        ctx.beginPath(); ctx.arc(cx - i * 2, cy - i * 3, r, 0, 6.283); ctx.fill();
+        ctx.fillStyle = "#4a4844";
+        ctx.beginPath(); ctx.arc(cx - i * 2, cy - i * 3, r * 0.42, 0, 6.283); ctx.fill();
+      }
+    } else if (o.type === "hedgehog") {
+      // 対戦車バリケード。歩兵も車両も通れないが、弾と視線は抜ける。
+      const cx = o.x + o.w / 2, cy = o.y + o.h / 2, r = o.w / 2;
+      ctx.strokeStyle = "#7d8288"; ctx.lineWidth = 5; ctx.lineCap = "round";
+      for (let i = 0; i < 3; i++) {
+        const a = i * Math.PI / 3 + (o.seed || 0);
+        ctx.beginPath();
+        ctx.moveTo(cx - Math.cos(a) * r, cy - Math.sin(a) * r);
+        ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = "#4c5054"; ctx.lineWidth = 2;
+      for (let i = 0; i < 3; i++) {
+        const a = i * Math.PI / 3 + (o.seed || 0);
+        ctx.beginPath();
+        ctx.moveTo(cx - Math.cos(a) * r, cy - Math.sin(a) * r);
+        ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+        ctx.stroke();
+      }
     }
   }
 
   function teamColors(s) {
-    if (s.id === G.localId) return { u: COL.youUniform, a: COL.youAccent };
-    if (s.team === TEAM_ALLY) return { u: COL.allyUniform, a: COL.allyAccent };
-    return { u: COL.enemyUniform, a: COL.enemyAccent };
+    if (s.id === G.localId) return { u: YOU_UNIFORM, a: YOU_ACCENT };
+    const def = teamDef(s.team);
+    return { u: def.uniform, a: def.accent };
   }
 
   function drawSoldierShadow(s) {
@@ -2112,8 +3050,8 @@
   }
 
   function drawDog(dog) {
-    const harness = dog.team === TEAM_ALLY ? "#4f9ed7" : "#d85445";
-    const fur = dog.team === TEAM_ALLY ? "#554536" : "#49362f";
+    const harness = teamDef(dog.team).dogHarness;
+    const fur = teamDef(dog.team).dogFur;
     const bite = now() - dog.biteAt < 170;
     ctx.save();
     ctx.translate(dog.x, dog.y); ctx.rotate(dog.angle);
@@ -2143,6 +3081,49 @@
     ctx.restore();
   }
 
+  function drawTurretShadow(turret) {
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.beginPath(); ctx.ellipse(turret.x + 3, turret.y + 5, TURRET_R + 2, TURRET_R - 4, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawTurret(turret) {
+    // 誰も乗っていない銃座は灰色、取り付かれたらその軍の色になる
+    const held = turret.team >= 0;
+    const accent = held ? teamDef(turret.team).flag : "#8e9384";
+    ctx.save();
+    ctx.translate(turret.x, turret.y);
+    // 土嚢の陣地
+    ctx.fillStyle = "#6f6a44";
+    for (let i = 0; i < 6; i++) {
+      const a = i * Math.PI * 2 / 6;
+      ctx.fillStyle = i % 2 ? "#7a754d" : "#67623f";
+      ctx.beginPath();
+      ctx.ellipse(Math.cos(a) * (TURRET_R - 2), Math.sin(a) * (TURRET_R - 2), 9, 6, a, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = "#3f4438";
+    ctx.beginPath(); ctx.arc(0, 0, TURRET_R - 8, 0, Math.PI * 2); ctx.fill();
+    // 銃身と防盾は照準方向へ回る
+    ctx.rotate(turret.angle);
+    ctx.fillStyle = "#2a2c26";
+    ctx.fillRect(6, -3.5, 34, 7);
+    ctx.fillStyle = accent;
+    ctx.fillRect(2, -13, 8, 26);              // 防盾
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.fillRect(4, -4, 4, 8);                // 覗き窓
+    ctx.fillStyle = "#3a3d34";
+    ctx.beginPath(); ctx.arc(0, 0, 9, 0, Math.PI * 2); ctx.fill();
+    if (now() - turret.muzzle < 55) {
+      ctx.fillStyle = "rgba(255,220,120,0.95)";
+      ctx.beginPath(); ctx.moveTo(40, 0); ctx.lineTo(54, -7); ctx.lineTo(61, 0); ctx.lineTo(54, 7); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+    if (turret.hitFlash > 0) {
+      ctx.fillStyle = `rgba(255,255,255,${turret.hitFlash * 0.5})`;
+      ctx.beginPath(); ctx.arc(turret.x, turret.y, TURRET_R, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
   function drawTankShadow(tank) {
     ctx.save();
     ctx.translate(tank.x + 5, tank.y + 8);
@@ -2153,9 +3134,8 @@
   }
 
   function drawTank(tank) {
-    const ally = tank.team === TEAM_ALLY;
-    const body = ally ? "#365c66" : "#713e35";
-    const light = ally ? "#588a91" : "#9a5b48";
+    const body = teamDef(tank.team).tankBody;
+    const light = teamDef(tank.team).tankLight;
     ctx.save();
     ctx.translate(tank.x, tank.y);
     ctx.rotate(tank.angle);
@@ -2191,6 +3171,44 @@
       ctx.beginPath(); ctx.moveTo(53, 0); ctx.lineTo(70, -9); ctx.lineTo(79, 0); ctx.lineTo(70, 9); ctx.closePath(); ctx.fill();
     }
     ctx.restore();
+  }
+
+  // 近接武器の見た目。原点は握り手、+X が刃先の向き。
+  function drawMeleeWeapon(style) {
+    if (style === "bayonet") {
+      // 銃身に着剣した細身の刺突武器
+      ctx.fillStyle = "#23231f"; ctx.fillRect(-2, -2.5, 20, 5);
+      ctx.fillStyle = "#e6ecee";
+      ctx.beginPath(); ctx.moveTo(18, -3); ctx.lineTo(36, 0); ctx.lineTo(18, 3); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "#8b9599"; ctx.lineWidth = 1; ctx.stroke();
+    } else if (style === "hatchet") {
+      // 短い柄 + 扇形の斧刃
+      ctx.fillStyle = "#6b4423"; ctx.fillRect(-2, -2.5, 17, 5);
+      ctx.fillStyle = "#cfd7da";
+      ctx.beginPath(); ctx.moveTo(13, -3); ctx.lineTo(22, -11); ctx.lineTo(27, -1); ctx.lineTo(21, 6); ctx.lineTo(13, 3); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "#7d868a"; ctx.lineWidth = 1; ctx.stroke();
+    } else if (style === "shovel") {
+      // 長い柄 + 四角い匙。一番リーチが長く、振りも大きい。
+      ctx.fillStyle = "#5d4a2e"; ctx.fillRect(-2, -3, 24, 6);
+      ctx.fillStyle = "#9aa3a6";
+      ctx.beginPath(); ctx.moveTo(21, -9); ctx.lineTo(34, -8); ctx.lineTo(36, 0); ctx.lineTo(34, 8); ctx.lineTo(21, 9); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "#6d7679"; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.22)"; ctx.fillRect(24, -5, 8, 10);
+    } else if (style === "katana") {
+      // 長い柄 + 反りのある刀身
+      ctx.fillStyle = "#2b2b33"; ctx.fillRect(-4, -2.5, 12, 5);
+      ctx.fillStyle = "#c9a227"; ctx.fillRect(7, -5, 3, 10);   // 鍔
+      ctx.strokeStyle = "#eef3f6"; ctx.lineWidth = 4; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(10, 1); ctx.quadraticCurveTo(28, -1, 42, -7); ctx.stroke();
+      ctx.strokeStyle = "#9fb0b8"; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(10, 1); ctx.quadraticCurveTo(28, -1, 42, -7); ctx.stroke();
+    } else {
+      // knife
+      ctx.fillStyle = "#5b3a22"; ctx.fillRect(-2, -3, 9, 6);
+      ctx.fillStyle = "#dfe5e7";
+      ctx.beginPath(); ctx.moveTo(7, -4); ctx.lineTo(25, 0); ctx.lineTo(7, 4); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "#727b7e"; ctx.lineWidth = 1; ctx.stroke();
+    }
   }
 
   function drawSoldier(s) {
@@ -2238,13 +3256,15 @@
       ctx.beginPath(); ctx.arc(12, 8, 3.4, 0, Math.PI * 2); ctx.fill();
     } else if (w.melee) {
       const attackAge = now() - s.muzzle;
-      const swing = attackAge < 180 ? -0.95 + (attackAge / 180) * 1.9 : 0;
+      // 振りかぶり → 振り抜きを1回のスイングで表現。武器が重いほど大きく振る。
+      const swingSpan = w.style === "shovel" ? 2.5 : w.style === "hatchet" ? 2.1 : w.style === "katana" ? 2.3 : w.style === "bayonet" ? 0.5 : 1.9;
+      const swingMs = w.style === "bayonet" ? 110 : 180;
+      const swing = attackAge < swingMs ? -swingSpan / 2 + (attackAge / swingMs) * swingSpan : 0;
+      // 銃剣だけは振らずに前へ突き出す
+      const thrust = w.style === "bayonet" && attackAge < swingMs ? 10 * (1 - attackAge / swingMs) : 0;
       ctx.save();
-      ctx.translate(SOLDIER_R - 4 - recoilBack, 0); ctx.rotate(swing);
-      ctx.fillStyle = "#5b3a22"; ctx.fillRect(-2, -3, 9, 6);
-      ctx.fillStyle = "#dfe5e7";
-      ctx.beginPath(); ctx.moveTo(7, -4); ctx.lineTo(25, 0); ctx.lineTo(7, 4); ctx.closePath(); ctx.fill();
-      ctx.strokeStyle = "#727b7e"; ctx.lineWidth = 1; ctx.stroke();
+      ctx.translate(SOLDIER_R - 4 - recoilBack + thrust, 0); ctx.rotate(swing);
+      drawMeleeWeapon(w.style);
       ctx.fillStyle = "#caa06b"; ctx.beginPath(); ctx.arc(1, 1, 3.5, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     } else {
@@ -2302,6 +3322,86 @@
     }
   }
 
+  // 有刺鉄線。地雷と違って隠せないので、敵味方どちらからも見える。
+  function drawWires() {
+    const mine = localTeam();
+    for (const wire of G.wires) {
+      const def = teamDef(wire.team);
+      const friendly = wire.team === mine;
+      ctx.save();
+      ctx.translate(wire.x, wire.y);
+      ctx.fillStyle = friendly ? hexToRgba(def.flag, 0.1) : "rgba(255,90,78,0.12)";
+      ctx.beginPath(); ctx.arc(0, 0, WIRE_R, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = friendly ? hexToRgba(def.flag, 0.45) : "rgba(255,120,100,0.5)";
+      ctx.lineWidth = 1.5; ctx.setLineDash([5, 5]);
+      ctx.beginPath(); ctx.arc(0, 0, WIRE_R, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      // 絡まった針金を数本描く
+      ctx.strokeStyle = "#9aa0a4"; ctx.lineWidth = 2;
+      for (let i = 0; i < 4; i++) {
+        const a = i * Math.PI / 4 + (wire.seed || 0) * 3;
+        ctx.beginPath();
+        ctx.moveTo(-Math.cos(a) * WIRE_R * 0.85, -Math.sin(a) * WIRE_R * 0.85);
+        ctx.quadraticCurveTo(Math.sin(a) * 14, -Math.cos(a) * 14, Math.cos(a) * WIRE_R * 0.85, Math.sin(a) * WIRE_R * 0.85);
+        ctx.stroke();
+      }
+      // トゲ
+      ctx.strokeStyle = "#d8dee2"; ctx.lineWidth = 1.4;
+      for (let i = 0; i < 12; i++) {
+        const a = i * Math.PI * 2 / 12 + (wire.seed || 0);
+        const r = WIRE_R * 0.55;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * r - 3, Math.sin(a) * r - 3);
+        ctx.lineTo(Math.cos(a) * r + 3, Math.sin(a) * r + 3);
+        ctx.moveTo(Math.cos(a) * r + 3, Math.sin(a) * r - 3);
+        ctx.lineTo(Math.cos(a) * r - 3, Math.sin(a) * r + 3);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  // 味方の地雷は常に見える。敵の地雷は踏む寸前まで見えない。
+  function drawMines() {
+    const t = now();
+    const me = localSoldier();
+    const mine = localTeam();
+    for (const m of G.mines) {
+      const friendly = m.team === mine;
+      let alpha = 1;
+      if (!friendly) {
+        if (!me) continue;
+        // 罠師は罠の扱いに長けているので、敵の地雷も見抜ける
+        const spot = me.seesEnemyMines ? currentVisionRadius() : MINE_SPOT_R * (m.stealthMul || 1);
+        const d = Math.sqrt(dist2(me.x, me.y, m.x, m.y));
+        if (d > spot || !lineClear(me.x, me.y, m.x, m.y)) continue;
+        alpha = clamp(1 - (d - spot * 0.55) / (spot * 0.45), 0.25, 1);
+      }
+      const armed = t >= m.armAt;
+      const def = teamDef(m.team);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = "rgba(0,0,0,0.28)";
+      ctx.beginPath(); ctx.ellipse(m.x + 2, m.y + 3, 10, 5, 0, 0, Math.PI * 2); ctx.fill();
+      // 本体
+      ctx.fillStyle = armed ? "#4a4b40" : "#5d5e50";
+      ctx.beginPath(); ctx.arc(m.x, m.y, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = friendly ? def.flag : "#ff6b52"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(m.x, m.y, 9, 0, Math.PI * 2); ctx.stroke();
+      // 中央のランプ: 作動後は点滅する
+      const blink = armed ? (Math.floor(t / 380) % 2 === 0 ? 1 : 0.28) : 0.5;
+      ctx.fillStyle = armed ? `rgba(255,90,70,${blink})` : "rgba(220,220,150,0.7)";
+      ctx.beginPath(); ctx.arc(m.x, m.y, 3.4, 0, Math.PI * 2); ctx.fill();
+      // 味方には作動範囲を薄く見せる
+      if (friendly) {
+        ctx.strokeStyle = hexToRgba(def.flag, 0.2); ctx.lineWidth = 1; ctx.setLineDash([4, 5]);
+        ctx.beginPath(); ctx.arc(m.x, m.y, MINE_TRIGGER_R, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.restore();
+    }
+  }
+
   function drawGrenades() {
     const t = now();
     for (const g of G.grenades) {
@@ -2349,10 +3449,11 @@
         ctx.fillStyle = `rgba(255,${(120 + lr * 120) | 0},40,${lr})`;
         ctx.beginPath(); ctx.arc(p.x, p.y, (1 - lr) * 110 + 10, 0, 6.283); ctx.fill();
       } else if (p.kind === "slash") {
+        const half = p.arc || 0.95;
         ctx.save();
         ctx.translate(p.x, p.y); ctx.rotate(p.a);
         ctx.strokeStyle = `rgba(235,245,255,${lr})`; ctx.lineWidth = 4 * lr + 1;
-        ctx.beginPath(); ctx.arc(0, 0, p.size, -0.95, 0.95); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 0, p.size, -half, half); ctx.stroke();
         ctx.restore();
       } else if (p.kind === "heal") {
         ctx.fillStyle = `rgba(115,245,145,${lr})`;
@@ -2404,11 +3505,31 @@
     }
   }
 
+  // 時間帯に応じた色かぶり。夜は青く暗く、朝夕はオレンジ寄り。
+  function drawNightTint(vw, vh) {
+    const light = daylight();
+    const dark = 1 - light;
+    if (dark < 0.02) return;
+    ctx.save();
+    ctx.fillStyle = `rgba(10,18,48,${dark * 0.52})`;
+    ctx.fillRect(0, 0, vw, vh);
+    // 日の出・日の入りの時間帯だけ暖色をひとさじ
+    const warm = Math.max(0, 1 - Math.abs(light - 0.45) * 4);
+    if (warm > 0.01) {
+      ctx.fillStyle = `rgba(255,132,54,${warm * 0.14})`;
+      ctx.fillRect(0, 0, vw, vh);
+    }
+    ctx.restore();
+  }
+
   function drawVisionMask(vw, vh) {
+    if (spectating) return;        // 観戦中は視界制限なし
     const me = localSoldier();
     if (!me) return;
     const px = me.x - camX, py = me.y - camY;
-    const radius = me.dead ? 115 : currentVisionRadius();
+    // 倒れて復活も見込めない間は、選択待ちのあいだも少し広く見せる
+    const eliminatedView = me.dead && !teamAlive(me.team);
+    const radius = eliminatedView ? currentVisionRadius() * 1.7 : me.dead ? 115 : currentVisionRadius();
     ctx.save();
     ctx.fillStyle = "rgba(3,6,2,0.83)";
     ctx.beginPath(); ctx.rect(0, 0, vw, vh); ctx.arc(px, py, radius, 0, Math.PI * 2, true); ctx.fill("evenodd");
@@ -2438,47 +3559,52 @@
   function drawNameTags() {
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
+    const mine = localTeam();
     for (const s of G.soldiers) {
       if (s.dead || s.vehicleId >= 0 || !isEntityVisible(s)) continue;
-      const c = teamColors(s);
+      const def = teamDef(s.team);
       const tx = s.x, ty = s.y - SOLDIER_R - 16;
-      // HPバー
+      // HPバー: 味方は緑、それ以外はその軍の色
       const bw = 38, bh = 4;
       const ratio = clamp(s.hp / s.maxHp, 0, 1);
       ctx.fillStyle = "rgba(0,0,0,0.55)";
       ctx.fillRect(tx - bw / 2 - 1, ty + 3, bw + 2, bh + 2);
-      ctx.fillStyle = s.team === TEAM_ALLY ? "#46d36a" : "#ff5a4e";
+      ctx.fillStyle = s.team === mine ? "#46d36a" : def.flag;
       ctx.fillRect(tx - bw / 2, ty + 4, bw * ratio, bh);
-      // 名前 + Lv
+      // 名前 + Lv (味方には◆を付けて見分けやすく)
       ctx.font = "bold 12px -apple-system, sans-serif";
-      const label = (s.id === G.localId ? "▼ " : "") + s.name + " " + "Lv" + s.level;
+      const mark = s.id === G.localId ? "▼ " : s.team === mine ? "◆ " : "";
+      const cls = classDef(s.classKey);
+      const label = mark + (cls.key === "soldier" ? "" : cls.icon + " ") + s.name + " Lv" + s.level;
       ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.8)";
       ctx.strokeText(label, tx, ty);
-      ctx.fillStyle = s.id === G.localId ? COL.youAccent : (s.team === TEAM_ALLY ? "#cfe2ff" : "#ffd0c8");
+      ctx.fillStyle = s.id === G.localId ? YOU_ACCENT : def.text;
       ctx.fillText(label, tx, ty);
     }
     for (const dog of G.dogs) {
       if (dog.dead || !isEntityVisible(dog)) continue;
+      const def = teamDef(dog.team);
       const tx = dog.x, ty = dog.y - DOG_R - 14;
       const bw = 31, ratio = clamp(dog.hp / dog.maxHp, 0, 1);
       ctx.fillStyle = "rgba(0,0,0,0.58)"; ctx.fillRect(tx - bw / 2 - 1, ty + 3, bw + 2, 6);
-      ctx.fillStyle = dog.team === TEAM_ALLY ? "#55c879" : "#ee6a55"; ctx.fillRect(tx - bw / 2, ty + 4, bw * ratio, 4);
+      ctx.fillStyle = def.dogBar; ctx.fillRect(tx - bw / 2, ty + 4, bw * ratio, 4);
       ctx.font = "bold 10px -apple-system, sans-serif";
       const label = `K9 ${dog.name}`;
       ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.8)"; ctx.strokeText(label, tx, ty);
-      ctx.fillStyle = dog.team === TEAM_ALLY ? "#d7ecff" : "#ffd5cb"; ctx.fillText(label, tx, ty);
+      ctx.fillStyle = def.text; ctx.fillText(label, tx, ty);
     }
     for (const tank of G.tanks) {
       if (tank.dead || !isEntityVisible(tank)) continue;
+      const def = teamDef(tank.team);
       const driver = G.soldiers.find((s) => s.id === tank.driverId);
       const tx = tank.x, ty = tank.y - TANK_R - 18;
       const bw = 58, ratio = clamp(tank.hp / tank.maxHp, 0, 1);
       ctx.fillStyle = "rgba(0,0,0,0.62)"; ctx.fillRect(tx - bw / 2 - 1, ty + 3, bw + 2, 7);
-      ctx.fillStyle = tank.team === TEAM_ALLY ? "#65c2d0" : "#ef745e"; ctx.fillRect(tx - bw / 2, ty + 4, bw * ratio, 5);
+      ctx.fillStyle = def.tankBar; ctx.fillRect(tx - bw / 2, ty + 4, bw * ratio, 5);
       ctx.font = "bold 12px -apple-system, sans-serif";
       const label = driver ? `▣ ${driver.name}の戦車` : `▣ ${tank.name}`;
       ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.82)"; ctx.strokeText(label, tx, ty);
-      ctx.fillStyle = tank.team === TEAM_ALLY ? "#bfeeff" : "#ffd0c8"; ctx.fillText(label, tx, ty);
+      ctx.fillStyle = def.text; ctx.fillText(label, tx, ty);
     }
   }
 
@@ -2489,13 +3615,26 @@
     mctx.fillRect(0, 0, mw, mh);
     const sx = mw / WORLD_W, sy = mh / WORLD_H;
     for (const base of G.bases) {
-      mctx.strokeStyle = base.team === TEAM_ALLY ? "rgba(78,163,255,0.8)" : "rgba(255,90,78,0.8)";
+      const def = teamDef(base.team);
+      mctx.strokeStyle = hexToRgba(def.flag, base.hp > 0 ? 0.85 : 0.3);
       mctx.lineWidth = 1.5; mctx.strokeRect(base.x * sx - 5, base.y * sy - 5, 10, 10);
+      if (base.hp <= 0) {
+        // 陥落した基地には×印
+        mctx.beginPath();
+        mctx.moveTo(base.x * sx - 5, base.y * sy - 5); mctx.lineTo(base.x * sx + 5, base.y * sy + 5);
+        mctx.moveTo(base.x * sx + 5, base.y * sy - 5); mctx.lineTo(base.x * sx - 5, base.y * sy + 5);
+        mctx.stroke();
+      }
     }
     // 障害物
-    mctx.fillStyle = "rgba(255,255,255,0.22)";
     for (const o of G.obstacles) {
-      if (o.type === "wall") mctx.fillRect(o.x * sx, o.y * sy, Math.max(1, o.w * sx), Math.max(1, o.h * sy));
+      if (o.type === "wall" || o.type === "ruin") {
+        mctx.fillStyle = "rgba(255,255,255,0.22)";
+        mctx.fillRect(o.x * sx, o.y * sy, Math.max(1, o.w * sx), Math.max(1, o.h * sy));
+      } else if (o.type === "bush" || o.type === "tree") {
+        mctx.fillStyle = "rgba(110,190,110,0.24)";
+        mctx.fillRect(o.x * sx, o.y * sy, Math.max(1, o.w * sx), Math.max(1, o.h * sy));
+      }
     }
     for (const kit of G.pickups) {
       if (!kit.active) continue;
@@ -2505,19 +3644,27 @@
     // 兵士
     for (const s of G.soldiers) {
       if (s.dead || s.vehicleId >= 0 || !isEntityVisible(s)) continue;
-      mctx.fillStyle = s.id === G.localId ? "#ffd23f" : (s.team === TEAM_ALLY ? "#4ea3ff" : "#ff5a4e");
+      mctx.fillStyle = s.id === G.localId ? YOU_ACCENT : teamDef(s.team).flag;
       const r = s.id === G.localId ? 3 : 2;
       mctx.beginPath(); mctx.arc(s.x * sx, s.y * sy, r, 0, 6.283); mctx.fill();
     }
     for (const dog of G.dogs) {
       if (dog.dead || !isEntityVisible(dog)) continue;
-      mctx.fillStyle = dog.team === TEAM_ALLY ? "#8ed7ff" : "#ff9c78";
+      mctx.fillStyle = teamDef(dog.team).dogBar;
       mctx.beginPath(); mctx.arc(dog.x * sx, dog.y * sy, 1.7, 0, Math.PI * 2); mctx.fill();
     }
     for (const tank of G.tanks) {
       if (tank.dead || !isEntityVisible(tank)) continue;
-      mctx.fillStyle = tank.driverId === G.localId ? "#ffd23f" : (tank.team === TEAM_ALLY ? "#65c2d0" : "#ff745f");
+      mctx.fillStyle = tank.driverId === G.localId ? YOU_ACCENT : teamDef(tank.team).tankBar;
       mctx.fillRect(tank.x * sx - 3, tank.y * sy - 3, 6, 6);
+    }
+    // 銃座は常に位置が分かる(マップ上の固定設備なので)
+    for (const turret of G.turrets) {
+      if (turret.dead) continue;
+      mctx.strokeStyle = turret.gunnerId === G.localId ? YOU_ACCENT
+        : turret.team >= 0 ? teamDef(turret.team).flag : "rgba(220,220,200,0.55)";
+      mctx.lineWidth = 1.5;
+      mctx.beginPath(); mctx.arc(turret.x * sx, turret.y * sy, 2.6, 0, Math.PI * 2); mctx.stroke();
     }
     mctx.strokeStyle = "#ffb84a"; mctx.lineWidth = 1;
     for (const ping of G.soundPings) {
@@ -2529,27 +3676,73 @@
   // ============================================================
   //  HUD
   // ============================================================
+  // 4軍スコアボード。DOMは1度だけ組み立て、以降は数値だけ書き換える。
+  let teamCards = null;
+  function buildTeamBoard() {
+    el.teamBoard.innerHTML = "";
+    teamCards = TEAMS.map((team) => {
+      const def = teamDef(team);
+      const card = document.createElement("div");
+      card.className = "team-card";
+      card.style.setProperty("--team", def.flag);
+      card.innerHTML =
+        `<span class="tc-name"></span>` +
+        `<span class="tc-kills"><b></b><i>撃破</i></span>` +
+        `<span class="tc-base"><span class="tc-base-fill"></span></span>` +
+        `<span class="tc-basehp"></span>`;
+      el.teamBoard.appendChild(card);
+      return {
+        card,
+        name: card.querySelector(".tc-name"),
+        kills: card.querySelector(".tc-kills b"),
+        fill: card.querySelector(".tc-base-fill"),
+        hp: card.querySelector(".tc-basehp"),
+      };
+    });
+  }
+
+  function updateTeamBoard() {
+    if (!teamCards) buildTeamBoard();
+    const mine = localTeam();
+    for (const team of TEAMS) {
+      const c = teamCards[team];
+      const base = G.bases[team];
+      const fallen = !base || base.hp <= 0;
+      // 既定名のままなら短縮名を出す(狭いHUDで省略されないように)
+      const def = teamDef(team);
+      c.name.textContent = G.armyNames[team] === def.name ? def.short : G.armyNames[team];
+      c.kills.textContent = G.score[team];
+      c.fill.style.transform = `scaleX(${base ? clamp(base.hp / base.maxHp, 0, 1) : 0})`;
+      c.hp.textContent = fallen ? "陥落" : Math.ceil(base.hp);
+      c.card.classList.toggle("mine", team === mine);
+      c.card.classList.toggle("fallen", fallen);
+    }
+  }
+
   let lastFeedKey = "";
   function updateHUD() {
     const me = localSoldier();
-    el.scoreAlly.textContent = G.score[TEAM_ALLY];
-    el.scoreEnemy.textContent = G.score[TEAM_ENEMY];
-    el.armyAlly.textContent = G.armyNames[TEAM_ALLY];
-    el.armyEnemy.textContent = G.armyNames[TEAM_ENEMY];
-    const allyBase = G.bases[TEAM_ALLY], enemyBase = G.bases[TEAM_ENEMY];
-    if (allyBase && enemyBase) {
-      el.baseAllyHp.textContent = Math.ceil(allyBase.hp);
-      el.baseEnemyHp.textContent = Math.ceil(enemyBase.hp);
-      el.baseAllyFill.style.transform = `scaleX(${clamp(allyBase.hp / allyBase.maxHp, 0, 1)})`;
-      el.baseEnemyFill.style.transform = `scaleX(${clamp(enemyBase.hp / enemyBase.maxHp, 0, 1)})`;
+    updateTeamBoard();
+    const phase = dayPhase();
+    el.daytime.textContent = phase.label;
+    el.daytime.className = "daytime " + phase.key;
+    document.body.classList.toggle("spectating", spectating);
+    if (spectating) {
+      const watched = G.soldiers.find((s) => s.id === spectateTargetId);
+      el.vehicleHint.textContent = watched
+        ? `👁 観戦中：${watched.name}（${G.armyNames[watched.team]}）`
+        : "👁 観戦中";
+      el.vehicleHint.classList.remove("hidden");
     }
-    if (me) {
+    // 観戦中は自分の装備欄を更新しない(キルフィードは下で更新する)
+    if (me && !spectating) {
       const tank = me.vehicleId >= 0 ? G.tanks.find((x) => x.id === me.vehicleId && !x.dead) : null;
       const active = tank || me;
       const ratio = clamp(active.hp / active.maxHp, 0, 1);
       el.hpFill.style.width = (ratio * 100) + "%";
       el.hpFill.style.background = ratio > 0.5 ? "linear-gradient(90deg,#46d36a,#8cf06a)" : ratio > 0.25 ? "linear-gradient(90deg,#e3b341,#f0d36a)" : "linear-gradient(90deg,#e3413f,#ff7a6a)";
-      el.hpText.textContent = me.dead ? "復活中" : Math.max(0, Math.ceil(active.hp));
+      const canRespawn = teamAlive(me.team);
+      el.hpText.textContent = me.dead ? (canRespawn ? "復活中" : "戦死") : Math.max(0, Math.ceil(active.hp));
       const armorRatio = clamp((me.armor || 0) / (me.maxArmor || 100), 0, 1);
       const shieldRatio = clamp((me.shield || 0) / (me.maxShield || 160), 0, 1);
       el.armorFill.style.transform = `scaleX(${armorRatio})`;
@@ -2566,8 +3759,11 @@
       el.shieldState.classList.toggle("raised", !!me.shieldRaised || (me.parryUntil > 0 && now() <= me.parryUntil));
       const sinceHit = now() - (me.lastDamagedAt == null ? -99999 : me.lastDamagedAt);
       if (me.dead) {
-        el.recovery.textContent = "";
-        el.recovery.classList.remove("waiting");
+        el.recovery.textContent = canRespawn ? "" : "基地を失ったため復活できません（観戦中）";
+        el.recovery.classList.toggle("waiting", !canRespawn);
+      } else if (!canRespawn) {
+        el.recovery.textContent = "基地陥落・次に倒れたら脱落";
+        el.recovery.classList.add("waiting");
       } else if (tank) {
         el.recovery.textContent = "戦車装甲";
         el.recovery.classList.remove("waiting");
@@ -2586,29 +3782,44 @@
       }
       el.lvText.textContent = me.level;
       el.xpFill.style.width = clamp(me.xp / (me.level * 3), 0, 1) * 100 + "%";
+      const turret = me.turretId >= 0 ? G.turrets.find((x) => x.id === me.turretId && !x.dead) : null;
       if (tank) {
-        const ready = now() - tank.lastShot >= 1450;
-        el.wName.textContent = "戦車・120mm主砲";
+        const tw = TANK_WEAPONS[tank.weapon || 0];
+        const ready = now() - tank.lastShot >= tw.interval;
+        el.wName.textContent = `戦車・${tw.name}`;
         el.ammo.textContent = ready ? "READY" : "装填中";
         el.ammo.classList.toggle("low", !ready);
-        el.grenade.textContent = "💣 車内では使用不可";
+        el.grenade.textContent = isTouch ? "「武器」で主砲 / 機関銃を切替" : "数字キー・ホイールで主砲 / 機関銃";
+      } else if (turret) {
+        el.wName.textContent = "機関銃座・重機関銃";
+        el.ammo.textContent = "∞";
+        el.ammo.classList.remove("low");
+        el.grenade.textContent = `銃座 耐久 ${Math.ceil(turret.hp)} / ${turret.maxHp}`;
       } else {
         const w = WEAPONS[me.weapon];
-        el.wName.textContent = w.name;
+        const slot = me.loadout ? me.loadout.indexOf(me.weapon) : -1;
+        el.wName.textContent = slot >= 0 ? `${slot + 1}. ${w.name}` : w.name;
         el.ammo.textContent = w.melee ? "近接 / ∞" : (me.reloading ? "リロード" : me.ammo) + " / " + w.mag;
         el.ammo.classList.toggle("low", !w.melee && !me.reloading && me.ammo <= Math.ceil(w.mag * 0.25));
-        el.grenade.textContent = `💣 グレネード × ${me.grenades == null ? 0 : me.grenades}`;
+        const hasWires = (me.maxWires || 0) > 0;
+        const wireText = hasWires ? `　🪤 ${me.wires == null ? 0 : me.wires}` : "";
+        el.grenade.textContent = `💣 ${me.grenades == null ? 0 : me.grenades}　🧨 ${me.mines == null ? 0 : me.mines}${wireText}`;
+        // 鉄線ボタンは罠師のときだけ出す
+        wireBtn.classList.toggle("hidden", !hasWires);
       }
 
       let hint = "";
       if (!me.dead && tank) hint = isTouch ? "「戦車」で降りる" : "E：戦車から降りる";
+      else if (!me.dead && me.turretId >= 0) hint = isTouch ? "「戦車」で銃座から離れる" : "E：銃座から離れる";
       else if (!me.dead) {
         const nearby = G.tanks.some((x) => !x.dead && x.team === me.team && x.driverId < 0 && dist2(me.x, me.y, x.x, x.y) < 78 ** 2);
+        const nearTurret = G.turrets.some((x) => !x.dead && x.gunnerId < 0 && dist2(me.x, me.y, x.x, x.y) < TURRET_MOUNT_R ** 2);
         if (nearby) hint = isTouch ? "「戦車」で乗り込む" : "E：戦車に乗る";
+        else if (nearTurret) hint = isTouch ? "「戦車」で銃座に取り付く" : "E：機関銃座に取り付く";
       }
       el.vehicleHint.textContent = hint;
       el.vehicleHint.classList.toggle("hidden", !hint);
-    } else {
+    } else if (!spectating) {
       el.vehicleHint.classList.add("hidden");
     }
     // キルフィード
@@ -2619,8 +3830,8 @@
       for (const f of G.killfeed) {
         const div = document.createElement("div");
         div.className = "kf-item";
-        const kc = f.killerTeam === TEAM_ALLY ? "#9fc7ff" : "#ffb0a6";
-        const vc = f.victimTeam === TEAM_ALLY ? "#9fc7ff" : "#ffb0a6";
+        const kc = f.killerTeam >= 0 ? teamDef(f.killerTeam).text : "#cfd3c2";
+        const vc = f.victimTeam >= 0 ? teamDef(f.victimTeam).text : "#cfd3c2";
         if (f.killer) {
           div.innerHTML = `<span class="kf-killer" style="color:${kc}">${esc(f.killer)}</span> ▸ <span class="kf-victim" style="color:${vc}">${esc(f.victim)}</span>`;
         } else {
@@ -2664,7 +3875,7 @@
         if (inputAcc >= 1 / INPUT_HZ) {
           inputAcc = 0;
           Net.sendInput(localInput);
-          localInput.reloadEdge = false; localInput.grenadeEdge = false; localInput.interactEdge = false; localInput.parryEdge = false;
+          localInput.reloadEdge = false; localInput.grenadeEdge = false; localInput.interactEdge = false; localInput.parryEdge = false; localInput.mineEdge = false; localInput.wireEdge = false;
           localInput.weaponWanted = -1;
         }
         interpClient(dt);
@@ -2675,6 +3886,7 @@
           if (snapAcc >= 1 / SNAP_HZ) { snapAcc = 0; Net.broadcastSnapshot(); }
         }
       }
+      checkElimination();
       updateCamera();
       render();
     }
@@ -2723,12 +3935,14 @@
     spawnTeams();
     spawnDogs();
     spawnTanks();
+    spawnTurrets();
     spawnMedkits();
-    el.scoreGoal.textContent = "敵基地を破壊";
+    el.scoreGoal.textContent = "他3軍の基地をすべて破壊";
     resize();
     hideOverlays();
     G.running = true;
     G.over = false;
+    Audio.startBgm();
   }
 
   function endMatch(winnerTeam) {
@@ -2755,18 +3969,33 @@
     el.resultTitle.style.color = win ? "#8cf06a" : "#ff7a6a";
     el.rewardSummary.textContent = win ? `勝利報酬 +${reward || WIN_REWARD} G` : `勝利すると ${WIN_REWARD} G 獲得できます`;
     el.rewardSummary.classList.toggle("win", win);
-    const winnerName = G.armyNames[winnerTeam] || "勝利軍";
-    const rows = [
-      ["結果", win ? "WIN" : "LOSE"],
-      ["陥落した基地", G.armyNames[1 - winnerTeam]],
-      ["勝利軍", winnerName],
-      ["撃破数", `${G.armyNames[TEAM_ALLY]} ${G.score[TEAM_ALLY]} ― ${G.score[TEAM_ENEMY]} ${G.armyNames[TEAM_ENEMY]}`],
+
+    // 4軍の順位表: 基地が健在な軍が上、あとは撃破数順。
+    const standings = TEAMS.map((team) => ({
+      team,
+      alive: G.bases[team] && G.bases[team].hp > 0,
+      kills: G.score[team],
+    })).sort((a, b) => (b.team === winnerTeam) - (a.team === winnerTeam) || b.alive - a.alive || b.kills - a.kills);
+
+    const mine = localTeam();
+    const table = standings.map((row, i) => {
+      const def = teamDef(row.team);
+      const tags = [row.team === winnerTeam ? "🎖 勝利" : row.alive ? "基地健在" : "基地陥落"];
+      if (row.team === mine) tags.push("あなたの軍");
+      return `<div class="row standing${row.team === mine ? " mine" : ""}">` +
+        `<span><i class="dot" style="background:${def.flag}"></i>${i + 1}. ${esc(G.armyNames[row.team])}` +
+        `<em>${tags.join(" / ")}</em></span><b>${row.kills} 撃破</b></div>`;
+    }).join("");
+
+    const personal = [
       ["あなたのキル", me ? me.kills : 0],
       ["あなたのデス", me ? me.deaths : 0],
       ["最終レベル", me ? me.level : 1],
-    ];
-    el.resultStats.innerHTML = rows.map(r => `<div class="row"><span>${r[0]}</span><b>${esc(String(r[1]))}</b></div>`).join("");
+    ].map(r => `<div class="row"><span>${r[0]}</span><b>${esc(String(r[1]))}</b></div>`).join("");
+    el.resultStats.innerHTML = table + `<div class="result-divider"></div>` + personal;
     renderShop();
+    el.eliminated.classList.add("hidden");
+    Audio.stopBgm();
     el.touch.classList.add("hidden");
     el.result.classList.remove("hidden");
   }
@@ -2776,6 +4005,10 @@
     el.pause.classList.add("hidden");
     el.help.classList.add("hidden");
     el.result.classList.add("hidden");
+    el.eliminated.classList.add("hidden");
+    eliminationPrompted = false;
+    spectating = false;
+    spectateTargetId = -1;
     matchPaused = false;
     pauseStartedAt = 0;
     helpOrigin = "menu";
@@ -2786,6 +4019,31 @@
     return !!(G && !G.over && (G.running || matchPaused));
   }
 
+  // 自軍が全滅したら一度だけ「観戦する / やめる」を聞く。
+  // 試合は止めない(オンラインでは他のプレイヤーが戦い続けているため)。
+  function checkElimination() {
+    if (!G || G.over || eliminationPrompted || spectating) return;
+    const me = localSoldier();
+    if (!me || !me.dead) return;
+    const team = me.team;
+    if (teamAlive(team)) return;
+    if (G.soldiers.some((s) => s.team === team && !s.dead)) return;
+    eliminationPrompted = true;
+    const rivals = TEAMS.filter((t) => t !== team && teamInPlay(t)).map((t) => G.armyNames[t]);
+    el.eliminatedDetail.textContent =
+      `基地を失い、生き残りも倒されました。もう復活はできません。残っているのは ${rivals.join(" と ")} です。`;
+    el.touch.classList.add("hidden");
+    el.eliminated.classList.remove("hidden");
+  }
+
+  function startSpectating() {
+    spectating = true;
+    spectateTargetId = -1;
+    spectateSwitchAt = 0;
+    el.eliminated.classList.add("hidden");
+    banner("観戦モード：決着まで戦況を見届けます");
+  }
+
   function clearGameInput() {
     for (const key of Object.keys(keys)) keys[key] = false;
     mouse.down = false;
@@ -2794,7 +4052,7 @@
     document.querySelectorAll(".stick .knob").forEach((knob) => { knob.style.transform = "translate(0,0)"; });
     releaseTouchShield();
     localInput.mvx = 0; localInput.mvy = 0; localInput.shoot = false; localInput.dash = false;
-    localInput.reloadEdge = false; localInput.grenadeEdge = false; localInput.interactEdge = false; localInput.parryEdge = false;
+    localInput.reloadEdge = false; localInput.grenadeEdge = false; localInput.interactEdge = false; localInput.parryEdge = false; localInput.mineEdge = false; localInput.wireEdge = false;
     localInput.weaponWanted = -1; localInput.shield = false;
   }
 
@@ -2809,15 +4067,17 @@
     };
 
     for (const s of G.soldiers) {
-      shift(s, ["respawnAt", "lastDamagedAt", "parryUntil", "parryCooldownUntil", "stunnedUntil", "reloadUntil", "lastShot", "lastGrenade", "lastBaseSupplyAt", "lastFootstepAt", "heardUntil", "muzzle"]);
+      shift(s, ["respawnAt", "lastDamagedAt", "parryUntil", "parryCooldownUntil", "stunnedUntil", "reloadUntil", "lastShot", "lastGrenade", "lastMine", "lastBaseSupplyAt", "lastFootstepAt", "heardUntil", "muzzle"]);
       shift(s.ai, ["think", "strafeUntil", "lastSeen", "lostAt", "fireUntil"]);
     }
     for (const dog of G.dogs) shift(dog, ["respawnAt", "lastAttack", "biteAt", "stunnedUntil"]);
+    for (const turret of G.turrets) shift(turret, ["respawnAt", "lastShot", "muzzle"]);
     for (const tank of G.tanks) {
       shift(tank, ["respawnAt", "lastShot", "muzzle"]);
       shift(tank.ai, ["think"]);
     }
     for (const grenade of G.grenades) shift(grenade, ["fuseAt", "bornAt"]);
+    for (const m of G.mines) shift(m, ["armAt", "placedAt"]);
     for (const pickup of G.pickups) shift(pickup, ["respawnAt"]);
     for (const base of G.bases) shift(base, ["lastWarningAt"]);
     for (const item of G.killfeed) shift(item, ["t"]);
@@ -2836,10 +4096,12 @@
       pauseStartedAt = stamp;
       clearGameInput();
       G.running = false;
+      Audio.pauseBgm();
     } else {
       shiftGameTimers(Math.max(0, stamp - pauseStartedAt));
       pauseStartedAt = 0;
       G.running = true;
+      Audio.resumeBgm();
     }
     matchPaused = paused;
     return true;
@@ -2853,7 +4115,8 @@
 
   function restoreTouchControls() {
     if (isTouch && el.menu.classList.contains("hidden") && el.help.classList.contains("hidden") &&
-        el.pause.classList.contains("hidden") && el.result.classList.contains("hidden")) {
+        el.pause.classList.contains("hidden") && el.result.classList.contains("hidden") &&
+        el.eliminated.classList.contains("hidden") && !spectating) {
       el.touch.classList.remove("hidden");
     }
   }
@@ -2954,12 +4217,14 @@
       spawnTeams();
       spawnDogs();
       spawnTanks();
+      spawnTurrets();
       spawnMedkits();
-      el.scoreGoal.textContent = "敵基地を破壊";
+      el.scoreGoal.textContent = "他3軍の基地をすべて破壊";
       resize();
       G.running = false; G.over = false;
       lobbyOpen = true;
-      showLobby(roomCode, "参加者を待っています…");
+      showLobby(roomCode, `あなたは ${G.armyNames[playerTeam]}。コードを共有して仲間を集めよう。`);
+      broadcastLobby();
     }
 
     function showLobby(code, status, counting = false) {
@@ -2977,6 +4242,45 @@
       el.roomLobby.classList.remove("counting");
       el.roomCode.textContent = "----";
       el.lobbyStatus.textContent = "参加者を待っています…";
+      el.lobbyRoster.innerHTML = "";
+      el.lobbyStart.classList.add("hidden");
+      el.lobbyStart.disabled = false;
+    }
+
+    // ロビーの参加者一覧(チーム別)。ホストが作り、そのままクライアントへ送る。
+    function buildRoster() {
+      if (!G) return [];
+      return G.soldiers
+        .filter((s) => s.controller !== "cpu")
+        .map((s) => ({ n: s.name, tm: s.team }));
+    }
+
+    function renderRoster(roster, armyNames) {
+      const byTeam = TEAMS.map(() => []);
+      for (const p of roster || []) {
+        if (p.tm >= 0 && p.tm < TEAM_COUNT) byTeam[p.tm].push(p.n);
+      }
+      el.lobbyRoster.innerHTML = TEAMS.map((team) => {
+        const def = teamDef(team);
+        const members = byTeam[team];
+        const names = members.length ? members.map((n) => esc(n)).join("、") : "CPUのみ";
+        const title = (armyNames && armyNames[team]) || def.name;
+        return `<div class="roster-row${members.length ? "" : " empty"}">` +
+          `<i class="dot" style="background:${def.flag}"></i>` +
+          `<b>${esc(title)}</b><span>${names}</span></div>`;
+      }).join("");
+    }
+
+    function broadcastLobby() {
+      const roster = buildRoster();
+      renderRoster(roster, G.armyNames);
+      const ready = conns.length > 0;
+      el.lobbyStart.classList.toggle("hidden", mode !== "host");
+      el.lobbyStart.disabled = !ready || !!countdownTimer;
+      el.lobbyStart.textContent = ready ? "全員そろった → 開始" : "参加者を待っています…";
+      for (const c of conns) {
+        try { c.send({ t: "lobby", roster, names: G.armyNames }); } catch (e) {}
+      }
     }
 
     function sendInit(conn) {
@@ -2999,10 +4303,12 @@
       }
     }
 
+    // 開始はホストの合図で。チーム編成が済むまで待てるようにするため。
     function beginCountdown() {
       if (!lobbyOpen || countdownTimer || conns.length === 0) return;
       let remaining = MATCH_COUNTDOWN_SECONDS;
       announceCountdown(remaining);
+      broadcastLobby();
       countdownTimer = setInterval(() => {
         remaining--;
         if (remaining > 0) announceCountdown(remaining);
@@ -3013,7 +4319,10 @@
     function cancelCountdown() {
       clearInterval(countdownTimer);
       countdownTimer = null;
-      if (lobbyOpen) showLobby(roomCode, "参加者を待っています…");
+      if (lobbyOpen) {
+        showLobby(roomCode, `あなたは ${G.armyNames[playerTeam]}。コードを共有して仲間を集めよう。`);
+        broadcastLobby();
+      }
     }
 
     function startHostMatch() {
@@ -3031,6 +4340,7 @@
       }
       hideOverlays();
       G.running = true; G.over = false;
+      Audio.startBgm();
       showRoomBanner();
     }
 
@@ -3042,32 +4352,35 @@
           return;
         }
         conns.push(conn);
-        // ボットを1体クライアントに割り当て(チームバランス: 人数の少ない方=敵側優先で対戦に)
-        const slot = pickSlotForClient();
-        if (slot) {
-          slot.controller = conn.peer;
-          slot.isHuman = true;
-          slot.allWeapons = true;
-          slot.name = "Player";
-          clientInputs[conn.peer] = {
-            mvx: 0, mvy: 0, aimAngle: 0, shoot: false, dash: false,
-            weaponWanted: -1, reloadEdge: false, grenadeEdge: false, interactEdge: false, parryEdge: false, shield: false,
-          };
-        }
-        if (!slot) {
-          conns = conns.filter((c) => c !== conn);
-          try { conn.send({ t: "reject", reason: "このルームは満員です" }); } catch (e) {}
-          setTimeout(() => conn.close(), 250);
-          return;
-        }
-        beginCountdown();
+        // 枠の割り当ては hello(希望チームを含む)を受け取ってから行う。
       });
       conn.on("data", (d) => {
         if (d.t === "hello") {
-          const s = G.soldiers.find((x) => x.controller === conn.peer);
-          if (s && d.name) s.name = String(d.name).slice(0, 12);
-          if (s) applyShopUpgrades(s, d.upgrades || {});
-          if (s && s.team === TEAM_ENEMY && d.army) G.armyNames[TEAM_ENEMY] = String(d.army).slice(0, 16);
+          if (G.soldiers.some((x) => x.controller === conn.peer)) return; // 二重hello
+          const slot = pickSlotForClient(d.team);
+          if (!slot) {
+            conns = conns.filter((c) => c !== conn);
+            try { conn.send({ t: "reject", reason: "このルームは満員です" }); } catch (e) {}
+            setTimeout(() => conn.close(), 250);
+            return;
+          }
+          slot.controller = conn.peer;
+          slot.isHuman = true;
+          slot.name = d.name ? String(d.name).slice(0, 12) : "Player";
+          // 参加者が選んだキャラクターを反映してから強化を乗せる
+          applyClass(slot, d.cls || "soldier");
+          slot.shopApplied = false;
+          applyShopUpgrades(slot, d.upgrades || {});
+          clientInputs[conn.peer] = {
+            mvx: 0, mvy: 0, aimAngle: 0, shoot: false, dash: false,
+            weaponWanted: -1, reloadEdge: false, grenadeEdge: false, interactEdge: false, parryEdge: false, mineEdge: false, wireEdge: false, shield: false,
+          };
+          // その軍の名前がまだ既定のままなら、最初に入った人の軍名を採用する。
+          if (d.army && G.armyNames[slot.team] === TEAM_DEFS[slot.team].name) {
+            G.armyNames[slot.team] = String(d.army).slice(0, 16);
+          }
+          try { conn.send({ t: "slot", team: slot.team, name: G.armyNames[slot.team] }); } catch (e) {}
+          broadcastLobby();
         } else if (d.t === "input") {
           clientInputs[conn.peer] = d.i;
         } else if (d.t === "pause") {
@@ -3090,16 +4403,23 @@
         applyNetworkPause(false);
         broadcastPause(false);
       }
-      if (lobbyOpen && conns.length === 0) cancelCountdown();
+      if (lobbyOpen) {
+        if (conns.length === 0) cancelCountdown();
+        else broadcastLobby();
+      }
     }
 
-    function pickSlotForClient() {
-      // 各チームの人間の数を数え、少ない方のボットへ割り当て(2人なら 1v1 + bots)
-      const humans = [0, 0];
+    // 希望チームを最優先。埋まっていたら人間が少ない軍へ回す。
+    function pickSlotForClient(preferred) {
+      const humans = TEAMS.map(() => 0);
       for (const s of G.soldiers) if (s.controller !== "cpu") humans[s.team]++;
-      const targetTeam = humans[TEAM_ENEMY] <= humans[TEAM_ALLY] ? TEAM_ENEMY : TEAM_ALLY;
-      return G.soldiers.find((s) => s.team === targetTeam && s.controller === "cpu") ||
-             G.soldiers.find((s) => s.controller === "cpu");
+      const order = TEAMS.slice().sort((a, b) => humans[a] - humans[b]);
+      if (preferred >= 0 && preferred < TEAM_COUNT) order.unshift(preferred);
+      for (const team of order) {
+        const slot = G.soldiers.find((s) => s.team === team && s.controller === "cpu");
+        if (slot) return slot;
+      }
+      return null;
     }
 
     async function join(code) {
@@ -3113,8 +4433,8 @@
         netMsg("ホストへ接続中…");
         hostConn = peer.connect("wz-" + roomCode, { reliable: false });
         hostConn.on("open", () => {
-          showLobby(roomCode, "接続しました。開始を待っています…");
-          hostConn.send({ t: "hello", name: playerName, army: armyName, upgrades: shopLevels });
+          showLobby(roomCode, "接続しました。ホストの開始を待っています…");
+          hostConn.send({ t: "hello", name: playerName, army: armyName, team: playerTeam, cls: playerClass, upgrades: shopLevels });
         });
         hostConn.on("data", (d) => onHostData(d));
         hostConn.on("close", () => { if (!joinRejected) netMsg("ホストとの接続が切れました", true); });
@@ -3133,11 +4453,20 @@
         G.goal = d.goal;
         G.localId = d.slotId;
         G.armyNames = d.armyNames || G.armyNames;
-        el.scoreGoal.textContent = "敵基地を破壊";
+        if (d.you && d.you.team != null) playerTeam = d.you.team;
+        localInput.aimAngle = BASE_SPOTS[playerTeam].heading;
+        el.scoreGoal.textContent = "他3軍の基地をすべて破壊";
         resize();
         hideOverlays();
         G.running = true; G.over = false;
+        Audio.startBgm();
         if (d.paused) applyNetworkPause(true);
+      } else if (d.t === "slot") {
+        // ホストが決めた所属チーム。希望が通らなかった場合もここで分かる。
+        playerTeam = d.team;
+        showLobby(roomCode, `あなたは ${d.name || teamDef(d.team).name}。ホストの開始を待っています…`);
+      } else if (d.t === "lobby") {
+        renderRoster(d.roster, d.names);
       } else if (d.t === "countdown") {
         showLobby(roomCode, `ゲーム開始まで ${d.n} 秒`, true);
       } else if (d.t === "reject") {
@@ -3157,6 +4486,7 @@
       if (!G) return;
       G.score = d.sc;
       if (d.an) G.armyNames = d.an;
+      if (d.ck != null) G.clock = d.ck;
       for (const nb of (d.bs || [])) {
         const base = G.bases[nb.tm];
         if (!base) continue;
@@ -3175,7 +4505,11 @@
         s.hp = ns.hp; s.maxHp = ns.mh; s.dead = ns.d ? true : false;
         s.weapon = ns.w; s.aimAngle = ns.a;
         s.xp = ns.xp; s.ammo = ns.am; s.reloading = ns.rl ? true : false;
-        s.grenades = ns.gr; s.maxGrenades = ns.mg || 3; s.vehicleId = ns.v == null ? -1 : ns.v;
+        s.grenades = ns.gr; s.maxGrenades = ns.mg || 3; s.vehicleId = ns.v == null ? -1 : ns.v; s.turretId = ns.tr == null ? -1 : ns.tr;
+        s.mines = ns.mn == null ? 0 : ns.mn; s.maxMines = ns.mm || 2;
+        s.wires = ns.wi || 0; s.maxWires = ns.mw || 0;
+        s.classKey = ns.cl || "soldier";
+        s.seesEnemyMines = classDef(s.classKey).seesEnemyMines;
         s.armor = ns.ar; s.maxArmor = ns.ma; s.shield = ns.sh; s.maxShield = ns.ms; s.shieldRaised = !!ns.sr;
         s.parryUntil = now() + (ns.pr || 0); s.parryCooldownUntil = now() + (ns.pc || 0); s.stunnedUntil = now() + (ns.st || 0);
         s.lastDamagedAt = now() - (AUTO_HEAL_DELAY_MS - (ns.rh || 0));
@@ -3226,6 +4560,26 @@
         x: g.x, y: g.y, vx: g.vx, vy: g.vy, rotation: g.ro,
         fuseAt: nt + g.rem, bornAt: nt - g.age,
       }));
+      const turretSeen = new Set();
+      for (const nt2 of (d.tu || [])) {
+        turretSeen.add(nt2.id);
+        let turret = G.turrets.find((x) => x.id === nt2.id);
+        if (!turret) {
+          turret = { kind: "turret", id: nt2.id, x: nt2.x, y: nt2.y, muzzle: 0, hitFlash: 0 };
+          G.turrets.push(turret);
+        }
+        turret.x = nt2.x; turret.y = nt2.y; turret.angle = nt2.a;
+        turret.team = nt2.tm; turret.hp = nt2.hp; turret.maxHp = nt2.mh;
+        turret.dead = !!nt2.d; turret.gunnerId = nt2.gn;
+        if (nt2.fl) turret.muzzle = now();
+      }
+      G.turrets = G.turrets.filter((turret) => turretSeen.has(turret.id));
+      G.mines = (d.mn || []).map((m) => ({
+        id: m.id, team: m.tm, x: m.x, y: m.y, armAt: nt + (m.ar || 0), owner: -1, stealthMul: m.sm || 1,
+      }));
+      G.wires = (d.wr || []).map((wire) => ({
+        id: wire.id, team: wire.tm, x: wire.x, y: wire.y, owner: -1, seed: wire.sd || 0,
+      }));
       G.pickups = (d.p || []).map((p) => ({
         id: p.id, kind: p.k || "medkit", x: p.x, y: p.y, active: !!p.ac,
         respawnAt: nt + (p.rem || 0), phase: p.id * 1.7,
@@ -3249,7 +4603,8 @@
         id: o.id, tm: o.team, n: o.name, lv: o.level,
         x: Math.round(o.x), y: Math.round(o.y), a: +o.aimAngle.toFixed(2),
         hp: Math.round(o.hp), mh: o.maxHp, d: o.dead ? 1 : 0, w: o.weapon,
-        xp: o.xp, am: o.ammo, rl: o.reloading ? 1 : 0, gr: o.grenades, mg: o.maxGrenades || 3, v: o.vehicleId,
+        xp: o.xp, am: o.ammo, rl: o.reloading ? 1 : 0, gr: o.grenades, mg: o.maxGrenades || 3, v: o.vehicleId, tr: o.turretId,
+        mn: o.mines, mm: o.maxMines || 2, wi: o.wires || 0, mw: o.maxWires || 0, cl: o.classKey,
         ar: Math.round(o.armor), ma: o.maxArmor, sh: Math.round(o.shield), ms: o.maxShield, sr: o.shieldRaised ? 1 : 0,
         pr: Math.max(0, o.parryUntil - stamp), pc: Math.max(0, o.parryCooldownUntil - stamp), st: Math.max(0, o.stunnedUntil - stamp),
         rh: Math.max(0, AUTO_HEAL_DELAY_MS - (stamp - o.lastDamagedAt)),
@@ -3278,8 +4633,20 @@
         id: kit.id, k: kit.kind, x: Math.round(kit.x), y: Math.round(kit.y), ac: kit.active ? 1 : 0,
         rem: kit.active ? 0 : Math.max(0, kit.respawnAt - stamp),
       }));
+      const mn = G.mines.map((m) => ({
+        id: m.id, tm: m.team, x: Math.round(m.x), y: Math.round(m.y),
+        ar: Math.max(0, m.armAt - stamp), sm: m.stealthMul || 1,
+      }));
+      const tu = G.turrets.map((turret) => ({
+        id: turret.id, x: Math.round(turret.x), y: Math.round(turret.y), a: +turret.angle.toFixed(2),
+        tm: turret.team, hp: Math.round(turret.hp), mh: turret.maxHp, d: turret.dead ? 1 : 0,
+        gn: turret.gunnerId, fl: stamp - turret.muzzle < 55 ? 1 : 0,
+      }));
+      const wr = G.wires.map((wire) => ({
+        id: wire.id, tm: wire.team, x: Math.round(wire.x), y: Math.round(wire.y), sd: +(wire.seed || 0).toFixed(2),
+      }));
       const bs = G.bases.map((base) => ({ tm: base.team, hp: Math.round(base.hp), mh: base.maxHp, hf: +base.hitFlash.toFixed(2) }));
-      const payload = { t: "snap", sc: G.score, an: G.armyNames, bs, s, dg, tn, b, g, p, kf: G.killfeed };
+      const payload = { t: "snap", sc: G.score, an: G.armyNames, ck: Math.round(G.clock), bs, s, dg, tn, tu, b, g, p, mn, wr, kf: G.killfeed };
       for (const c of conns) { try { c.send(payload); } catch (e) {} }
     }
 
@@ -3308,7 +4675,7 @@
           i: {
             mvx: inp.mvx, mvy: inp.mvy, aimAngle: inp.aimAngle, shoot: inp.shoot, dash: inp.dash,
             weaponWanted: inp.weaponWanted, reloadEdge: inp.reloadEdge,
-            grenadeEdge: inp.grenadeEdge, interactEdge: inp.interactEdge,
+            grenadeEdge: inp.grenadeEdge, interactEdge: inp.interactEdge, mineEdge: inp.mineEdge, wireEdge: inp.wireEdge,
             parryEdge: inp.parryEdge, shield: inp.shield,
           },
         });
@@ -3336,7 +4703,10 @@
       resetLobbyView();
     }
 
-    return { host, join, broadcastSnapshot, broadcastEnd, sendInput, setPause, shutdown, clientInputs, get code() { return roomCode; } };
+    return {
+      host, join, broadcastSnapshot, broadcastEnd, sendInput, setPause, shutdown,
+      startFromLobby: beginCountdown, clientInputs, get code() { return roomCode; },
+    };
   })();
 
   let bannerTimer = null;
@@ -3375,12 +4745,58 @@
       localStorage.setItem("wz-name", playerName);
     });
 
+    // 所属チーム(ソロ戦・オンラインとも共通)
+    const savedTeam = Number(localStorage.getItem("wz-team"));
+    playerTeam = Number.isFinite(savedTeam) ? clamp(Math.floor(savedTeam), 0, TEAM_COUNT - 1) : 0;
+    el.teamSeg.innerHTML = TEAMS.map((team) => {
+      const def = teamDef(team);
+      return `<button data-team="${team}" style="--team:${def.flag}"><i class="dot"></i>${esc(def.name)}</button>`;
+    }).join("");
+    function syncTeamButtons() {
+      el.teamSeg.querySelectorAll("button").forEach((b) => {
+        b.classList.toggle("on", Number(b.dataset.team) === playerTeam);
+      });
+    }
+    el.teamSeg.addEventListener("click", (e) => {
+      const b = e.target.closest && e.target.closest("[data-team]");
+      if (!b) return;
+      playerTeam = Number(b.dataset.team);
+      localStorage.setItem("wz-team", String(playerTeam));
+      syncTeamButtons();
+      // 軍名を未設定のまま切り替えたら、その軍の既定名に追随させる
+      if (!localStorage.getItem("wz-army")) {
+        armyName = teamDef(playerTeam).name;
+        el.armyInput.value = armyName;
+      }
+    });
+    syncTeamButtons();
+
+    // キャラクター(兵科)
+    const savedClass = localStorage.getItem("wz-class");
+    playerClass = CLASS_BY_KEY[savedClass] ? savedClass : "soldier";
+    el.classSeg.innerHTML = CLASSES.map((c) =>
+      `<button data-class="${c.key}"><span class="class-head">${c.icon} ${esc(c.name)}</span>` +
+      `<span class="class-desc">${esc(c.desc)}</span></button>`).join("");
+    function syncClassButtons() {
+      el.classSeg.querySelectorAll("button").forEach((b) => {
+        b.classList.toggle("on", b.dataset.class === playerClass);
+      });
+    }
+    el.classSeg.addEventListener("click", (e) => {
+      const b = e.target.closest && e.target.closest("[data-class]");
+      if (!b) return;
+      playerClass = b.dataset.class;
+      localStorage.setItem("wz-class", playerClass);
+      syncClassButtons();
+    });
+    syncClassButtons();
+
     const savedArmy = localStorage.getItem("wz-army");
     if (savedArmy) el.armyInput.value = savedArmy;
-    else el.armyInput.value = armyName;
-    armyName = el.armyInput.value.trim() || "ブルー・フェニックス軍";
+    else el.armyInput.value = teamDef(playerTeam).name;
+    armyName = el.armyInput.value.trim() || teamDef(playerTeam).name;
     el.armyInput.addEventListener("input", () => {
-      armyName = el.armyInput.value.trim() || "ブルー・フェニックス軍";
+      armyName = el.armyInput.value.trim() || teamDef(playerTeam).name;
       localStorage.setItem("wz-army", armyName);
     });
 
@@ -3408,6 +4824,10 @@
       Audio.unlock();
       try { await Net.host(); } catch (e) { netMsg(e.message, true); }
     });
+    el.lobbyStart.addEventListener("click", () => {
+      el.lobbyStart.disabled = true;
+      Net.startFromLobby();
+    });
     document.getElementById("btn-join").addEventListener("click", async () => {
       Audio.unlock();
       const code = (el.joinCode.value || "").trim();
@@ -3434,6 +4854,8 @@
       startSoloMatch();
     });
     document.getElementById("btn-tomenu").addEventListener("click", openMenu);
+    document.getElementById("btn-spectate").addEventListener("click", startSpectating);
+    document.getElementById("btn-give-up").addEventListener("click", openMenu);
     el.shopItems.addEventListener("click", (e) => {
       const button = e.target.closest && e.target.closest("[data-shop-buy]");
       if (button && !button.disabled) buyShopItem(button.dataset.shopBuy);
@@ -3461,6 +4883,7 @@
 
   function openMenu() {
     if (G) { G.running = false; }
+    Audio.stopBgm();
     matchPaused = false;
     pauseStartedAt = 0;
     helpOrigin = "menu";
@@ -3469,6 +4892,9 @@
     el.result.classList.add("hidden");
     el.pause.classList.add("hidden");
     el.help.classList.add("hidden");
+    el.eliminated.classList.add("hidden");
+    eliminationPrompted = false;
+    spectating = false;
     el.touch.classList.add("hidden");
     el.menuOnline.classList.add("hidden");
     el.menuMain.classList.remove("hidden");

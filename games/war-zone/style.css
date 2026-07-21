@@ -57,29 +57,54 @@ html, body {
   left: 50%;
   transform: translateX(-50%);
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 4px;
   background: rgba(0, 0, 0, 0.4);
-  padding: 5px 14px;
+  padding: 5px 12px 7px;
   border-radius: 10px;
   backdrop-filter: blur(2px);
+  max-width: min(560px, calc(100vw - 320px));
 }
-.score { display: flex; align-items: center; gap: 6px; font-weight: 800; }
-.score .num { font-size: 22px; }
-.score.ally .num { color: var(--ally); }
-.score.enemy .num { color: var(--enemy); }
-.score .tag { font-size: 11px; opacity: 0.85; font-weight: 700; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.objective { min-width: 230px; font-size: 13px; opacity: 0.92; text-align: center; }
+.objective { display: flex; align-items: center; gap: 7px; font-size: 11px; opacity: 0.9; }
 .objective b { color: var(--you); }
-.base-hud { display: grid; grid-template-columns: auto minmax(90px, 1fr) auto; align-items: center; gap: 6px; margin-top: 3px; }
-.base-hud-team { font-size: 9px; font-weight: 800; white-space: nowrap; }
-.base-hud-team.ally { color: #9fc7ff; }
-.base-hud-team.enemy { color: #ffb0a6; }
-.base-hud-team b { color: inherit; font-variant-numeric: tabular-nums; }
-.base-hud-bar { position: relative; display: flex; gap: 2px; height: 5px; }
-.base-hud-bar > span { display: block; width: 50%; border-radius: 3px; transform-origin: center; }
-.base-hud-bar .ally { background: var(--ally); transform-origin: right center; }
-.base-hud-bar .enemy { background: var(--enemy); transform-origin: left center; }
+.daytime { font-weight: 800; white-space: nowrap; }
+.daytime.night { color: #9fb6ff; }
+.daytime.dusk { color: #ffb072; }
+.daytime.morning { color: #ffd9a0; }
+.daytime.noon { color: #ffe98a; }
+
+/* 4軍スコアボード */
+.team-board { display: flex; gap: 6px; }
+.team-card {
+  --team: #888;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "name name" "kills hp" "bar bar";
+  align-items: center;
+  gap: 1px 6px;
+  min-width: 0;
+  width: 122px;
+  padding: 3px 6px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 3px solid var(--team);
+  background: rgba(255, 255, 255, 0.05);
+}
+.team-card.mine { background: rgba(255, 210, 63, 0.14); border-color: rgba(255, 210, 63, 0.5); border-left-color: var(--team); }
+.team-card.fallen { opacity: 0.45; }
+.tc-name {
+  grid-area: name;
+  font-size: 10px; font-weight: 800; color: var(--team);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tc-kills { grid-area: kills; display: flex; align-items: baseline; gap: 2px; }
+.tc-kills b { font-size: 15px; font-weight: 900; }
+.tc-kills i { font-size: 8px; font-style: normal; opacity: 0.6; }
+.tc-base { grid-area: bar; position: relative; height: 4px; margin-top: 1px; border-radius: 3px; overflow: hidden; background: rgba(255, 255, 255, 0.16); }
+.tc-base-fill { position: absolute; inset: 0; background: var(--team); transform-origin: left center; transition: transform 0.15s linear; }
+.tc-basehp { grid-area: hp; font-size: 9px; font-weight: 800; opacity: 0.8; min-width: 26px; text-align: right; }
+.team-card.fallen .tc-basehp { color: #ff9a8d; opacity: 1; }
 
 .hud-bottom {
   position: absolute;
@@ -230,6 +255,13 @@ html, body {
 /* ===== タッチ操作 ===== */
 #touch { position: absolute; inset: 0; pointer-events: none; }
 #touch.hidden { display: none; }
+
+/* スティックの上に HUD が重ならないよう、タッチ端末では両パネルを上へ逃がす */
+body.touch-ui .hud-bottom { bottom: 164px; min-width: 168px; padding: 6px 9px; }
+body.touch-ui .weapon { bottom: 164px; padding: 6px 9px; }
+body.touch-ui .equipment-status { width: 128px; }
+body.touch-ui .ammo { font-size: 20px; }
+body.touch-ui .vehicle-hint { bottom: 226px; }
 .stick {
   position: absolute;
   bottom: 22px;
@@ -272,6 +304,7 @@ html, body {
   font-size: 13px;
   font-weight: 700;
 }
+.tbtn.hidden { display: none; }
 .tbtn.action { background: rgba(91, 111, 48, 0.78); border: 1px solid rgba(255, 226, 125, 0.26); }
 .tbtn.shield-btn { background: rgba(43, 105, 119, 0.8); border: 1px solid rgba(138, 238, 235, 0.32); }
 .tbtn.shield-btn.active { color: #202511; background: #a9efe5; }
@@ -411,6 +444,57 @@ html, body {
 }
 .room-lobby p { margin: 0; color: #dfe5ca; font-size: 13px; font-weight: 700; }
 .room-lobby.counting p { color: #ffe078; font-size: 16px; }
+.room-lobby .big-btn { margin: 10px 0 0; }
+.room-lobby .big-btn.hidden { display: none; }
+.room-lobby .big-btn:disabled { background: rgba(255, 255, 255, 0.07); border-color: rgba(255, 255, 255, 0.14); color: #9a9d8c; cursor: default; }
+
+.lobby-roster { display: flex; flex-direction: column; gap: 3px; margin: 10px 0 0; text-align: left; }
+.roster-row { display: grid; grid-template-columns: 10px minmax(0, auto) minmax(0, 1fr); align-items: center; gap: 7px; font-size: 11px; }
+.roster-row.empty { opacity: 0.45; }
+.roster-row b { color: #eef0e2; font-size: 11px; white-space: nowrap; }
+.roster-row span { color: #c3cba6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: none; }
+
+/* チーム選択 */
+.team-seg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.team-seg button {
+  --team: #888;
+  display: flex; align-items: center; gap: 6px;
+  padding: 9px 8px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-left: 3px solid var(--team);
+  background: rgba(255, 255, 255, 0.05);
+  color: #dfe2d2;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.team-seg button .dot { background: var(--team); }
+.team-seg button.on { background: rgba(255, 255, 255, 0.15); border-color: var(--you); color: #fff; font-weight: 900; }
+
+/* キャラクター選択 */
+.class-seg { display: flex; flex-direction: column; gap: 6px; }
+.class-seg button {
+  display: block;
+  width: 100%;
+  padding: 9px 11px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: #dfe2d2;
+  text-align: left;
+  cursor: pointer;
+}
+.class-head { display: block; font-size: 13px; font-weight: 800; color: #f0f2e4; }
+.class-desc { display: block; margin-top: 2px; font-size: 10.5px; line-height: 1.35; opacity: 0.68; }
+.class-seg button.on { background: rgba(255, 210, 63, 0.12); border-color: var(--you); }
+.class-seg button.on .class-head { color: var(--you); }
+.class-seg button.on .class-desc { opacity: 0.85; }
 .net-status { font-size: 12px; min-height: 18px; margin: 10px 0 0; color: #b7c08a; white-space: pre-line; }
 .net-status.err { color: var(--enemy); }
 .net-status.ok { color: #8cf06a; }
@@ -422,8 +506,13 @@ html, body {
 .help-rpg { font-size: 12.5px; opacity: 0.88; line-height: 1.6; text-align: left; margin: 4px 0 16px; }
 
 .result-stats { font-size: 14px; line-height: 1.9; margin-bottom: 16px; }
-.result-stats .row { display: flex; justify-content: space-between; padding: 0 6px; }
-.result-stats .row b { color: var(--you); }
+.result-stats .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 0 6px; }
+.result-stats .row b { color: var(--you); white-space: nowrap; }
+.result-stats .row.standing { padding: 4px 8px; border-radius: 8px; line-height: 1.35; text-align: left; }
+.result-stats .row.standing.mine { background: rgba(255, 210, 63, 0.12); }
+.result-stats .row.standing > span { display: flex; align-items: center; flex-wrap: wrap; gap: 0 7px; min-width: 0; font-weight: 700; }
+.result-stats .row.standing em { flex-basis: 100%; padding-left: 16px; font-style: normal; font-size: 10px; opacity: 0.66; }
+.result-divider { height: 1px; margin: 10px 6px; background: rgba(255, 255, 255, 0.13); }
 .result-panel { width: min(620px, 96vw); }
 .reward-summary { margin: -3px 0 10px; min-height: 20px; color: #d9e5b7; font-size: 13px; font-weight: 800; }
 .reward-summary.win { color: #ffe078; }
@@ -450,12 +539,23 @@ html, body {
   .panel h1 { font-size: 30px; }
   .hud-bottom { min-width: 180px; }
   #minimap { width: 116px; height: 77px; }
-  .score .tag { max-width: 72px; }
-  .hud-top { gap: 8px; padding: 5px 9px; }
-  .objective { min-width: 150px; }
-  .base-hud-team { font-size: 8px; }
-  .base-hud-team b { display: none; }
+  .hud-top { gap: 3px; padding: 4px 7px 5px; max-width: calc(100vw - 190px); }
+  .objective { font-size: 9px; }
+  .team-board { gap: 3px; }
+  .team-card { width: 74px; padding: 2px 4px; gap: 0 4px; border-left-width: 2px; }
+  .tc-name { font-size: 8px; }
+  .tc-kills b { font-size: 12px; }
+  .tc-kills i { display: none; }
+  .tc-basehp { font-size: 7px; min-width: 20px; }
+  .team-seg { grid-template-columns: 1fr; }
   .shop-items { grid-template-columns: 1fr; }
   #touch-btns { right: 154px; grid-template-columns: repeat(2, 64px); }
   .tbtn { width: 64px; font-size: 11px; }
 }
+
+.help-classes { margin: 4px 0 12px; padding-left: 18px; font-size: 12.5px; line-height: 1.65; text-align: left; }
+.help-classes b { color: var(--you); }
+
+/* 観戦中は自分用の HUD を隠す */
+body.spectating .hud-bottom,
+body.spectating .weapon { display: none; }

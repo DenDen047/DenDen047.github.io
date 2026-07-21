@@ -15,22 +15,8 @@
       <!-- HUD -->
       <div id="hud">
         <div class="hud-top">
-          <div class="score ally" title="味方軍の撃破数">
-            <span id="army-ally-name" class="tag">味方軍</span>
-            <span id="score-ally" class="num">0</span>
-          </div>
-          <div class="objective">
-            <span id="objective-text"><b id="score-goal">敵基地を破壊</b></span>
-            <div class="base-hud">
-              <span class="base-hud-team ally">味方 <b id="base-ally-hp">2400</b></span>
-              <span class="base-hud-bar"><span id="base-ally-fill" class="ally"></span><span id="base-enemy-fill" class="enemy"></span></span>
-              <span class="base-hud-team enemy">敵 <b id="base-enemy-hp">2400</b></span>
-            </div>
-          </div>
-          <div class="score enemy" title="敵軍の撃破数">
-            <span id="score-enemy" class="num">0</span>
-            <span id="army-enemy-name" class="tag">敵軍</span>
-          </div>
+          <div class="objective"><span id="daytime" class="daytime">🌅 朝</span><b id="score-goal">他3軍の基地をすべて破壊</b></div>
+          <div id="team-board" class="team-board"></div>
         </div>
         <div class="hud-bottom">
           <div class="vitals">
@@ -44,15 +30,15 @@
               <span class="xp-bar"><span id="xp-fill" class="fill"></span></span>
             </div>
           </div>
-          <div class="weapon">
-            <span id="weapon-name" class="wname">アサルトライフル</span>
-            <span id="ammo-text" class="ammo">30 / 30</span>
-            <span id="grenade-text" class="grenade-count">💣 グレネード × 3</span>
-            <div class="equipment-status">
-              <div class="equip-row armor"><span class="equip-label">鎧</span><span class="equip-bar"><span id="armor-fill"></span></span><b id="armor-text">100</b></div>
-              <div class="equip-row shield"><span class="equip-label">盾</span><span class="equip-bar"><span id="shield-fill"></span></span><b id="shield-text">160</b></div>
-              <span id="shield-state" class="shield-state">Qを攻撃直前に押してパリィ</span>
-            </div>
+        </div>
+        <div class="weapon">
+          <span id="weapon-name" class="wname">アサルトライフル</span>
+          <span id="ammo-text" class="ammo">30 / 30</span>
+          <span id="grenade-text" class="grenade-count">💣 3　🧨 2</span>
+          <div class="equipment-status">
+            <div class="equip-row armor"><span class="equip-label">鎧</span><span class="equip-bar"><span id="armor-fill"></span></span><b id="armor-text">100</b></div>
+            <div class="equip-row shield"><span class="equip-label">盾</span><span class="equip-bar"><span id="shield-fill"></span></span><b id="shield-text">160</b></div>
+            <span id="shield-state" class="shield-state">Qを攻撃直前に押してパリィ</span>
           </div>
         </div>
       </div>
@@ -81,6 +67,8 @@
         <div id="stick-aim" class="stick"><div class="knob"></div></div>
         <div id="touch-btns">
           <button id="t-grenade" class="tbtn action">💣 投げる</button>
+          <button id="t-mine" class="tbtn action">🧨 地雷</button>
+          <button id="t-wire" class="tbtn action hidden">🪤 鉄線</button>
           <button id="t-tank" class="tbtn action">戦車</button>
           <button id="t-shield" class="tbtn shield-btn">🛡 盾</button>
           <button id="t-reload" class="tbtn">リロード</button>
@@ -105,6 +93,16 @@
           <input id="army-input" type="text" maxlength="16" placeholder="ブルー・フェニックス軍" value="">
         </label>
 
+        <div class="field">
+          <span>所属チーム（4軍が同時に戦います）</span>
+          <div id="team-seg" class="team-seg"></div>
+        </div>
+
+        <div class="field">
+          <span>キャラクター</span>
+          <div id="class-seg" class="class-seg"></div>
+        </div>
+
         <div id="menu-main">
           <p class="menu-wallet">所持金 <b id="menu-money">0</b> G</p>
           <button id="btn-solo" class="big-btn primary">ソロ戦（CPUと対戦）</button>
@@ -122,7 +120,7 @@
 
         <!-- オンラインのサブパネル -->
         <div id="menu-online" class="hidden">
-          <p class="lead small">同じルームコードを共有すると、ブラウザ同士で対戦できます（P2P / サーバー不要）。</p>
+          <p class="lead small">同じルームコードを共有すると、ブラウザ同士で対戦できます（P2P / サーバー不要）。同じチームを選べば味方として一緒に戦えます。</p>
           <div id="online-actions">
             <button id="btn-host" class="big-btn primary">ルームを作成（ホスト）</button>
             <div class="join-row">
@@ -134,12 +132,25 @@
             <span class="room-lobby-label">ルームコード</span>
             <strong id="room-code">----</strong>
             <p id="lobby-status">参加者を待っています…</p>
+            <div id="lobby-roster" class="lobby-roster"></div>
+            <button id="btn-lobby-start" class="big-btn primary hidden">参加者を待っています…</button>
           </div>
           <div id="net-status" class="net-status"></div>
           <button id="btn-back" class="link-btn">← もどる</button>
         </div>
 
         <p class="hint" id="menu-hint"></p>
+      </div>
+    </div>
+
+    <!-- ===== 脱落（観戦するか、やめるか） ===== -->
+    <div id="eliminated" class="overlay hidden">
+      <div class="panel pause-panel">
+        <p class="pause-kicker">TEAM ELIMINATED</p>
+        <h2>あなたの軍は全滅しました</h2>
+        <p class="lead" id="eliminated-detail">基地を失い、生き残りも倒されました。もう復活はできません。</p>
+        <button id="btn-spectate" class="big-btn primary">観戦する（決着まで見届ける）</button>
+        <button id="btn-give-up" class="big-btn">やめてメニューへ</button>
       </div>
     </div>
 
@@ -168,9 +179,11 @@
               <li><b>左クリック長押し</b> … 射撃</li>
               <li><b>R</b> … リロード</li>
               <li><b>G</b> … グレネードを投げる</li>
-              <li><b>E</b> … 戦車に乗る / 降りる</li>
+              <li><b>F</b> … 足元に地雷を設置</li>
+              <li><b>C</b> … 有刺鉄線を張る（罠師のみ）</li>
+              <li><b>E</b> … 戦車・機関銃座に乗る / 降りる</li>
               <li><b>Q</b> … 攻撃直前に押してパリィ / 長押しで防御</li>
-              <li><b>1〜6</b> / ホイール … 武器切替（6はナイフ）</li>
+              <li><b>1〜3</b> / ホイール … 武器切替（持てる武器はキャラごとに固定）</li>
               <li><b>Shift</b> … ダッシュ</li>
             </ul>
           </div>
@@ -179,14 +192,32 @@
             <ul>
               <li><b>左スティック</b> … 移動</li>
               <li><b>右スティック</b> … 照準＆自動射撃</li>
+              <li>指を離しても<b>最後に向いた方向を維持</b>します</li>
               <li><b>💣 投げる</b> … グレネード</li>
-              <li><b>戦車</b> … 近くの戦車に乗る / 降りる</li>
+              <li><b>🧨 地雷</b> … 足元に設置</li>
+              <li><b>戦車</b> … 近くの戦車・機関銃座に乗る / 降りる</li>
               <li><b>🛡 盾</b> … 攻撃直前に押してパリィ / 長押しで防御</li>
               <li><b>リロード / 武器</b> … 右下ボタン</li>
             </ul>
           </div>
         </div>
-        <p class="help-rpg">攻撃直前に盾を構えるとパリィ成功。銃弾は敵へ跳ね返し、ナイフや軍用犬の攻撃は相手をひるませます。パリィ受付は短く、成功後も約1秒の再使用待ちがあります。通常の盾防御は正面攻撃を軽減しますが、構え中は攻撃不可・移動速度低下。防弾鎧と盾はフィールド装備または基地で補給できます。視界外の足音はオレンジ色の波紋で察知できます。敵基地の耐久力を0にした軍の勝ちです。</p>
+        <h3 style="margin-top:6px">戦い方（サバイバル）</h3>
+        <p class="help-rpg"><b>4軍による同時戦</b>です。基地を破壊された軍は<b>それ以降いっさい復活できません</b>。生き残っている兵士は戦い続けられますが、倒されたらその軍は脱落。最後まで残った1軍の勝ちです。だから自分の基地を守ることが何より大事で、逆に敵の基地さえ落とせば、あとは残党を掃討するだけになります。オンラインでは同じチームを選んだ人同士が味方になります。</p>
+        <h3 style="margin-top:6px">キャラクター</h3>
+        <p class="help-rpg">キャラクターごとに<b>持てる武器が決まっています</b>。数字キーの1〜3は、そのキャラの装備の1番目〜3番目に対応します。</p>
+        <ul class="help-classes">
+          <li><b>🎖️ 兵士</b> … アサルトライフル / ハンドガン / 銃剣。撃ち合いに強い標準型。</li>
+          <li><b>⚔️ 侍</b> … 打刀 / 戦斧 / コンバットナイフ。<b>銃は一切持てません</b>が、体力＋30・移動速度＋18%・近接ダメージ1.4倍で、パリィの受付も長め。懐に飛び込むのが仕事です。</li>
+          <li><b>🪤 罠師</b> … サブマシンガン / ショットガン / 軍用シャベル。地雷を5個持ち、その地雷は敵からほとんど見えません。敵の地雷も見抜けて、有刺鉄線（Cキー）で敵の足を止められます。そのぶん体力は低めです。</li>
+          <li><b>🚀 重火器兵</b> … ロケットランチャー / スナイパー / ハンドガン。ロケット弾は弾速が遅くて避けられますが、当たれば戦車や基地を大きく削ります。足は遅く、接近戦は苦手です。</li>
+        </ul>
+        <h3 style="margin-top:6px">乗り物と銃座</h3>
+        <p class="help-rpg"><b>戦車</b>は<b>120mm主砲</b>（爆発・対戦車）と<b>同軸機関銃</b>（連射・対歩兵）を積んでいます。数字キーかホイール（スマホは「武器」ボタン）で切り替えてください。</p>
+        <p class="help-rpg"><b>機関銃座</b>はマップ上に8つ置かれた中立の設備です。近づいてEキー（スマホは「戦車」ボタン）で取り付けます。動けなくなる代わりに、連射の効く重機関銃を撃て、防盾のおかげで被弾も半分になります。誰でも先に取り付いた者が使えるので、要所の銃座は奪い合いになります。</p>
+        <p class="help-rpg"><b>隠れる</b>：敵は壁やコンテナの裏にいる相手を見つけられず、正面の視野角の外も見えません。<b>茂み</b>は通り抜けられるのに視線を遮るので、待ち伏せに最適です。ただし至近距離まで近づくと向きに関係なく気づかれます。走ると足音が響くので、忍び寄るときは歩きましょう。</p>
+        <p class="help-rpg"><b>昼と夜</b>：時間が進むと朝→昼→夕方→夜と移り変わります。夜は視界がぐっと狭まるので奇襲のチャンス、昼は遠くまで見渡せます。</p>
+        <p class="help-rpg"><b>地雷</b>：足元に設置すると約1秒後に作動し、踏んだ敵を吹き飛ばします。味方には見えますが、敵にはすぐ近くに来るまで見えません。戦車にも大ダメージ。</p>
+        <p class="help-rpg">攻撃直前に盾を構えるとパリィ成功。銃弾は敵へ跳ね返し、近接武器や軍用犬の攻撃は相手をひるませます。パリィ受付は短く、成功後も約1秒の再使用待ちがあります。通常の盾防御は正面攻撃を軽減しますが、構え中は攻撃不可・移動速度低下。防弾鎧と盾はフィールド装備または基地で補給できます。</p>
         <button id="btn-help-close" class="big-btn primary">とじる</button>
       </div>
     </div>
