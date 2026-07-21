@@ -175,6 +175,27 @@
   CLASSES.forEach((c) => (CLASS_BY_KEY[c.key] = c));
   const classDef = (key) => CLASS_BY_KEY[key] || CLASSES[0];
 
+  // ============================================================
+  //  ステージ
+  // ============================================================
+  const STAGES = [
+    {
+      key: "field", name: "標準戦場", icon: "🏙",
+      desc: "建物と瓦礫が点在する見通しの良い戦場。時間帯が朝から夜へ移り変わる。",
+      bgm: "bgm-battle", creature: false, forcedNight: 0,
+      ground: ["#3c4d28", "#41522b", "#374524"],
+    },
+    {
+      key: "darkforest", name: "暗黒の森", icon: "🌲",
+      desc: "夜が明けない密林。見通しは最悪で、何かが棲んでいる。走ると気づかれる。",
+      bgm: "bgm-darkforest", creature: true, forcedNight: 0.1,
+      ground: ["#1b2416", "#1f291a", "#161e12"],
+    },
+  ];
+  const STAGE_BY_KEY = {};
+  STAGES.forEach((s) => (STAGE_BY_KEY[s.key] = s));
+  const stageDef = () => STAGE_BY_KEY[G && G.stage ? G.stage : playerStage] || STAGES[0];
+
   const DIFF = {
     easy:   { aimErr: 0.17, react: 430, fireChance: 0.68, hpMul: 0.85, dmgMul: 0.85, sniperChance: 0.05 },
     normal: { aimErr: 0.09, react: 280, fireChance: 0.85, hpMul: 1.0,  dmgMul: 1.0,  sniperChance: 0.12 },
@@ -285,6 +306,7 @@
     lobbyStart: document.getElementById("btn-lobby-start"),
     teamSeg: document.getElementById("team-seg"),
     classSeg: document.getElementById("class-seg"),
+    stageSeg: document.getElementById("stage-seg"),
     touch: document.getElementById("touch"),
     btnMute: document.getElementById("btn-mute"),
   };
@@ -406,6 +428,42 @@
       g.gain.setValueAtTime(0.24, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
       o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.16);
     }
+    // クリーチャーの唸り声。低い唸りに軋むような倍音を重ねる。
+    function roar() {
+      if (!actx || muted) return;
+      const t = actx.currentTime;
+      const g = actx.createGain(); g.connect(master);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.55, t + 0.09);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 1.15);
+      const lp = actx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.setValueAtTime(900, t);
+      lp.frequency.exponentialRampToValueAtTime(160, t + 1.1);
+      lp.connect(g);
+      // 唸りの基音
+      const o = actx.createOscillator();
+      o.type = "sawtooth";
+      o.frequency.setValueAtTime(72, t);
+      o.frequency.exponentialRampToValueAtTime(38, t + 1.1);
+      o.connect(lp);
+      // 軋み
+      const o2 = actx.createOscillator();
+      o2.type = "square";
+      o2.frequency.setValueAtTime(131, t);
+      o2.frequency.exponentialRampToValueAtTime(47, t + 0.9);
+      const g2 = actx.createGain(); g2.gain.value = 0.22;
+      o2.connect(g2); g2.connect(lp);
+      // 息づかい
+      const src = noise(1.2), hp = actx.createBiquadFilter();
+      hp.type = "bandpass"; hp.frequency.value = 420; hp.Q.value = 0.7;
+      const g3 = actx.createGain(); g3.gain.value = 0.3;
+      src.connect(hp); hp.connect(g3); g3.connect(lp);
+      o.start(t); o.stop(t + 1.2);
+      o2.start(t); o2.stop(t + 1.0);
+      src.start(t); src.stop(t + 1.2);
+    }
+
     // ---- BGM ----
     // 効果音より控えめの音量で流す。OGG が使えるブラウザなら継ぎ目なくループする
     // (MP3 はエンコーダの余白ぶん、ループ点にごく短い間が入る)。
@@ -414,11 +472,11 @@
     let bgmLoading = false, bgmWanted = false;
     let bgmStartedAt = 0, bgmOffset = 0;
 
+    let bgmTrack = "bgm-battle";
     function bgmUrl() {
       const probe = document.createElement("audio");
-      return probe.canPlayType && probe.canPlayType('audio/ogg; codecs="vorbis"')
-        ? "audio/bgm-battle.ogg"
-        : "audio/bgm-battle.mp3";
+      const ext = probe.canPlayType && probe.canPlayType('audio/ogg; codecs="vorbis"') ? "ogg" : "mp3";
+      return `audio/${bgmTrack}.${ext}`;
     }
 
     function loadBgm() {
@@ -466,10 +524,16 @@
       unlock() {
         ensure();
         if (actx && actx.state === "suspended") actx.resume();
-        loadBgm();   // 最初の操作でダウンロードだけ先に済ませておく
+        // 曲はステージが決まってから読む(暗黒の森は別の曲)
       },
-      shot, boom, hurt, levelup, heal, melee, footstep, parry,
-      startBgm() {
+      shot, boom, hurt, levelup, heal, melee, footstep, parry, roar,
+      startBgm(track) {
+        if (track && track !== bgmTrack) {
+          // ステージが変わったら曲も差し替える
+          bgmTrack = track;
+          haltBgm(false);
+          bgmBuffer = null;
+        }
         bgmWanted = true;
         ensure();
         if (actx && actx.state === "suspended") actx.resume();
@@ -673,6 +737,7 @@
   let playerName = "Soldier";
   let playerTeam = 0;
   let playerClass = "soldier";
+  let playerStage = "field";
   let armyName = TEAM_DEFS[0].name;
   let matchPaused = false;
   // 自軍が全滅したときの「観戦するか、やめるか」の状態
@@ -708,6 +773,8 @@
       killfeed: [],
       soundPings: [],
       clock: DAY_START_CLOCK,
+      stage: playerStage,
+      creature: null,
       armyNames: TEAM_DEFS.map((def, team) => (team === playerTeam ? armyName : def.name)),
       rewardClaimed: false,
     };
@@ -733,6 +800,9 @@
 
   // 0 = 真夜中, 1 = 真昼
   function daylight() {
+    const forced = stageDef().forcedNight;
+    // 暗黒の森は時間が進んでも明るくならない
+    if (forced) return forced;
     const p = ((G ? G.clock : DAY_START_CLOCK) % DAY_LENGTH_MS) / DAY_LENGTH_MS;
     return 0.5 - 0.5 * Math.cos(p * Math.PI * 2);
   }
@@ -749,6 +819,7 @@
   }
 
   function dayPhase() {
+    if (stageDef().forcedNight) return { key: "night", label: "🌲 暗黒の森", note: "何かが見ている" };
     const light = daylight();
     if (light >= 0.78) return { key: "noon", label: "☀ 昼", note: "視界が最も広い" };
     if (light >= 0.34) return daylightRising()
@@ -870,6 +941,64 @@
 
   // ---- マップ生成 ----
   function genMap() {
+    return stageDef().key === "darkforest" ? genForestMap() : genFieldMap();
+  }
+
+  // 暗黒の森: 木と茂みで埋め尽くし、見通しを極端に悪くする。
+  // 遮蔽が多いぶん、音を立てるとクリーチャーに位置がバレる。
+  function genForestMap() {
+    const obs = [];
+    const wt = 26;
+    obs.push({ x: 0, y: 0, w: WORLD_W, h: wt, type: "wall", hp: Infinity });
+    obs.push({ x: 0, y: WORLD_H - wt, w: WORLD_W, h: wt, type: "wall", hp: Infinity });
+    obs.push({ x: 0, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity });
+    obs.push({ x: WORLD_W - wt, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity });
+
+    // 廃墟(数は少なめ)
+    for (let i = 0; i < 7; i++) {
+      const w = rand(90, 170), h = rand(24, 38);
+      const vertical = Math.random() < 0.5;
+      const rw = vertical ? h : w, rh = vertical ? w : h;
+      const x = rand(200, WORLD_W - 200 - rw);
+      const y = rand(200, WORLD_H - 200 - rh);
+      if (BASE_SPOTS.some((spot) => dist2(x + rw / 2, y + rh / 2, spot.x, spot.y) < 300 ** 2)) continue;
+      obs.push({ x, y, w: rw, h: rh, type: "ruin", hp: Infinity, seed: Math.random() });
+    }
+
+    // 木は通れないので、必ず人もクリーチャーも抜けられる隙間を空けて植える。
+    // (隙間を確保しないと木が固まって通行不能な壁ができてしまう)
+    const LANE = 46;
+    const solids = obs.slice();
+    const farFromBase = (x, y, w, h, pad) =>
+      !G.bases.some((base) => dist2(x + w / 2, y + h / 2, base.x, base.y) < (base.r + pad) ** 2);
+    for (let i = 0; i < 620; i++) {
+      const t = Math.random() < 0.78 ? "tree" : "rock";
+      const w = t === "tree" ? rand(44, 76) : rand(34, 58);
+      const h = t === "tree" ? w : rand(34, 58);
+      const x = rand(90, WORLD_W - 90 - w);
+      const y = rand(90, WORLD_H - 90 - h);
+      if (!farFromBase(x, y, w, h, 60)) continue;
+      // 既存の固い障害物から LANE ぶん離れていなければ諦める
+      const blocked = solids.some((o) =>
+        x - LANE < o.x + o.w && x + w + LANE > o.x && y - LANE < o.y + o.h && y + h + LANE > o.y);
+      if (blocked) continue;
+      const tree = { x, y, w, h, type: t, hp: Infinity, seed: Math.random() };
+      obs.push(tree);
+      solids.push(tree);
+    }
+
+    // 茂みは通り抜けられるので、視界を潰すために好きなだけ重ねて置く
+    for (let i = 0; i < 190; i++) {
+      const w = rand(64, 124), h = rand(58, 106);
+      const x = rand(70, WORLD_W - 70 - w);
+      const y = rand(70, WORLD_H - 70 - h);
+      if (!farFromBase(x, y, w, h, 30)) continue;
+      obs.push({ x, y, w, h, type: "bush", hp: Infinity, seed: Math.random() });
+    }
+    return obs;
+  }
+
+  function genFieldMap() {
     const obs = [];
     // 外周の壁
     const wt = 26;
@@ -1088,6 +1217,137 @@
         ai: { think: 0, targetId: -1 },
       };
     });
+  }
+
+  // ============================================================
+  //  クリーチャー (暗黒の森)
+  //  ステージに1体だけ。倒せない代わりに、走らなければ気づかれない。
+  //  触れられたら即死。
+  // ============================================================
+  const CREATURE_R = 20;
+  const CREATURE_HEAR_R = 560;       // 走る足音に気づく距離
+  const CREATURE_SHOT_HEAR_R = 780;  // 銃声に気づく距離
+  const CREATURE_SIGHT_R = 260;      // 歩いていても至近距離なら見つかる
+  const CREATURE_HUNT_SPEED = 232;
+  const CREATURE_ROAM_SPEED = 62;
+  const CREATURE_LOSE_MS = 6000;     // 手がかりが無くなってから諦めるまで
+
+  function spawnCreature() {
+    if (!stageDef().creature) { G.creature = null; return; }
+    // 最初はマップ中央付近、どの基地からも離れた場所に潜ませる
+    let spot = { x: WORLD_W / 2, y: WORLD_H / 2 };
+    for (let i = 0; i < 120; i++) {
+      const x = rand(500, WORLD_W - 500), y = rand(400, WORLD_H - 400);
+      if (BASE_SPOTS.some((b) => dist2(x, y, b.x, b.y) < 700 ** 2)) continue;
+      if (G.obstacles.some((o) => isSolid(o) && circleRect(x, y, CREATURE_R + 6, o.x, o.y, o.w, o.h))) continue;
+      spot = { x, y };
+      break;
+    }
+    G.creature = {
+      kind: "creature", x: spot.x, y: spot.y, rx: spot.x, ry: spot.y,
+      angle: rand(0, Math.PI * 2), targetId: -1, lastHeardAt: -99999,
+      wx: spot.x, wy: spot.y, roamUntil: 0, lastRoarAt: -99999,
+      limbPhase: 0, hunting: false, lungeAt: 0,
+    };
+  }
+
+  // 物音を立てた相手を探す。走る足音・銃声・至近距離の目視。
+  function creatureFindPrey(cr, t) {
+    let best = null, bestScore = Infinity;
+    for (const s of G.soldiers) {
+      if (s.dead || s.vehicleId >= 0) continue;
+      const d2 = dist2(cr.x, cr.y, s.x, s.y);
+      // 走っている(足音が大きい)相手が最優先
+      const running = s.moving && (s.noiseRadius || 0) > 500;
+      const heardRun = running && d2 < CREATURE_HEAR_R ** 2;
+      const heardShot = t - (s.lastShot || -99999) < 900 && d2 < CREATURE_SHOT_HEAR_R ** 2 && !WEAPONS[s.weapon].melee;
+      const seen = d2 < CREATURE_SIGHT_R ** 2 && lineClear(cr.x, cr.y, s.x, s.y);
+      if (!heardRun && !heardShot && !seen) continue;
+      // 近いほど、そして走っている相手ほど狙われやすい
+      const score = d2 * (heardRun ? 0.5 : 1);
+      if (score < bestScore) { bestScore = score; best = s; }
+    }
+    return best;
+  }
+
+  function updateCreature(dt, t) {
+    const cr = G.creature;
+    if (!cr) return;
+    cr.limbPhase += dt * (cr.hunting ? 15 : 4);
+
+    const prey = creatureFindPrey(cr, t);
+    if (prey) {
+      cr.targetId = prey.id;
+      cr.lastHeardAt = t;
+      cr.wx = prey.x; cr.wy = prey.y;
+      if (!cr.hunting) {
+        cr.hunting = true;
+        cr.lastRoarAt = t;
+        Audio.roar();
+        if (prey.id === G.localId) banner("何かがこちらに気づいた……！");
+      }
+    } else if (cr.hunting && t - cr.lastHeardAt > CREATURE_LOSE_MS) {
+      cr.hunting = false;
+      cr.targetId = -1;
+    }
+
+    let speed = CREATURE_ROAM_SPEED;
+    if (cr.hunting) {
+      speed = CREATURE_HUNT_SPEED;
+      const tgt = G.soldiers.find((s) => s.id === cr.targetId && !s.dead);
+      // 見えているなら現在地へ、見失っていたら最後の物音のほうへ
+      if (tgt && (dist2(cr.x, cr.y, tgt.x, tgt.y) < CREATURE_SIGHT_R ** 2 || t - cr.lastHeardAt < 700)) {
+        cr.wx = tgt.x; cr.wy = tgt.y;
+      }
+    } else if (t > cr.roamUntil) {
+      // 当てもなくうろつく
+      cr.roamUntil = t + rand(2500, 5000);
+      cr.wx = clamp(cr.x + rand(-420, 420), 120, WORLD_W - 120);
+      cr.wy = clamp(cr.y + rand(-420, 420), 120, WORLD_H - 120);
+    }
+
+    const dx = cr.wx - cr.x, dy = cr.wy - cr.y;
+    const d = Math.hypot(dx, dy) || 1;
+    if (d > 6) {
+      const desired = Math.atan2(dy, dx);
+      cr.angle = angLerp(cr.angle, desired, clamp(dt * (cr.hunting ? 7 : 3), 0, 1));
+      const ox = cr.x, oy = cr.y;
+      moveCreature(cr, cr.x + Math.cos(cr.angle) * speed * dt, cr.y + Math.sin(cr.angle) * speed * dt);
+      // 木に引っかかったら横滑りして回り込む
+      if (cr.x === ox && cr.y === oy) {
+        moveCreature(cr, cr.x - Math.sin(cr.angle) * speed * dt, cr.y + Math.cos(cr.angle) * speed * dt);
+      }
+    }
+
+    // 接触したものは一撃で死ぬ。チームは問わない。
+    for (const s of G.soldiers) {
+      if (s.dead || s.vehicleId >= 0) continue;
+      if (dist2(cr.x, cr.y, s.x, s.y) > (CREATURE_R + SOLDIER_R) ** 2) continue;
+      cr.lungeAt = t;
+      if (s.id === G.localId) { shake = Math.min(22, shake + 16); Audio.roar(); }
+      s.killedByCreature = true;
+      damageSoldier(s, 99999, null, { x: cr.x, y: cr.y, type: "creature", bypassEquipment: true });
+      for (let i = 0; i < 18; i++) {
+        const a = Math.random() * Math.PI * 2;
+        addParticle(s.x, s.y, { kind: "blood", vx: Math.cos(a) * rand(60, 300), vy: Math.sin(a) * rand(60, 300), life: rand(400, 900), size: rand(2, 5) });
+      }
+    }
+    for (const dog of G.dogs) {
+      if (dog.dead) continue;
+      if (dist2(cr.x, cr.y, dog.x, dog.y) > (CREATURE_R + DOG_R) ** 2) continue;
+      cr.lungeAt = t;
+      destroyDog(dog, null);
+    }
+  }
+
+  function moveCreature(cr, nx, ny) {
+    let x = cr.x, y = cr.y;
+    let tx = clamp(nx, CREATURE_R, WORLD_W - CREATURE_R);
+    if (G.obstacles.some((o) => isSolid(o) && circleRect(tx, y, CREATURE_R, o.x, o.y, o.w, o.h))) tx = x;
+    x = tx;
+    let ty = clamp(ny, CREATURE_R, WORLD_H - CREATURE_R);
+    if (G.obstacles.some((o) => isSolid(o) && circleRect(x, ty, CREATURE_R, o.x, o.y, o.w, o.h))) ty = y;
+    cr.x = x; cr.y = ty;
   }
 
   // 中立の機関銃座をマップ中央寄りに散らす。基地のすぐ前には置かない。
@@ -1650,6 +1910,9 @@
       G.score[attacker.team]++;
       if (!attacker.kind) gainXp(attacker, target.isHuman ? 2 : 1);
       addKillfeed(attacker, target);
+    } else if (target.killedByCreature) {
+      target.killedByCreature = false;
+      addKillfeed({ name: "??????", team: -1 }, target);
     } else {
       addKillfeed(null, target);
     }
@@ -2463,6 +2726,7 @@
     }
     updateTanks(dt, t);
     updateTurrets(dt, t);
+    updateCreature(dt, t);
     updateDogs(dt, t);
     updateFootsteps(dt, t);
     // リロード完了
@@ -2746,6 +3010,7 @@
     for (const tank of G.tanks) if (!tank.dead && isEntityVisible(tank)) drawTank(tank);
     for (const dog of G.dogs) if (!dog.dead && isEntityVisible(dog)) drawDog(dog);
     for (const s of G.soldiers) if (!s.dead && s.vehicleId < 0 && isEntityVisible(s)) drawSoldier(s);
+    if (G.creature && creatureVisible()) drawCreature(G.creature);
     drawObstaclesOver();
     drawGrenades();
     drawBullets();
@@ -2757,6 +3022,7 @@
 
     if (shake > 0) shake = Math.max(0, shake - 0.6);
     drawNightTint(vw, vh);
+    drawHuntedWarning(vw, vh);
     drawVisionMask(vw, vh);
     drawFootstepIndicators(vw, vh);
     drawMinimap();
@@ -2770,7 +3036,8 @@
     for (let x = x0; x < camX + vw + TS; x += TS) {
       for (let y = y0; y < camY + vh + TS; y += TS) {
         const k = ((x / TS) * 7 + (y / TS) * 13) % 5;
-        ctx.fillStyle = k < 2 ? "#3c4d28" : k < 4 ? "#41522b" : "#374524";
+        const pal = stageDef().ground;
+        ctx.fillStyle = k < 2 ? pal[0] : k < 4 ? pal[1] : pal[2];
         ctx.fillRect(x, y, TS, TS);
       }
     }
@@ -2851,6 +3118,17 @@
     const bonus = entity.kind === "tank" ? 65 : 0;
     const r = currentVisionRadius() + bonus;
     return dist2(me.x, me.y, entity.x, entity.y) < r ** 2 && lineClear(me.x, me.y, entity.x, entity.y);
+  }
+
+  // クリーチャーは視界の中にいるときだけ描く。姿が見えないほうが怖い。
+  function creatureVisible() {
+    const cr = G.creature;
+    if (!cr) return false;
+    if (spectating) return true;
+    const me = localSoldier();
+    if (!me) return false;
+    const r = currentVisionRadius() + 40;
+    return dist2(me.x, me.y, cr.x, cr.y) < r * r && lineClear(me.x, me.y, cr.x, cr.y);
   }
 
   function drawStains() {
@@ -3078,6 +3356,63 @@
       ctx.fillStyle = `rgba(255,255,255,${dog.hitFlash * 0.65})`;
       ctx.beginPath(); ctx.ellipse(0, 0, 23, 14, 0, 0, Math.PI * 2); ctx.fill();
     }
+    ctx.restore();
+  }
+
+  // 痩せた長身の影。顔は無く、光る眼だけがこちらを向く。
+  function drawCreature(cr) {
+    const t = now();
+    const hunting = cr.hunting;
+    const lunging = t - cr.lungeAt < 220;
+    ctx.save();
+    ctx.translate(cr.x, cr.y);
+    // 足元に溜まる闇
+    const shadow = ctx.createRadialGradient(0, 0, 4, 0, 0, 62);
+    shadow.addColorStop(0, "rgba(0,0,0,0.72)");
+    shadow.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = shadow;
+    ctx.beginPath(); ctx.arc(0, 0, 62, 0, Math.PI * 2); ctx.fill();
+
+    ctx.rotate(cr.angle);
+    // 長い四肢。狩り中は激しく波打つ。
+    const reach = hunting ? 40 : 31;
+    ctx.strokeStyle = hunting ? "#c9c4bb" : "#8e8a83";
+    ctx.lineWidth = 3.4; ctx.lineCap = "round";
+    for (let i = 0; i < 4; i++) {
+      const base = (i < 2 ? -1 : 1) * (0.75 + (i % 2) * 0.55);
+      const sway = Math.sin(cr.limbPhase + i * 1.7) * (hunting ? 0.5 : 0.22);
+      const a = base + sway;
+      const elbowX = Math.cos(a) * reach * 0.55, elbowY = Math.sin(a) * reach * 0.55;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(elbowX, elbowY, Math.cos(a - 0.5) * reach, Math.sin(a - 0.5) * reach);
+      ctx.stroke();
+    }
+    // 胴体: 縦に引き伸ばした細身
+    ctx.fillStyle = hunting ? "#ded8cd" : "#a8a49b";
+    ctx.beginPath(); ctx.ellipse(0, 0, 11, 16, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "rgba(20,18,22,0.5)";
+    ctx.beginPath(); ctx.ellipse(-3, 0, 6, 13, 0, 0, Math.PI * 2); ctx.fill();
+    // 頭部: のっぺりした楕円、口は裂けたときだけ見える
+    ctx.fillStyle = hunting ? "#efe9dd" : "#b8b4aa";
+    ctx.beginPath(); ctx.ellipse(7, 0, 9.5, 8, 0, 0, Math.PI * 2); ctx.fill();
+    if (lunging) {
+      ctx.fillStyle = "#2a0a0c";
+      ctx.beginPath(); ctx.ellipse(12, 0, 6, 5.5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.1;
+      for (let i = -2; i <= 2; i++) {
+        ctx.beginPath(); ctx.moveTo(9, i * 2.1); ctx.lineTo(17, i * 2.4); ctx.stroke();
+      }
+    }
+    // 光る眼
+    const glow = hunting ? "rgba(255,52,40," : "rgba(226,196,120,";
+    const pulse = 0.65 + Math.sin(t * 0.006) * 0.25;
+    ctx.shadowColor = hunting ? "#ff3428" : "#e2c478";
+    ctx.shadowBlur = hunting ? 16 : 8;
+    ctx.fillStyle = glow + pulse + ")";
+    ctx.beginPath(); ctx.arc(11, -3.4, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(11, 3.4, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
     ctx.restore();
   }
 
@@ -3522,6 +3857,22 @@
     ctx.restore();
   }
 
+  // 追われている間は画面の縁が脈打つ。姿が見えなくても危険が分かるように。
+  function drawHuntedWarning(vw, vh) {
+    const cr = G.creature;
+    if (!cr || !cr.hunting) return;
+    const me = localSoldier();
+    if (!me || me.dead || cr.targetId !== me.id) return;
+    const d = Math.sqrt(dist2(me.x, me.y, cr.x, cr.y));
+    const closeness = clamp(1 - d / 700, 0, 1);
+    const pulse = 0.35 + Math.sin(now() * 0.009) * 0.2;
+    const g = ctx.createRadialGradient(vw / 2, vh / 2, Math.min(vw, vh) * 0.22, vw / 2, vh / 2, Math.max(vw, vh) * 0.62);
+    g.addColorStop(0, "rgba(120,0,0,0)");
+    g.addColorStop(1, `rgba(120,0,0,${(0.25 + closeness * 0.45) * pulse})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, vw, vh);
+  }
+
   function drawVisionMask(vw, vh) {
     if (spectating) return;        // 観戦中は視界制限なし
     const me = localSoldier();
@@ -3657,6 +4008,11 @@
       if (tank.dead || !isEntityVisible(tank)) continue;
       mctx.fillStyle = tank.driverId === G.localId ? YOU_ACCENT : teamDef(tank.team).tankBar;
       mctx.fillRect(tank.x * sx - 3, tank.y * sy - 3, 6, 6);
+    }
+    const cr = G.creature;
+    if (cr && (spectating || cr.hunting)) {
+      mctx.fillStyle = "rgba(255,60,45,0.9)";
+      mctx.beginPath(); mctx.arc(cr.x * sx, cr.y * sy, 3, 0, Math.PI * 2); mctx.fill();
     }
     // 銃座は常に位置が分かる(マップ上の固定設備なので)
     for (const turret of G.turrets) {
@@ -3920,6 +4276,7 @@
       g.x += g.vx * dt; g.y += g.vy * dt;
       g.rotation += Math.hypot(g.vx, g.vy) * dt * 0.08;
     }
+    if (G.creature) G.creature.limbPhase += dt * (G.creature.hunting ? 15 : 4);
     updateFootsteps(dt, now());
     updateParticles(dt);
   }
@@ -3936,13 +4293,14 @@
     spawnDogs();
     spawnTanks();
     spawnTurrets();
+    spawnCreature();
     spawnMedkits();
     el.scoreGoal.textContent = "他3軍の基地をすべて破壊";
     resize();
     hideOverlays();
     G.running = true;
     G.over = false;
-    Audio.startBgm();
+    Audio.startBgm(stageDef().bgm);
   }
 
   function endMatch(winnerTeam) {
@@ -4071,6 +4429,7 @@
       shift(s.ai, ["think", "strafeUntil", "lastSeen", "lostAt", "fireUntil"]);
     }
     for (const dog of G.dogs) shift(dog, ["respawnAt", "lastAttack", "biteAt", "stunnedUntil"]);
+    if (G.creature) shift(G.creature, ["lastHeardAt", "roamUntil", "lastRoarAt", "lungeAt"]);
     for (const turret of G.turrets) shift(turret, ["respawnAt", "lastShot", "muzzle"]);
     for (const tank of G.tanks) {
       shift(tank, ["respawnAt", "lastShot", "muzzle"]);
@@ -4218,6 +4577,7 @@
       spawnDogs();
       spawnTanks();
       spawnTurrets();
+      spawnCreature();
       spawnMedkits();
       el.scoreGoal.textContent = "他3軍の基地をすべて破壊";
       resize();
@@ -4290,7 +4650,7 @@
         hp: Number.isFinite(o.hp) ? o.hp : null,
       }));
       conn.send({
-        t: "init", obstacles, goal: G.goal, slotId: slot ? slot.id : -1,
+        t: "init", obstacles, goal: G.goal, slotId: slot ? slot.id : -1, stage: G.stage,
         armyNames: G.armyNames, you: { team: slot ? slot.team : 1 }, paused: matchPaused,
       });
     }
@@ -4340,7 +4700,7 @@
       }
       hideOverlays();
       G.running = true; G.over = false;
-      Audio.startBgm();
+      Audio.startBgm(stageDef().bgm);
       showRoomBanner();
     }
 
@@ -4449,6 +4809,7 @@
     function onHostData(d) {
       if (d.t === "init") {
         G = emptyState();
+        if (d.stage) { G.stage = d.stage; playerStage = d.stage; }
         G.obstacles = d.obstacles.map((o) => ({ ...o, hp: o.hp == null ? Infinity : o.hp }));
         G.goal = d.goal;
         G.localId = d.slotId;
@@ -4459,7 +4820,7 @@
         resize();
         hideOverlays();
         G.running = true; G.over = false;
-        Audio.startBgm();
+        Audio.startBgm(stageDef().bgm);
         if (d.paused) applyNetworkPause(true);
       } else if (d.t === "slot") {
         // ホストが決めた所属チーム。希望が通らなかった場合もここで分かる。
@@ -4577,6 +4938,17 @@
       G.mines = (d.mn || []).map((m) => ({
         id: m.id, team: m.tm, x: m.x, y: m.y, armAt: nt + (m.ar || 0), owner: -1, stealthMul: m.sm || 1,
       }));
+      if (d.cre) {
+        if (!G.creature) G.creature = { kind: "creature", limbPhase: 0, lungeAt: 0, lastRoarAt: 0 };
+        const cr2 = G.creature;
+        const wasHunting = cr2.hunting;
+        cr2.x = d.cre.x; cr2.y = d.cre.y; cr2.angle = d.cre.a;
+        cr2.hunting = !!d.cre.h; cr2.targetId = d.cre.tg;
+        if (d.cre.lg) cr2.lungeAt = now();
+        if (!wasHunting && cr2.hunting) Audio.roar();
+      } else {
+        G.creature = null;
+      }
       G.wires = (d.wr || []).map((wire) => ({
         id: wire.id, team: wire.tm, x: wire.x, y: wire.y, owner: -1, seed: wire.sd || 0,
       }));
@@ -4642,11 +5014,16 @@
         tm: turret.team, hp: Math.round(turret.hp), mh: turret.maxHp, d: turret.dead ? 1 : 0,
         gn: turret.gunnerId, fl: stamp - turret.muzzle < 55 ? 1 : 0,
       }));
+      const cre = G.creature ? {
+        x: Math.round(G.creature.x), y: Math.round(G.creature.y),
+        a: +G.creature.angle.toFixed(2), h: G.creature.hunting ? 1 : 0,
+        tg: G.creature.targetId, lg: stamp - G.creature.lungeAt < 220 ? 1 : 0,
+      } : null;
       const wr = G.wires.map((wire) => ({
         id: wire.id, tm: wire.team, x: Math.round(wire.x), y: Math.round(wire.y), sd: +(wire.seed || 0).toFixed(2),
       }));
       const bs = G.bases.map((base) => ({ tm: base.team, hp: Math.round(base.hp), mh: base.maxHp, hf: +base.hitFlash.toFixed(2) }));
-      const payload = { t: "snap", sc: G.score, an: G.armyNames, ck: Math.round(G.clock), bs, s, dg, tn, tu, b, g, p, mn, wr, kf: G.killfeed };
+      const payload = { t: "snap", sc: G.score, an: G.armyNames, ck: Math.round(G.clock), bs, s, dg, tn, tu, b, g, p, mn, wr, cre, kf: G.killfeed };
       for (const c of conns) { try { c.send(payload); } catch (e) {} }
     }
 
@@ -4770,6 +5147,26 @@
       }
     });
     syncTeamButtons();
+
+    // ステージ
+    const savedStage = localStorage.getItem("wz-stage");
+    playerStage = STAGE_BY_KEY[savedStage] ? savedStage : "field";
+    el.stageSeg.innerHTML = STAGES.map((st) =>
+      `<button data-stage="${st.key}"><span class="class-head">${st.icon} ${esc(st.name)}</span>` +
+      `<span class="class-desc">${esc(st.desc)}</span></button>`).join("");
+    function syncStageButtons() {
+      el.stageSeg.querySelectorAll("button").forEach((b) => {
+        b.classList.toggle("on", b.dataset.stage === playerStage);
+      });
+    }
+    el.stageSeg.addEventListener("click", (e) => {
+      const b = e.target.closest && e.target.closest("[data-stage]");
+      if (!b) return;
+      playerStage = b.dataset.stage;
+      localStorage.setItem("wz-stage", playerStage);
+      syncStageButtons();
+    });
+    syncStageButtons();
 
     // キャラクター(兵科)
     const savedClass = localStorage.getItem("wz-class");
