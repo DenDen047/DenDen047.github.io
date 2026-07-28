@@ -93,6 +93,7 @@ html, body {
 }
 .team-card.mine { background: rgba(255, 210, 63, 0.14); border-color: rgba(255, 210, 63, 0.5); border-left-color: var(--team); }
 .team-card.fallen { opacity: 0.45; }
+.team-card.hidden { display: none; }
 .tc-name {
   grid-area: name;
   font-size: 10px; font-weight: 800; color: var(--team);
@@ -175,6 +176,50 @@ html, body {
   pointer-events: none;
 }
 .vehicle-hint.hidden { display: none; }
+
+/* 練習場のチュートリアル */
+.training-panel {
+  position: absolute;
+  top: 50px;
+  left: 8px;
+  width: 232px;
+  padding: 8px 10px 9px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 210, 63, 0.32);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+  pointer-events: auto;
+}
+.training-panel.hidden { display: none; }
+.tp-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+.tp-title { font-size: 11px; font-weight: 800; color: var(--you); }
+.tp-progress { font-size: 10px; font-weight: 800; opacity: 0.75; }
+.tp-steps { margin: 0; padding: 0; list-style: none; }
+.tp-steps li { font-size: 11.5px; line-height: 1.4; }
+.tp-cur { font-weight: 800; color: #fff3c4; }
+.tp-cur.clear { color: #9df08a; }
+.tp-hint { margin: 2px 0 5px; padding-left: 13px; font-size: 10.5px; line-height: 1.45; color: #d3dcc0; opacity: 0.85; }
+.tp-next { padding-left: 1px; color: #b9bfa8; opacity: 0.62; }
+.tp-skip {
+  width: 100%;
+  margin-top: 7px;
+  padding: 5px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #cfd3c2;
+  font-size: 10px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.tp-skip:active { background: rgba(255, 255, 255, 0.18); }
+.tp-skip.hidden { display: none; }
 
 #minimap {
   position: absolute;
@@ -384,6 +429,7 @@ body.touch-ui .vehicle-hint { bottom: 226px; }
   transition: transform 0.06s, background 0.15s;
 }
 .big-btn:active { transform: scale(0.98); }
+.big-btn:disabled { opacity: 0.45; cursor: default; transform: none; }
 .big-btn.primary {
   background: linear-gradient(180deg, #7bb33f, #4f7d28);
   border-color: #8fce4f;
@@ -495,6 +541,18 @@ body.touch-ui .vehicle-hint { bottom: 226px; }
 .class-seg button.on { background: rgba(255, 210, 63, 0.12); border-color: var(--you); }
 .class-seg button.on .class-head { color: var(--you); }
 .class-seg button.on .class-desc { opacity: 0.85; }
+
+/* スキン選択: 左に色見本のチップを置く */
+.skin-seg button { display: grid; grid-template-columns: 26px minmax(0, 1fr); align-items: center; gap: 9px; }
+.skin-chip {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--skin-body);
+  border: 3px solid var(--skin);
+  box-shadow: 0 0 7px color-mix(in srgb, var(--skin) 60%, transparent);
+}
+.skin-body { min-width: 0; }
 .net-status { font-size: 12px; min-height: 18px; margin: 10px 0 0; color: #b7c08a; white-space: pre-line; }
 .net-status.err { color: var(--enemy); }
 .net-status.ok { color: #8cf06a; }
@@ -533,6 +591,72 @@ body.touch-ui .vehicle-hint { bottom: 226px; }
 .shop-message { min-height: 14px; margin: 7px 0 0; color: #9fe78b; font-size: 10px; }
 .shop-message.err { color: #ff9a8d; }
 
+/* ===== 実績（メダル） ===== */
+.medal-panel { width: min(640px, 96vw); }
+.medal-count { margin: -6px 0 12px; color: #d8dfbd; font-size: 13px; font-weight: 700; }
+.medal-count b { color: var(--you); font-size: 20px; }
+.medal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-right: 6px;
+  max-height: 46vh;
+  overflow-y: auto;
+  text-align: left;
+}
+.medal {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  opacity: 0.55;
+}
+.medal.got {
+  opacity: 1;
+  border-color: rgba(255, 210, 63, 0.45);
+  background: rgba(255, 210, 63, 0.1);
+}
+.medal-icon { font-size: 26px; text-align: center; filter: grayscale(1); }
+.medal.got .medal-icon { filter: none; }
+.medal-info { min-width: 0; }
+.medal-info b { display: block; font-size: 12px; color: #eef0e2; }
+.medal.got .medal-info b { color: var(--you); }
+.medal-info span { display: block; margin-top: 2px; font-size: 10px; line-height: 1.35; color: #c6c9b6; }
+.medal-info em { display: block; margin-top: 3px; font-size: 9px; font-style: normal; opacity: 0.62; }
+
+.medal-toast {
+  position: absolute;
+  /* 上部のバナーとレベルアップ表示に重ならない高さ */
+  top: 36%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 18px 9px 14px;
+  border: 1px solid rgba(255, 210, 63, 0.55);
+  border-radius: 12px;
+  background: rgba(24, 22, 10, 0.92);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  animation: medal-in 0.35s ease;
+  max-width: min(340px, 86vw);
+}
+.medal-toast.hidden { display: none; }
+.medal-toast .mt-icon { font-size: 28px; }
+.medal-toast .mt-text { min-width: 0; font-size: 14px; font-weight: 800; color: #fff3c4; }
+.medal-toast .mt-text b { display: block; font-size: 10px; letter-spacing: 0.2em; color: var(--you); }
+.medal-toast .mt-text i { display: block; margin-top: 2px; font-size: 10px; font-style: normal; font-weight: 600; color: #cfd3c2; }
+@keyframes medal-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-10px) scale(0.9); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+
 .hint { font-size: 11px; opacity: 0.55; margin: 14px 0 0; min-height: 14px; }
 
 @media (max-width: 560px) {
@@ -551,6 +675,10 @@ body.touch-ui .vehicle-hint { bottom: 226px; }
   .shop-items { grid-template-columns: 1fr; }
   #touch-btns { right: 154px; grid-template-columns: repeat(2, 64px); }
   .tbtn { width: 64px; font-size: 11px; }
+  .medal-grid { grid-template-columns: 1fr; }
+  .training-panel { top: 46px; width: 176px; padding: 6px 8px 7px; }
+  .tp-steps li { font-size: 10px; }
+  .tp-hint { font-size: 9px; padding-left: 11px; }
 }
 
 .help-classes { margin: 4px 0 12px; padding-left: 18px; font-size: 12.5px; line-height: 1.65; text-align: left; }

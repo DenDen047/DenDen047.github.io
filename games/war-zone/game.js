@@ -126,6 +126,8 @@
     { key: "katana",  name: "打刀",             dmg: 86, interval: 470, mag: 1, reload: 0, spread: 0, pellets: 1, auto: false, speed: 0, range: 106, len: 30, kick: 3.8, melee: true, arc: 1.2, style: "katana", snd: "melee" },
     // ロケットランチャー: 弾速が遅く避けられるが、着弾すると戦車・基地に大ダメージ
     { key: "rocket",  name: "ロケットランチャー", dmg: 130, interval: 1800, mag: 1, reload: 2600, spread: 0.02, pellets: 1, auto: false, speed: 640, range: 920, len: 34, kick: 7.0, rocket: true, snd: "sniper" },
+    // 時の剣: 「時の森」の岩から抜いた者だけが持てる。拾えず、買えず、失われない。
+    { key: "timesword", name: "時の剣", dmg: 132, interval: 520, mag: 1, reload: 0, spread: 0, pellets: 1, auto: false, speed: 0, range: 132, len: 34, kick: 4.2, melee: true, arc: 1.5, style: "timesword", snd: "melee" },
   ];
   const WKEY = {}; WEAPONS.forEach((w, i) => (WKEY[w.key] = i));
 
@@ -145,8 +147,8 @@
     },
     {
       key: "samurai", name: "侍", icon: "⚔️",
-      desc: "打刀・戦斧・ナイフの近接専用。銃は一切持てないが、体力と足が速くパリィが得意。",
-      hpBonus: 30, speedMul: 1.18, gunMul: 0.72, meleeMul: 1.4,
+      desc: "打刀・戦斧・ナイフの近接専用。銃は持てないが体力と足が速い。打刀は足を止めて斬ると全方位攻撃になり、振っている間は銃弾を弾き返す。",
+      hpBonus: 30, speedMul: 1.18, gunMul: 0.72, meleeMul: 1.12,
       grenades: 2, mines: 1, wires: 0,
       parryWindowMul: 1.7, parryCooldownMul: 0.6,
       mineArmMul: 1, mineBlastMul: 1, mineStealthMul: 1, seesEnemyMines: false,
@@ -176,25 +178,83 @@
   const classDef = (key) => CLASS_BY_KEY[key] || CLASSES[0];
 
   // ============================================================
+  //  スキン (自分の見た目だけを変える。性能はいっさい変わらない)
+  //  style を持つものは、色に加えて専用の描き込みが乗る。
+  // ============================================================
+  const SKINS = [
+    { key: "standard", name: "標準装備", icon: "🎖",
+      desc: "見慣れた金色のマーキング。",
+      uniform: YOU_UNIFORM, accent: YOU_ACCENT },
+    { key: "woodland", name: "森林迷彩", icon: "🌿",
+      desc: "深緑の斑を散らしたウッドランド迷彩。草むらになじむ。",
+      uniform: "#3e4d2a", accent: "#7e9b4a", style: "camo" },
+    { key: "desert", name: "砂漠迷彩", icon: "🏜",
+      desc: "砂色の斑を散らしたデザート迷彩。乾いた戦場向け。",
+      uniform: "#8a7647", accent: "#d8c48a", style: "camo" },
+    { key: "crimson", name: "紅蓮", icon: "🔥",
+      desc: "尖った胸甲と肩当てを付けた深紅の重装。",
+      uniform: "#3a1414", accent: "#c8392c", style: "plated" },
+    { key: "hologram", name: "ホログラム兵", icon: "👻",
+      desc: "実体を持たない投影体。六角形のワイヤーフレームで、脚の代わりに光の裾が広がる。",
+      uniform: "#1c5f7a", accent: "#8fe9ff", style: "hologram", alpha: 0.62, glow: "#7fe6ff" },
+    { key: "neon", name: "ネオングリッド", icon: "🌃",
+      desc: "角ばった装甲の輪郭とコアだけが発光する、サイバー仕様の体。",
+      uniform: "#16162a", accent: "#ff4fd8", style: "neon", glow: "#ff4fd8" },
+    { key: "chrome", name: "クロムメック", icon: "🤖",
+      desc: "箱型シャーシに肩アーマーを載せた重機械。頭のバイザーが一文字に光る。",
+      uniform: "#8d949c", accent: "#e4ecf4", style: "mech", glow: "#bfe8ff" },
+    { key: "voxel", name: "ボクセル", icon: "🟪",
+      desc: "電脳空間から来たブロック体。胴も頭も脚も四角い塊でできている。",
+      uniform: "#3b2a63", accent: "#a98bff", style: "voxel" },
+  ];
+  const SKIN_BY_KEY = {};
+  SKINS.forEach((s) => (SKIN_BY_KEY[s.key] = s));
+  const activeSkin = () => SKIN_BY_KEY[playerSkin] || SKINS[0];
+
+  // ============================================================
   //  ステージ
   // ============================================================
+  // fixedLight: 明るさを固定するステージだけが持つ (null = 昼夜サイクルどおり)。
+  // phase: HUD の時間帯表示を固定するステージだけが持つ。
+  // monochrome: 地形・障害物・的を白と灰色だけで描くステージ。
   const STAGES = [
+    {
+      key: "training", name: "練習場", icon: "🎯",
+      desc: "はじめての人はここから。撃ち返してこない的を相手に、操作を1つずつ順番に練習できる。",
+      bgm: "bgm-battle", creature: false, training: true, fixedLight: 1,
+      phase: { key: "noon", label: "🎯 練習場", note: "敵は撃ってこない" },
+      monochrome: true, backdrop: "#6f6f6f",
+      ground: ["#b8b8b8", "#c2c2c2", "#adadad"],
+    },
     {
       key: "field", name: "標準戦場", icon: "🏙",
       desc: "建物と瓦礫が点在する見通しの良い戦場。時間帯が朝から夜へ移り変わる。",
-      bgm: "bgm-battle", creature: false, forcedNight: 0,
+      bgm: "bgm-battle", creature: false, training: false, fixedLight: null,
       ground: ["#3c4d28", "#41522b", "#374524"],
+    },
+    {
+      key: "timeforest", name: "時の森", icon: "⌛",
+      desc: "薄明かりの森。中央の岩に刺さった剣を5秒かけて抜くと、その剣の持ち主に近づいた銃弾は時が止まったように遅くなる。",
+      bgm: "bgm-darkforest", creature: false, training: false, fixedLight: 0.56,
+      phase: { key: "dusk", label: "⌛ 時の森", note: "中央の岩に剣がある" },
+      sword: true,
+      ground: ["#2a2f3f", "#303648", "#252a38"],
     },
     {
       key: "darkforest", name: "暗黒の森", icon: "🌲",
       desc: "夜が明けない密林。見通しは最悪で、何かが棲んでいる。走ると気づかれる。",
-      bgm: "bgm-darkforest", creature: true, forcedNight: 0.1,
+      bgm: "bgm-darkforest", creature: true, training: false, fixedLight: 0.1,
+      phase: { key: "night", label: "🌲 暗黒の森", note: "何かが見ている" },
       ground: ["#1b2416", "#1f291a", "#161e12"],
     },
   ];
   const STAGE_BY_KEY = {};
   STAGES.forEach((s) => (STAGE_BY_KEY[s.key] = s));
-  const stageDef = () => STAGE_BY_KEY[G && G.stage ? G.stage : playerStage] || STAGES[0];
+  const stageDef = () => STAGE_BY_KEY[G && G.stage ? G.stage : playerStage] || STAGE_BY_KEY.field;
+  const stageIsTraining = (key) => !!(STAGE_BY_KEY[key] && STAGE_BY_KEY[key].training);
+  const isTraining = () => !!stageDef().training;
+  const isMonochrome = () => !!stageDef().monochrome;
+  const hasSword = () => !!stageDef().sword;
 
   const DIFF = {
     easy:   { aimErr: 0.17, react: 430, fireChance: 0.68, hpMul: 0.85, dmgMul: 0.85, sniperChance: 0.05 },
@@ -226,9 +286,12 @@
     { x: WORLD_W - 220, y: WORLD_H - 220, heading: -Math.PI * 3 / 4 }, // 右下
   ];
 
-  function makeBases() {
+  // hidden = 存在しない扱いの基地。練習場では自分の基地だけを置く。
+  // ステージは引数で受け取る (emptyState から呼ばれる時点では G がまだ前の試合のもの)。
+  function makeBases(training) {
     return TEAMS.map((team) => ({
       kind: "base", team,
+      hidden: !!training && team !== playerTeam,
       x: BASE_SPOTS[team].x, y: BASE_SPOTS[team].y, r: 185, heading: BASE_SPOTS[team].heading,
       hp: BASE_MAX_HP, maxHp: BASE_MAX_HP, hitFlash: 0,
     }));
@@ -244,7 +307,7 @@
   function nearestEnemyBase(x, y, team) {
     let best = null, bestD = Infinity;
     for (const base of G.bases) {
-      if (base.team === team || base.hp <= 0) continue;
+      if (base.team === team || base.hp <= 0 || base.hidden) continue;
       const d = dist2(x, y, base.x, base.y);
       if (d < bestD) { bestD = d; best = base; }
     }
@@ -276,6 +339,15 @@
     shieldText: document.getElementById("shield-text"),
     shieldState: document.getElementById("shield-state"),
     vehicleHint: document.getElementById("vehicle-hint"),
+    trainingPanel: document.getElementById("training-panel"),
+    tpProgress: document.getElementById("tp-progress"),
+    tpSteps: document.getElementById("tp-steps"),
+    tpSkip: document.getElementById("tp-skip"),
+    medals: document.getElementById("medals"),
+    medalGrid: document.getElementById("medal-grid"),
+    medalCount: document.getElementById("medal-count"),
+    medalTotal: document.getElementById("medal-total"),
+    medalToast: document.getElementById("medal-toast"),
     killfeed: document.getElementById("killfeed"),
     levelup: document.getElementById("levelup"),
     menu: document.getElementById("menu"),
@@ -306,6 +378,7 @@
     lobbyStart: document.getElementById("btn-lobby-start"),
     teamSeg: document.getElementById("team-seg"),
     classSeg: document.getElementById("class-seg"),
+    skinSeg: document.getElementById("skin-seg"),
     stageSeg: document.getElementById("stage-seg"),
     touch: document.getElementById("touch"),
     btnMute: document.getElementById("btn-mute"),
@@ -562,6 +635,7 @@
   const stickMove = { x: 0, y: 0, active: false };
   const stickAim = { x: 0, y: 0, active: false };
   let touchShield = false;
+  let touchInteract = false;   // 「戦車」ボタンを押しっぱなしにしているか
 
   window.addEventListener("keydown", (e) => {
     if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
@@ -640,7 +714,16 @@
   document.getElementById("t-mine").addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.mineEdge = true; });
   const wireBtn = document.getElementById("t-wire");
   wireBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.wireEdge = true; });
-  document.getElementById("t-tank").addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.interactEdge = true; });
+  const tankBtn = document.getElementById("t-tank");
+  tankBtn.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    localInput.interactEdge = true;
+    touchInteract = true;
+    try { tankBtn.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  const releaseTouchInteract = () => { touchInteract = false; };
+  tankBtn.addEventListener("pointerup", releaseTouchInteract);
+  tankBtn.addEventListener("pointercancel", releaseTouchInteract);
   const touchShieldBtn = document.getElementById("t-shield");
   touchShieldBtn.addEventListener("pointerdown", (e) => {
     e.preventDefault();
@@ -676,6 +759,8 @@
     localInput.mvx = mvx; localInput.mvy = mvy;
     localInput.dash = !!keys["shift"] || (stickMove.active && mm > 0.92);
     localInput.shield = !!keys["q"] || touchShield;
+    // 岩から剣を抜くときのように、押し続けているかどうかが要る操作もある
+    localInput.interactHold = !!keys["e"] || touchInteract;
 
     let shoot = false;
     const me = localSoldier();
@@ -737,6 +822,7 @@
   let playerName = "Soldier";
   let playerTeam = 0;
   let playerClass = "soldier";
+  let playerSkin = "standard";
   let playerStage = "field";
   let armyName = TEAM_DEFS[0].name;
   let matchPaused = false;
@@ -754,6 +840,8 @@
     return {
       soldiers: [],
       dogs: [],
+      beasts: [],
+      swordRock: null,
       bullets: [],
       grenades: [],
       mines: [],
@@ -763,7 +851,7 @@
       particles: [],
       pickups: [],
       obstacles: [],
-      bases: makeBases(),
+      bases: makeBases(stageIsTraining(playerStage)),
       score: TEAMS.map(() => 0),
       goal: BASE_MAX_HP,
       running: false,
@@ -773,6 +861,7 @@
       killfeed: [],
       soundPings: [],
       clock: DAY_START_CLOCK,
+      dropAt: 0,
       stage: playerStage,
       creature: null,
       armyNames: TEAM_DEFS.map((def, team) => (team === playerTeam ? armyName : def.name)),
@@ -800,9 +889,9 @@
 
   // 0 = 真夜中, 1 = 真昼
   function daylight() {
-    const forced = stageDef().forcedNight;
-    // 暗黒の森は時間が進んでも明るくならない
-    if (forced) return forced;
+    const fixed = stageDef().fixedLight;
+    // 暗黒の森・練習場は時間が進んでも明るさが変わらない
+    if (fixed != null) return fixed;
     const p = ((G ? G.clock : DAY_START_CLOCK) % DAY_LENGTH_MS) / DAY_LENGTH_MS;
     return 0.5 - 0.5 * Math.cos(p * Math.PI * 2);
   }
@@ -819,11 +908,12 @@
   }
 
   function dayPhase() {
-    if (stageDef().forcedNight) return { key: "night", label: "🌲 暗黒の森", note: "何かが見ている" };
+    const fixed = stageDef().phase;
+    if (fixed) return fixed;
     const light = daylight();
     if (light >= 0.78) return { key: "noon", label: "☀ 昼", note: "視界が最も広い" };
     if (light >= 0.34) return daylightRising()
-      ? { key: "morning", label: "🌅 朝", note: "視界が広がっていく" }
+      ? { key: "morning", label: "🌅 朝", note: "戦場全体が見渡せる" }
       : { key: "dusk", label: "🌇 夕方", note: "視界が狭まっていく" };
     return { key: "night", label: "🌙 夜", note: "視界が狭い・奇襲のチャンス" };
   }
@@ -836,6 +926,161 @@
       if (lastPhaseKey) banner(`${phase.label}　${phase.note}`);
       lastPhaseKey = phase.key;
     }
+  }
+
+  // ============================================================
+  //  ミッションと実績(メダル)
+  //  ミッションを達成するとメダルを1枚もらえ、メニューの実績画面に貯まっていく。
+  //  練習場での戦果は数えない(いくらでも稼げてしまうため)。訓練のメダルだけ別枠。
+  // ============================================================
+  const ACHIEVEMENTS = [
+    { id: "training-clear", icon: "🎓", name: "訓練修了", inTraining: true,
+      mission: "練習場の練習メニューをすべてクリアする",
+      test: (c) => !!c.run.trainedAll },
+    { id: "first-match", icon: "🥉", name: "初出撃",
+      mission: "試合を最後まで戦う",
+      test: (c) => c.life.matches >= 1 },
+    { id: "first-win", icon: "🎖", name: "初勝利",
+      mission: "試合に勝つ",
+      test: (c) => c.life.wins >= 1 },
+    { id: "base-breaker", icon: "💥", name: "城落とし",
+      mission: "敵の基地を破壊する",
+      test: (c) => c.life.basesDestroyed >= 1 },
+    { id: "parry-master", icon: "🛡", name: "白刃取り",
+      mission: "1試合でパリィを3回成功させる",
+      test: (c) => c.run.parries >= 3 },
+    { id: "blademaster", icon: "🗡", name: "剣客",
+      mission: "1試合で近接武器で10体倒す",
+      test: (c) => c.run.meleeKills >= 10 },
+    { id: "demolition", icon: "🧨", name: "爆破工作",
+      mission: "1試合でグレネードや地雷で5体倒す",
+      test: (c) => c.run.blastKills >= 5 },
+    { id: "rampage", icon: "🏅", name: "二十撃破",
+      mission: "1試合で20体倒す",
+      test: (c) => c.run.kills >= 20 },
+    { id: "veteran", icon: "⭐", name: "歴戦",
+      mission: "1試合でレベル8まで上げる",
+      test: (c) => !!c.me && c.me.level >= 8 },
+    { id: "tank-hunter", icon: "🚀", name: "鉄馬砕き",
+      mission: "戦車を通算3両破壊する",
+      test: (c) => c.life.tankKills >= 3 },
+    { id: "flawless", icon: "👑", name: "無傷の凱旋",
+      mission: "1度も倒されずに勝利する",
+      test: (c) => c.run.won && c.run.deaths === 0 },
+    { id: "forest-survivor", icon: "🌲", name: "森を出た者",
+      mission: "暗黒の森で勝利する",
+      test: (c) => (c.life.winStages.darkforest || 0) >= 1 },
+    { id: "sword-pull", icon: "⚔", name: "選ばれし者",
+      mission: "時の森で岩から剣を抜く",
+      test: (c) => c.life.swordPulls >= 1 },
+    { id: "beast-slayer", icon: "🐉", name: "魔物狩り",
+      mission: "魔物を通算5体倒す",
+      test: (c) => c.life.beastKills >= 5 },
+    { id: "all-class", icon: "🏆", name: "皆伝",
+      mission: "4つの兵科すべてで勝利する",
+      test: (c) => CLASSES.every((cl) => (c.life.winClasses[cl.key] || 0) >= 1) },
+  ];
+
+  let medals = {};       // 実績id → 獲得日
+  let lifeStats = null;  // ずっと貯まる通算成績
+  let runStats = null;   // 今の試合だけの成績
+
+  function emptyLifeStats() {
+    return {
+      matches: 0, wins: 0, kills: 0, tankKills: 0, basesDestroyed: 0,
+      beastKills: 0, swordPulls: 0, winClasses: {}, winStages: {},
+    };
+  }
+
+  function emptyRunStats() {
+    return {
+      kills: 0, meleeKills: 0, blastKills: 0, deaths: 0, basesDestroyed: 0,
+      parries: 0, tankKills: 0, beastKills: 0, swordPulls: 0,
+      trainedAll: false, won: false, committed: false,
+    };
+  }
+
+  function noteStat(key, amount) {
+    if (!runStats || isTraining()) return;
+    runStats[key] = (runStats[key] || 0) + (amount == null ? 1 : amount);
+  }
+
+  // 試合が終わった(またはメニューへ戻った)ときに、その試合の成績を通算へ足す。
+  function commitRun(won) {
+    if (!runStats || runStats.committed) return;
+    runStats.committed = true;
+    if (isTraining()) return;   // 練習場は成績に数えない
+    runStats.won = !!won;
+    lifeStats.matches++;
+    lifeStats.kills += runStats.kills;
+    lifeStats.tankKills += runStats.tankKills;
+    lifeStats.basesDestroyed += runStats.basesDestroyed;
+    lifeStats.beastKills += runStats.beastKills;
+    lifeStats.swordPulls += runStats.swordPulls;
+    if (won) {
+      lifeStats.wins++;
+      lifeStats.winClasses[playerClass] = (lifeStats.winClasses[playerClass] || 0) + 1;
+      const stage = G && G.stage ? G.stage : playerStage;
+      lifeStats.winStages[stage] = (lifeStats.winStages[stage] || 0) + 1;
+    }
+    saveProgress();
+    checkAchievements();
+  }
+
+  function checkAchievements() {
+    if (!runStats || !lifeStats) return;
+    const training = isTraining();
+    const context = { run: runStats, life: lifeStats, me: localSoldier() };
+    let earned = false;
+    for (const a of ACHIEVEMENTS) {
+      if (medals[a.id]) continue;
+      // 練習場では訓練のメダルだけ、通常のステージではそれ以外だけを判定する
+      if (training !== !!a.inTraining) continue;
+      let ok = false;
+      try { ok = !!a.test(context); } catch (e) { ok = false; }
+      if (!ok) continue;
+      medals[a.id] = new Date().toISOString().slice(0, 10);
+      queueMedalToast(a);
+      earned = true;
+    }
+    if (earned) saveProgress();
+  }
+
+  const medalQueue = [];
+  let medalToastTimer = null;
+
+  function queueMedalToast(a) {
+    medalQueue.push(a);
+    if (!medalToastTimer) showNextMedalToast();
+  }
+
+  function showNextMedalToast() {
+    const a = medalQueue.shift();
+    if (!a) { medalToastTimer = null; el.medalToast.classList.add("hidden"); return; }
+    el.medalToast.innerHTML =
+      `<span class="mt-icon">${a.icon}</span>` +
+      `<span class="mt-text"><b>実績獲得</b>${esc(a.name)}<i>${esc(a.mission)}</i></span>`;
+    el.medalToast.classList.remove("hidden");
+    Audio.levelup();
+    medalToastTimer = setTimeout(showNextMedalToast, 2800);
+  }
+
+  function renderMedals() {
+    const got = ACHIEVEMENTS.filter((a) => medals[a.id]).length;
+    el.medalCount.textContent = got;
+    el.medalTotal.textContent = ACHIEVEMENTS.length;
+    el.medalGrid.innerHTML = ACHIEVEMENTS.map((a) => {
+      const day = medals[a.id];
+      return `<article class="medal${day ? " got" : ""}">` +
+        `<span class="medal-icon">${day ? a.icon : "🔒"}</span>` +
+        `<span class="medal-info"><b>${esc(a.name)}</b><span>${esc(a.mission)}</span>` +
+        `<em>${day ? `獲得 ${esc(day)}` : "未獲得"}</em></span></article>`;
+    }).join("");
+  }
+
+  function openMedals() {
+    renderMedals();
+    el.medals.classList.remove("hidden");
   }
 
   function sanitizeShopLevels(value) {
@@ -855,11 +1100,25 @@
     } catch (e) {
       shopLevels = sanitizeShopLevels({});
     }
+    try {
+      medals = JSON.parse(localStorage.getItem("wz-medals") || "{}") || {};
+    } catch (e) {
+      medals = {};
+    }
+    try {
+      lifeStats = Object.assign(emptyLifeStats(), JSON.parse(localStorage.getItem("wz-stats") || "{}"));
+    } catch (e) {
+      lifeStats = emptyLifeStats();
+    }
+    if (!lifeStats.winClasses) lifeStats.winClasses = {};
+    if (!lifeStats.winStages) lifeStats.winStages = {};
   }
 
   function saveProgress() {
     localStorage.setItem("wz-money", String(money));
     localStorage.setItem("wz-shop", JSON.stringify(shopLevels));
+    localStorage.setItem("wz-medals", JSON.stringify(medals));
+    localStorage.setItem("wz-stats", JSON.stringify(lifeStats));
     if (el.menuMoney) el.menuMoney.textContent = money;
   }
 
@@ -941,12 +1200,80 @@
 
   // ---- マップ生成 ----
   function genMap() {
-    return stageDef().key === "darkforest" ? genForestMap() : genFieldMap();
+    const key = stageDef().key;
+    if (key === "darkforest") return genForestMap(0);
+    if (key === "timeforest") return genForestMap(SWORD_CLEARING_R);
+    if (key === "training") return genTrainingMap();
+    return genFieldMap();
   }
 
-  // 暗黒の森: 木と茂みで埋め尽くし、見通しを極端に悪くする。
+  // ---- 練習場のレイアウト ----
+  // どのチームを選んでも同じ練習ができるよう、マップ中央から放射状に組む。
+  // 中心に的、その外に射撃位置の土嚢、さらに外に銃座と遮蔽ゾーン。
+  const TRAINING_CENTER = { x: WORLD_W / 2, y: WORLD_H / 2 };
+  const TRAINING_TARGET_R = 90;    // 静止標的を並べる半径
+  const TRAINING_MOVER_R = 185;    // 動く標的が周回する半径
+  const TRAINING_BARREL_R = 235;   // 爆発ドラム缶
+  const TRAINING_LINE_R = 300;     // 射撃位置(土嚢)
+  const TRAINING_TURRET_R = 405;   // 機関銃座
+
+  // 中心から radius だけ離れた円周上の位置。a は中心から外を向く角度。
+  function ringPos(radius, index, count, offset) {
+    const a = (offset || 0) + (index / count) * Math.PI * 2;
+    return {
+      x: TRAINING_CENTER.x + Math.cos(a) * radius,
+      y: TRAINING_CENTER.y + Math.sin(a) * radius,
+      a,
+    };
+  }
+
+  function genTrainingMap() {
+    const obs = [];
+    const wt = 26;
+    obs.push({ x: 0, y: 0, w: WORLD_W, h: wt, type: "wall", hp: Infinity });
+    obs.push({ x: 0, y: WORLD_H - wt, w: WORLD_W, h: wt, type: "wall", hp: Infinity });
+    obs.push({ x: 0, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity });
+    obs.push({ x: WORLD_W - wt, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity });
+
+    // 射撃位置の土嚢。どの方向から来ても正面に遮蔽がある。間は通り抜けられる。
+    for (let i = 0; i < 8; i++) {
+      const p = ringPos(TRAINING_LINE_R, i, 8, Math.PI / 8);
+      // 円周に沿って寝かせる(半径が縦向きなら横長、横向きなら縦長)
+      const flat = Math.abs(Math.cos(p.a)) < 0.5;
+      const w = flat ? 112 : 32, h = flat ? 32 : 112;
+      obs.push({ x: p.x - w / 2, y: p.y - h / 2, w, h, type: "sandbag", hp: Infinity, seed: (i + 1) / 9 });
+    }
+
+    // 爆発ドラム缶(撃つと爆発する練習用)
+    for (let i = 0; i < 6; i++) {
+      const p = ringPos(TRAINING_BARREL_R, i, 6, Math.PI / 6);
+      obs.push({ x: p.x - 15, y: p.y - 15, w: 30, h: 30, type: "barrel", hp: 30, r: 16 });
+    }
+
+    // 遮蔽ゾーン。隠れる練習用に、コンテナ・崩れ壁・茂みを混ぜて並べる。
+    const coverKinds = ["crate", "ruin", "bush", "tires", "crate", "bush", "hedgehog", "ruin", "bush", "crate", "wreck", "bush"];
+    for (let i = 0; i < coverKinds.length; i++) {
+      const t = coverKinds[i];
+      const p = ringPos(640 + (i % 3) * 90, i, coverKinds.length, 0.26);
+      let w, h;
+      if (t === "bush") { w = 104; h = 88; }
+      else if (t === "ruin") { w = 150; h = 34; }
+      else if (t === "wreck") { w = 88; h = 46; }
+      else if (t === "tires") { w = h = 46; }
+      else if (t === "hedgehog") { w = h = 48; }
+      else { w = h = 56; }
+      obs.push({ x: p.x - w / 2, y: p.y - h / 2, w, h, type: t, hp: Infinity, seed: (i + 3) / 15 });
+    }
+    return obs;
+  }
+
+  // 暗黒の森 / 時の森: 木と茂みで埋め尽くし、見通しを極端に悪くする。
   // 遮蔽が多いぶん、音を立てるとクリーチャーに位置がバレる。
-  function genForestMap() {
+  // clearing に半径を渡すと、マップ中央をその半径だけ空き地にする(時の森の岩場)。
+  function genForestMap(clearing) {
+    const clearR2 = clearing ? clearing * clearing : 0;
+    const inClearing = (x, y, w, h) =>
+      clearR2 > 0 && dist2(x + w / 2, y + h / 2, WORLD_W / 2, WORLD_H / 2) < clearR2;
     const obs = [];
     const wt = 26;
     obs.push({ x: 0, y: 0, w: WORLD_W, h: wt, type: "wall", hp: Infinity });
@@ -962,6 +1289,7 @@
       const x = rand(200, WORLD_W - 200 - rw);
       const y = rand(200, WORLD_H - 200 - rh);
       if (BASE_SPOTS.some((spot) => dist2(x + rw / 2, y + rh / 2, spot.x, spot.y) < 300 ** 2)) continue;
+      if (inClearing(x, y, rw, rh)) continue;
       obs.push({ x, y, w: rw, h: rh, type: "ruin", hp: Infinity, seed: Math.random() });
     }
 
@@ -977,7 +1305,7 @@
       const h = t === "tree" ? w : rand(34, 58);
       const x = rand(90, WORLD_W - 90 - w);
       const y = rand(90, WORLD_H - 90 - h);
-      if (!farFromBase(x, y, w, h, 60)) continue;
+      if (!farFromBase(x, y, w, h, 60) || inClearing(x, y, w, h)) continue;
       // 既存の固い障害物から LANE ぶん離れていなければ諦める
       const blocked = solids.some((o) =>
         x - LANE < o.x + o.w && x + w + LANE > o.x && y - LANE < o.y + o.h && y + h + LANE > o.y);
@@ -992,7 +1320,7 @@
       const w = rand(64, 124), h = rand(58, 106);
       const x = rand(70, WORLD_W - 70 - w);
       const y = rand(70, WORLD_H - 70 - h);
-      if (!farFromBase(x, y, w, h, 30)) continue;
+      if (!farFromBase(x, y, w, h, 30) || inClearing(x, y, w, h)) continue;
       obs.push({ x, y, w, h, type: "bush", hp: Infinity, seed: Math.random() });
     }
     return obs;
@@ -1127,6 +1455,7 @@
       reloading: false, reloadUntil: 0, lastShot: 0,
       kills: 0, deaths: 0,
       grenades: 3, maxGrenades: 3, lastGrenade: -99999, vehicleId: -1, turretId: -1,
+      dropUntil: 0, sweepAt: 0,
       mines: 2, maxMines: 2, lastMine: -99999,
       lastBaseSupplyAt: -99999,
       lastFootstepAt: -99999, noiseRadius: 0, heardUntil: 0,
@@ -1148,6 +1477,9 @@
     G.soldiers.push(me);
     // タッチ操作は照準を保持するので、開始時から敵陣を向かせておく
     localInput.aimAngle = me.angle;
+    G.nextId = id;
+    // 練習場は敵兵を出さない。代わりに撃ち返してこない的を並べる。
+    if (isTraining()) { spawnTrainingDummies(); return; }
     const used = new Set([me.name]);
     function botName() { let n; do { n = pick(BOT_NAMES); } while (used.has(n) && used.size < BOT_NAMES.length); used.add(n); return n; }
     for (const team of TEAMS) {
@@ -1172,9 +1504,77 @@
     G.nextId = id;
   }
 
+  // ============================================================
+  //  練習用の的 (練習場)
+  //  撃ち返してこない。壊しても数秒で立て直る。
+  // ============================================================
+  const DUMMY_HP = 70;
+  const DUMMY_RESPAWN_MS = 2200;
+
+  // 的は「自分の1つ隣の軍」に所属させる。既存の敵味方判定をそのまま使えるため。
+  function trainingDummyTeam() {
+    return (playerTeam + 1) % TEAM_COUNT;
+  }
+
+  function makeDummy(id, opt) {
+    const s = makeSoldier({ id, team: trainingDummyTeam(), name: opt.name });
+    s.dummy = true;
+    s.maxHp = DUMMY_HP; s.hp = DUMMY_HP;
+    s.armor = 0; s.maxArmor = 0; s.shield = 0; s.maxShield = 0;
+    s.grenades = 0; s.maxGrenades = 0; s.mines = 0; s.maxMines = 0; s.wires = 0; s.maxWires = 0;
+    s.speed = 0;
+    s.x = opt.x; s.y = opt.y; s.rx = opt.x; s.ry = opt.y;
+    s.postX = opt.x; s.postY = opt.y;
+    s.angle = opt.angle; s.aimAngle = opt.angle;
+    s.orbit = opt.orbit || null;
+    return s;
+  }
+
+  function dummyPost(s) {
+    if (!s.orbit) return { x: s.postX, y: s.postY };
+    return {
+      x: TRAINING_CENTER.x + Math.cos(s.orbit.a) * s.orbit.r,
+      y: TRAINING_CENTER.y + Math.sin(s.orbit.a) * s.orbit.r,
+    };
+  }
+
+  function spawnTrainingDummies() {
+    let id = G.nextId;
+    const statics = 8;
+    for (let i = 0; i < statics; i++) {
+      const p = ringPos(TRAINING_TARGET_R, i, statics, 0);
+      G.soldiers.push(makeDummy(id++, { name: `的 ${i + 1}`, x: p.x, y: p.y, angle: p.a }));
+    }
+    // 動く的。狙いを先読みする練習用に、中心のまわりをゆっくり周回する。
+    const movers = 3;
+    for (let i = 0; i < movers; i++) {
+      const p = ringPos(TRAINING_MOVER_R, i, movers, Math.PI / 6);
+      G.soldiers.push(makeDummy(id++, {
+        name: `動く的 ${i + 1}`, x: p.x, y: p.y, angle: p.a,
+        orbit: { r: TRAINING_MOVER_R, a: p.a, speed: i % 2 ? -0.28 : 0.28 },
+      }));
+    }
+    G.nextId = id;
+  }
+
+  // 的は攻撃しない。動く的だけが中心のまわりを回る。
+  function updateDummy(s, dt) {
+    if (!s.orbit) { s.moving = false; s.noiseRadius = 0; return; }
+    s.orbit.a += s.orbit.speed * dt;
+    const spot = dummyPost(s);
+    s.angle = s.orbit.a + (s.orbit.speed >= 0 ? Math.PI / 2 : -Math.PI / 2);
+    s.aimAngle = s.angle;
+    s.moving = true;
+    s.noiseRadius = 0;
+    s.legPhase += dt * 12;
+    resolveMovement(s, spot.x, spot.y);
+  }
+
   function spawnDogs() {
     const dogNames = ["Rex", "Fang", "Bruno", "Kaiser"];
-    G.dogs = TEAMS.map((team, id) => {
+    // 練習場では自分の軍の犬だけを連れて出る
+    const teams = isTraining() ? [playerTeam] : TEAMS;
+    G.dogs = teams.map((team, id) => {
       const handler = G.soldiers.find((s) => s.team === team && s.id === G.localId) ||
         G.soldiers.find((s) => s.team === team);
       let x = handler ? handler.x + rand(-45, 45) : teamSpawn(team).x;
@@ -1194,6 +1594,13 @@
 
   function findTankSpawn(team) {
     const spot = BASE_SPOTS[team];
+    // 練習場の無人戦車は動かないので、兵士の湧き位置(基地の正面)を塞がない真横に駐める。
+    // 重なった状態で湧くと、戦車に押し戻されて兵士が動けなくなる。
+    if (isTraining()) {
+      const a = spot.heading + Math.PI / 2;
+      const side = { x: spot.x + Math.cos(a) * 150, y: spot.y + Math.sin(a) * 150 };
+      if (!G.obstacles.some((o) => isSolid(o) && circleRect(side.x, side.y, TANK_R + 8, o.x, o.y, o.w, o.h))) return side;
+    }
     // 基地からマップ中央寄りに少しずらした位置を基準にする
     const home = { x: spot.x + Math.cos(spot.heading) * 55, y: spot.y + Math.sin(spot.heading) * 55 };
     for (let i = 0; i < 50; i++) {
@@ -1205,7 +1612,9 @@
   }
 
   function spawnTanks() {
-    G.tanks = TEAMS.map((team, id) => {
+    // 練習場では自分の軍の戦車だけを置く
+    const teams = isTraining() ? [playerTeam] : TEAMS;
+    G.tanks = teams.map((team, id) => {
       const sp = findTankSpawn(team);
       const heading = BASE_SPOTS[team].heading;
       return {
@@ -1217,6 +1626,248 @@
         ai: { think: 0, targetId: -1 },
       };
     });
+  }
+
+  // ============================================================
+  //  時の森: 岩に刺さった剣と、森に棲む魔物
+  //  剣は5秒かけて抜く。抜いた者の近くに飛んできた銃弾は極端に遅くなる。
+  //  魔物は銃でも倒せるが硬い。時の剣で叩けば一撃で倒せる。
+  // ============================================================
+  const SWORD_CLEARING_R = 300;    // 岩場として木を生やさない半径
+  const SWORD_ROCK_R = 46;
+  const SWORD_REACH = 78;          // 抜きにかかれる距離
+  const SWORD_PULL_MS = 5000;
+  const TIME_FIELD_R = 260;        // 銃弾が遅くなる範囲
+  const TIME_SLOW_MUL = 0.16;      // その中での弾速
+
+  const BEAST_R = 22;
+  const BEAST_HP = 620;            // 銃だと時間がかかる硬さ
+  const BEAST_SPEED = 108;
+  const BEAST_SIGHT = 360;
+  const BEAST_DAMAGE = 18;
+  const BEAST_ATTACK_MS = 1100;
+  const BEAST_RESPAWN_MS = 14000;
+  const BEAST_COUNT = 6;
+
+  function spawnSwordRock() {
+    if (!hasSword()) { G.swordRock = null; return; }
+    G.swordRock = {
+      x: WORLD_W / 2, y: WORLD_H / 2,
+      pulled: false, holderId: -1, pullerId: -1, progress: 0, hitFlash: 0,
+    };
+  }
+
+  function swordHolder() {
+    const rock = G.swordRock;
+    if (!rock || !rock.pulled || rock.holderId < 0) return null;
+    const s = G.soldiers.find((x) => x.id === rock.holderId && !x.dead);
+    return s || null;
+  }
+
+  // 剣を抜く。E を押し続けている間だけ進み、離すと巻き戻る。
+  function updateSwordRock(dt) {
+    const rock = G.swordRock;
+    if (!rock) return;
+    if (rock.hitFlash > 0) rock.hitFlash = Math.max(0, rock.hitFlash - dt * 4);
+    if (rock.pulled) return;
+    const me = localSoldier();
+    const pulling = !!me && !me.dead && me.vehicleId < 0 && me.turretId < 0 && !isDropping(me) &&
+      localInput.interactHold && dist2(me.x, me.y, rock.x, rock.y) < (SWORD_ROCK_R + SWORD_REACH) ** 2;
+    if (pulling) {
+      rock.pullerId = me.id;
+      rock.progress = Math.min(SWORD_PULL_MS, rock.progress + dt * 1000);
+      if (rock.progress % 400 < dt * 1000) {
+        addParticle(rock.x + rand(-18, 18), rock.y - 26 + rand(-10, 10), {
+          kind: "spark", vx: rand(-40, 40), vy: rand(-90, -20), life: 340, size: 2.6,
+        });
+      }
+      if (rock.progress >= SWORD_PULL_MS) grantSword(me);
+    } else if (rock.progress > 0) {
+      rock.progress = Math.max(0, rock.progress - dt * 1600);
+      if (rock.progress === 0) rock.pullerId = -1;
+    }
+  }
+
+  function grantSword(s) {
+    const rock = G.swordRock;
+    rock.pulled = true;
+    rock.holderId = s.id;
+    rock.progress = SWORD_PULL_MS;
+    const idx = WKEY.timesword;
+    if (s.loadout.indexOf(idx) < 0) s.loadout.push(idx);
+    s.weapon = idx;
+    s.ammo = 1;
+    s.reloading = false;
+    Audio.levelup();
+    shake = Math.min(16, shake + 10);
+    if (s.id === G.localId) noteStat("swordPulls");
+    for (let i = 0; i < 26; i++) {
+      const a = Math.random() * Math.PI * 2;
+      addParticle(rock.x, rock.y, { kind: "spark", vx: Math.cos(a) * rand(60, 260), vy: Math.sin(a) * rand(60, 260), life: rand(400, 800), size: rand(2, 4) });
+    }
+    banner(s.id === G.localId ? "時の剣を抜いた！　近づく銃弾が遅くなる" : `${s.name} が時の剣を抜いた`);
+  }
+
+  function spawnBeasts() {
+    G.beasts = [];
+    if (!hasSword()) return;
+    for (let id = 0; id < BEAST_COUNT; id++) {
+      let spot = null;
+      for (let attempt = 0; attempt < 90; attempt++) {
+        const x = rand(340, WORLD_W - 340), y = rand(300, WORLD_H - 300);
+        if (BASE_SPOTS.some((b) => dist2(x, y, b.x, b.y) < 620 ** 2)) continue;
+        if (dist2(x, y, WORLD_W / 2, WORLD_H / 2) < 360 ** 2) continue;
+        if (G.obstacles.some((o) => isSolid(o) && circleRect(x, y, BEAST_R + 6, o.x, o.y, o.w, o.h))) continue;
+        spot = { x, y };
+        break;
+      }
+      if (!spot) continue;
+      G.beasts.push({
+        kind: "beast", id, team: -1, name: `魔物${id + 1}`,
+        x: spot.x, y: spot.y, homeX: spot.x, homeY: spot.y,
+        hp: BEAST_HP, maxHp: BEAST_HP, dead: false, respawnAt: 0,
+        angle: rand(0, Math.PI * 2), targetId: -1, lastAttack: -99999,
+        wx: spot.x, wy: spot.y, roamUntil: 0, hitFlash: 0, limbPhase: Math.random() * 6.28,
+      });
+    }
+  }
+
+  function updateBeasts(dt, t) {
+    for (const beast of G.beasts) {
+      if (beast.dead) {
+        if (t >= beast.respawnAt) respawnBeast(beast);
+        continue;
+      }
+      if (beast.hitFlash > 0) beast.hitFlash = Math.max(0, beast.hitFlash - dt * 4);
+      // 一番近い兵士を追う。壁の裏までは見えない。
+      let prey = null, best = BEAST_SIGHT ** 2;
+      for (const s of G.soldiers) {
+        if (s.dead || s.vehicleId >= 0 || isDropping(s)) continue;
+        const d2v = dist2(beast.x, beast.y, s.x, s.y);
+        if (d2v < best && lineClear(beast.x, beast.y, s.x, s.y)) { best = d2v; prey = s; }
+      }
+      let speed = BEAST_SPEED;
+      if (prey) {
+        beast.targetId = prey.id;
+        beast.wx = prey.x; beast.wy = prey.y;
+        if (dist2(beast.x, beast.y, prey.x, prey.y) < (BEAST_R + SOLDIER_R + 4) ** 2) {
+          if (t - beast.lastAttack >= BEAST_ATTACK_MS) {
+            beast.lastAttack = t;
+            const a = Math.atan2(prey.y - beast.y, prey.x - beast.x);
+            damageSoldier(prey, BEAST_DAMAGE, null, { x: beast.x, y: beast.y, type: "melee" });
+            addParticle(prey.x, prey.y, { kind: "bite", life: 180, size: 20, a });
+          }
+          speed = 0;
+        }
+      } else {
+        beast.targetId = -1;
+        speed = BEAST_SPEED * 0.45;
+        if (t > beast.roamUntil) {
+          beast.roamUntil = t + rand(2200, 4600);
+          beast.wx = clamp(beast.homeX + rand(-260, 260), 120, WORLD_W - 120);
+          beast.wy = clamp(beast.homeY + rand(-260, 260), 120, WORLD_H - 120);
+        }
+      }
+      const dx = beast.wx - beast.x, dy = beast.wy - beast.y;
+      const d = Math.hypot(dx, dy) || 1;
+      beast.limbPhase += dt * (prey ? 11 : 4);
+      if (speed > 0 && d > 8) {
+        beast.angle = angLerp(beast.angle, Math.atan2(dy, dx), clamp(dt * 6, 0, 1));
+        const ox = beast.x, oy = beast.y;
+        moveBeast(beast, beast.x + Math.cos(beast.angle) * speed * dt, beast.y + Math.sin(beast.angle) * speed * dt);
+        // 木に引っかかったら横滑りで回り込む
+        if (beast.x === ox && beast.y === oy) {
+          moveBeast(beast, beast.x - Math.sin(beast.angle) * speed * dt, beast.y + Math.cos(beast.angle) * speed * dt);
+        }
+      }
+    }
+  }
+
+  function moveBeast(beast, nx, ny) {
+    let x = clamp(nx, BEAST_R, WORLD_W - BEAST_R);
+    if (G.obstacles.some((o) => isSolid(o) && circleRect(x, beast.y, BEAST_R, o.x, o.y, o.w, o.h))) x = beast.x;
+    let y = clamp(ny, BEAST_R, WORLD_H - BEAST_R);
+    if (G.obstacles.some((o) => isSolid(o) && circleRect(x, y, BEAST_R, o.x, o.y, o.w, o.h))) y = beast.y;
+    beast.x = x; beast.y = y;
+  }
+
+  function respawnBeast(beast) {
+    beast.x = beast.homeX; beast.y = beast.homeY;
+    beast.hp = beast.maxHp; beast.dead = false;
+    beast.targetId = -1; beast.lastAttack = -99999; beast.hitFlash = 0;
+  }
+
+  // 爆風のなかにいる魔物へまとめてダメージ。中心から遠いほど減衰する。
+  function damageBeastsInBlast(x, y, radius, dmg, attacker) {
+    for (const beast of G.beasts) {
+      if (beast.dead) continue;
+      const d = Math.sqrt(dist2(beast.x, beast.y, x, y));
+      if (d < radius + BEAST_R) damageBeast(beast, dmg * (1 - clamp(d / (radius + BEAST_R), 0, 0.7)), attacker, false);
+    }
+  }
+
+  // slay を true にすると体力にかかわらず一撃で倒す(時の剣)
+  function damageBeast(beast, dmg, attacker, slay) {
+    if (beast.dead) return;
+    beast.hp -= slay ? beast.maxHp : dmg;
+    beast.hitFlash = 1;
+    if (beast.hp > 0) return;
+    beast.dead = true;
+    beast.hp = 0;
+    beast.respawnAt = now() + BEAST_RESPAWN_MS;
+    Audio.boom();
+    for (let i = 0; i < 20; i++) {
+      const a = Math.random() * Math.PI * 2;
+      addParticle(beast.x, beast.y, { kind: "dust", vx: Math.cos(a) * rand(50, 230), vy: Math.sin(a) * rand(50, 230), life: rand(350, 700), size: rand(2.5, 5) });
+    }
+    addParticle(beast.x, beast.y, { kind: "stain", life: 8000, size: 22 });
+    if (attacker && !attacker.kind) {
+      gainXp(attacker, 3);
+      addKillfeed(attacker, { name: beast.name, team: -1 });
+      if (attacker.id === G.localId) noteStat("beastKills");
+    }
+  }
+
+  // ============================================================
+  //  降下演出 (試合開始)
+  //  輸送機から飛び降り、パラシュートで着地するまでの数秒間。
+  //  降下中は攻撃も被弾もせず、流されるように少しだけ動ける。
+  //  オンラインは開始タイミングがずれるので、ソロ戦だけで行う。
+  // ============================================================
+  const DROP_MS = 2600;
+  const DROP_HEIGHT = 330;     // 見た目の高度(ピクセル)
+  const DROP_DRIFT_MUL = 0.45; // 降下中の移動速度
+  const PLANE_MS = 3600;
+  const PLANE_ALT = 430;
+
+  const isDropping = (s) => now() < (s.dropUntil || 0);
+
+  // 残り時間から見た目の高度を出す。落ち始めは速く、着地間際はゆっくり。
+  function dropAltitude(s) {
+    const left = (s.dropUntil || 0) - now();
+    if (left <= 0) return 0;
+    const p = clamp(left / DROP_MS, 0, 1);
+    return DROP_HEIGHT * p * p;
+  }
+
+  function beginDrop() {
+    if (mode !== "sp") { G.dropAt = 0; return; }
+    G.dropAt = now();
+    for (const s of G.soldiers) {
+      if (s.dummy) continue;
+      s.dropUntil = G.dropAt + DROP_MS;
+    }
+  }
+
+  // 着地した瞬間に土煙を上げて、降下状態を終わらせる
+  function updateDrops(t) {
+    for (const s of G.soldiers) {
+      if (!s.dropUntil || t < s.dropUntil) continue;
+      s.dropUntil = 0;
+      for (let i = 0; i < 9; i++) {
+        addParticle(s.x, s.y, { kind: "dust", vx: rand(-80, 80), vy: rand(-80, 80), life: rand(250, 520), size: rand(2, 4.5) });
+      }
+    }
   }
 
   // ============================================================
@@ -1350,9 +2001,22 @@
     cr.x = x; cr.y = ty;
   }
 
+  // 練習場: 射撃場を囲むように、中央を向いた銃座を3つ据える。
+  function spawnTrainingTurrets() {
+    for (let i = 0; i < 3; i++) {
+      const p = ringPos(TRAINING_TURRET_R, i, 3, Math.PI / 3);
+      G.turrets.push({
+        kind: "turret", id: i, x: p.x, y: p.y, angle: p.a + Math.PI,
+        hp: 260, maxHp: 260, dead: false, respawnAt: 0,
+        gunnerId: -1, team: -1, lastShot: -99999, muzzle: 0, hitFlash: 0,
+      });
+    }
+  }
+
   // 中立の機関銃座をマップ中央寄りに散らす。基地のすぐ前には置かない。
   function spawnTurrets() {
     G.turrets = [];
+    if (isTraining()) { spawnTrainingTurrets(); return; }
     const count = 8;
     for (let id = 0; id < count; id++) {
       let placed = null;
@@ -1519,48 +2183,67 @@
     if (s.id === G.localId || dist2(s.x, s.y, camX + viewW() / 2, camY + viewH() / 2) < 700 * 700) Audio.shot(w.snd);
   }
 
+  // 刀は足を止めて斬ると全方位の範囲攻撃(円月斬り)、走りながらだと通常の単体攻撃。
+  // まとめて当たるぶん、範囲攻撃は1体あたりの威力を落としてある。
+  const KATANA_SWEEP_RANGE_MUL = 1.35;
+  const KATANA_SWEEP_DMG_MUL = 0.72;
+  const SWEEP_GUARD_MS = 230;   // 薙ぎ払い中に銃弾を弾ける時間
+
+  // 足を止めた薙ぎ払いの最中か。この間は刀が銃弾を弾く。
+  const isSweeping = (s) => !!s.sweepAt && now() - s.sweepAt < SWEEP_GUARD_MS;
+
   function tryMelee(s, t, w) {
     s.lastShot = t;
     s.muzzle = t;
     s.recoil = Math.min(8, s.recoil + w.kick);
+    const sweep = w.key === "katana" && !s.moving;
+    s.sweepAt = sweep ? t : 0;   // 描画で刀を一回転させるかの判定に使う
     const arc = w.arc || 0.82;
-    const dmg = w.dmg * s.dmgMul * (s.meleeMul || 1);
-    let target = null, best = Infinity;
+    const range = sweep ? w.range * KATANA_SWEEP_RANGE_MUL : w.range;
+    const dmg = w.dmg * s.dmgMul * (s.meleeMul || 1) * (sweep ? KATANA_SWEEP_DMG_MUL : 1);
+
+    // 届く相手を集める。範囲攻撃は向きを問わず全方位。
+    const hits = [];
+    const consider = (target, reach) => {
+      const d2v = dist2(s.x, s.y, target.x, target.y);
+      if (d2v > (range + reach) ** 2 || !lineClear(s.x, s.y, target.x, target.y)) return;
+      if (!sweep) {
+        const a = Math.atan2(target.y - s.y, target.x - s.x);
+        const gap = Math.abs(((a - s.aimAngle + Math.PI) % (Math.PI * 2)) - Math.PI);
+        if (gap >= arc) return;
+      }
+      hits.push({ target, d2v });
+    };
     for (const enemy of G.soldiers) {
-      if (enemy.dead || enemy.vehicleId >= 0 || enemy.team === s.team) continue;
-      const d2v = dist2(s.x, s.y, enemy.x, enemy.y);
-      if (d2v > w.range ** 2 || d2v >= best || !lineClear(s.x, s.y, enemy.x, enemy.y)) continue;
-      const a = Math.atan2(enemy.y - s.y, enemy.x - s.x);
-      const gap = Math.abs(((a - s.aimAngle + Math.PI) % (Math.PI * 2)) - Math.PI);
-      if (gap < arc) { target = enemy; best = d2v; }
+      if (!enemy.dead && enemy.vehicleId < 0 && enemy.team !== s.team) consider(enemy, 0);
     }
     for (const dog of G.dogs) {
-      if (dog.dead || dog.team === s.team) continue;
-      const d2v = dist2(s.x, s.y, dog.x, dog.y);
-      if (d2v > w.range ** 2 || d2v >= best || !lineClear(s.x, s.y, dog.x, dog.y)) continue;
-      const a = Math.atan2(dog.y - s.y, dog.x - s.x);
-      const gap = Math.abs(((a - s.aimAngle + Math.PI) % (Math.PI * 2)) - Math.PI);
-      if (gap < arc) { target = dog; best = d2v; }
+      if (!dog.dead && dog.team !== s.team) consider(dog, 0);
     }
     for (const tank of G.tanks) {
-      if (tank.dead || tank.team === s.team) continue;
-      const d2v = dist2(s.x, s.y, tank.x, tank.y);
-      if (d2v > (w.range + TANK_R) ** 2 || d2v >= best || !lineClear(s.x, s.y, tank.x, tank.y)) continue;
-      const a = Math.atan2(tank.y - s.y, tank.x - s.x);
-      const gap = Math.abs(((a - s.aimAngle + Math.PI) % (Math.PI * 2)) - Math.PI);
-      if (gap < arc) { target = tank; best = d2v; }
+      if (!tank.dead && tank.team !== s.team) consider(tank, TANK_R);
+    }
+    for (const beast of G.beasts) {
+      if (!beast.dead) consider(beast, BEAST_R - SOLDIER_R);
     }
     for (const enemyBase of G.bases) {
-      if (enemyBase.team === s.team || enemyBase.hp <= 0) continue;
-      const d2v = dist2(s.x, s.y, enemyBase.x, enemyBase.y);
-      if (d2v >= (w.range + BASE_CORE_R) ** 2 || d2v >= best || !lineClear(s.x, s.y, enemyBase.x, enemyBase.y)) continue;
-      const a = Math.atan2(enemyBase.y - s.y, enemyBase.x - s.x);
-      const gap = Math.abs(((a - s.aimAngle + Math.PI) % (Math.PI * 2)) - Math.PI);
-      if (gap < arc) { target = enemyBase; best = d2v; }
+      if (enemyBase.team !== s.team && enemyBase.hp > 0 && !enemyBase.hidden) consider(enemyBase, BASE_CORE_R);
     }
+    // 範囲攻撃は届いた全員、通常攻撃は一番近い1体だけ
+    let targets = [];
+    if (sweep) {
+      targets = hits.map((h) => h.target);
+    } else if (hits.length) {
+      let best = hits[0];
+      for (const h of hits) if (h.d2v < best.d2v) best = h;
+      targets = [best.target];
+    }
+
     const sx = s.x + Math.cos(s.aimAngle) * 28, sy = s.y + Math.sin(s.aimAngle) * 28;
-    addParticle(sx, sy, { kind: "slash", life: 150, size: w.range * 0.44, a: s.aimAngle, arc });
-    if (target) {
+    if (sweep) addParticle(s.x, s.y, { kind: "slash", life: 210, size: range * 0.92, a: s.aimAngle, arc: Math.PI });
+    else addParticle(sx, sy, { kind: "slash", life: 150, size: w.range * 0.44, a: s.aimAngle, arc });
+
+    for (const target of targets) {
       if (target.kind === "base") {
         damageBase(target, dmg * 0.75, s, s.team);
         addParticle(sx, sy, { kind: "spark", vx: rand(-70, 70), vy: rand(-70, 70), life: 180, size: 3 });
@@ -1570,6 +2253,10 @@
       } else if (target.kind === "dog") {
         damageDog(target, dmg, s);
         addParticle(target.x, target.y, { kind: "dust", vx: rand(-80, 80), vy: rand(-80, 80), life: 300, size: 3 });
+      } else if (target.kind === "beast") {
+        // 時の剣で叩けば一撃。ほかの近接武器は普通のダメージ。
+        damageBeast(target, dmg, s, w.key === "timesword");
+        addParticle(target.x, target.y, { kind: "spark", vx: rand(-90, 90), vy: rand(-90, 90), life: 220, size: 3.4 });
       } else {
         const result = damageSoldier(target, dmg, s, { x: s.x, y: s.y, type: "melee" });
         if (result !== "parried") {
@@ -1662,6 +2349,7 @@
       // 地雷は対戦車兵器。車両には減衰なしで効く。
       if (d < radius + TANK_R) damageTank(tank, MINE_DAMAGE * 1.3, attacker);
     }
+    damageBeastsInBlast(m.x, m.y, radius, MINE_DAMAGE, attacker);
     for (const o of G.obstacles) {
       if (o.type === "barrel" && dist2(o.x + o.w / 2, o.y + o.h / 2, m.x, m.y) < radius ** 2) o.hp = 0;
     }
@@ -1736,7 +2424,7 @@
     const py = target.y + Math.sin(target.aimAngle) * 22;
     addParticle(px, py, { kind: "parry", life: 260, size: 27, a: target.aimAngle });
     Audio.parry();
-    if (target.id === G.localId) { shake = Math.min(11, shake + 5); banner("PARRY!  攻撃を弾き返した"); }
+    if (target.id === G.localId) { shake = Math.min(11, shake + 5); banner("PARRY!  攻撃を弾き返した"); noteStat("parries"); }
     if (hit.type === "melee" && attacker && attacker.kind !== "tank") {
       attacker.stunnedUntil = now() + 650;
       addParticle(attacker.x, attacker.y - 18, { kind: "stun", life: 650, size: 12, a: 0 });
@@ -1752,9 +2440,19 @@
     }
   }
 
+  let lastSweepGuardAudioAt = 0;
+
   function damageSoldier(target, dmg, attacker, hit) {
     if (target.dead) return;
+    if (isDropping(target)) return "blocked";   // 降下中は無敵
     if (!hit) hit = attacker ? { x: attacker.x, y: attacker.y, type: "bullet" } : null;
+    // 足を止めて刀を振り回している間は、飛んできた銃弾を刀で弾き返す
+    if (hit && hit.type === "bullet" && isSweeping(target)) {
+      const a = Math.atan2(target.y - hit.y, target.x - hit.x);
+      addParticle(target.x - Math.cos(a) * 16, target.y - Math.sin(a) * 16, { kind: "parry", life: 200, size: 22, a });
+      if (now() - lastSweepGuardAudioAt > 90) { lastSweepGuardAudioAt = now(); Audio.parry(); }
+      return "parried";
+    }
     if (hit && !hit.bypassEquipment) {
       if (target.shieldRaised && target.shield > 0) {
         const incoming = Math.atan2(hit.y - target.y, hit.x - target.x);
@@ -1783,6 +2481,8 @@
     // 銃座の防盾に守られている射手は被弾が軽い
     if (target.turretId >= 0) dmg *= TURRET_DAMAGE_TAKEN;
     if (dmg <= 0.01) { target.hitFlash = Math.max(target.hitFlash, 0.25); return "blocked"; }
+    // 実績の集計で「何で倒したか」を見るために覚えておく
+    target.lastHitType = hit && hit.type ? hit.type : "bullet";
     target.hp -= dmg;
     target.lastDamagedAt = now();
     target.hitFlash = 1;
@@ -1805,7 +2505,7 @@
   }
 
   function damageBase(base, dmg, attacker, sourceTeam) {
-    if (!base || G.over || base.hp <= 0) return;
+    if (!base || G.over || base.hp <= 0 || base.hidden) return;
     const team = sourceTeam == null && attacker ? attacker.team : sourceTeam;
     if (!(team >= 0 && team < TEAM_COUNT)) return;
     if (team === base.team) return;
@@ -1834,6 +2534,7 @@
       const a = i * Math.PI * 2 / 5;
       createExplosionFx(base.x + Math.cos(a) * 55, base.y + Math.sin(a) * 42, 18);
     }
+    if (killerTeam === localTeam()) noteStat("basesDestroyed");
     const survivors = G.soldiers.filter((s) => s.team === base.team && !s.dead).length;
     if (base.team === localTeam()) banner("味方基地が陥落！　もう復活できません。生き残れ！");
     else banner(`${G.armyNames[base.team]}の基地が陥落！　残存兵 ${survivors} 名`);
@@ -1848,7 +2549,8 @@
   }
 
   function checkVictory() {
-    if (G.over) return;
+    // 練習場に勝敗は無い
+    if (G.over || isTraining()) return;
     const inPlay = TEAMS.filter(teamInPlay);
     if (inPlay.length === 1) {
       endMatch(inPlay[0]);
@@ -1891,6 +2593,7 @@
     if (attacker && attacker.team !== tank.team) {
       if (attacker.kind !== "tank") gainXp(attacker, 2);
       addKillfeed(attacker, { name: tank.name, team: tank.team });
+      if (attacker.id === G.localId && !attacker.kind) noteStat("tankKills");
     }
   }
 
@@ -1898,18 +2601,30 @@
     target.dead = true;
     target.hp = 0;
     target.deaths++;
-    target.respawnAt = now() + RESPAWN_MS;
-    // 血しぶき
-    for (let i = 0; i < 16; i++) {
-      const a = Math.random() * Math.PI * 2, sp = rand(30, 220);
-      addParticle(target.x, target.y, { kind: "blood", vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(400, 900), size: rand(2, 5) });
+    target.respawnAt = now() + (target.dummy ? DUMMY_RESPAWN_MS : RESPAWN_MS);
+    if (target.dummy) {
+      // 的は生き物ではないので血は出ない。光の柱で上へ転送されて消える。
+      warpOutDummy(target);
+    } else {
+      // 血しぶき
+      for (let i = 0; i < 16; i++) {
+        const a = Math.random() * Math.PI * 2, sp = rand(30, 220);
+        addParticle(target.x, target.y, { kind: "blood", vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(400, 900), size: rand(2, 5) });
+      }
+      addParticle(target.x, target.y, { kind: "stain", life: 9000, size: rand(16, 24) });
     }
-    addParticle(target.x, target.y, { kind: "stain", life: 9000, size: rand(16, 24) });
+    if (target.id === G.localId) noteStat("deaths");
     if (attacker && attacker.team !== target.team && (attacker.kind || attacker.id !== target.id)) {
       attacker.kills++;
       G.score[attacker.team]++;
       if (!attacker.kind) gainXp(attacker, target.isHuman ? 2 : 1);
       addKillfeed(attacker, target);
+      // 実績用: 自分が倒した分だけ、倒し方ごとに数える
+      if (!attacker.kind && attacker.id === G.localId) {
+        noteStat("kills");
+        if (target.lastHitType === "melee") noteStat("meleeKills");
+        else if (target.lastHitType === "explosion") noteStat("blastKills");
+      }
     } else if (target.killedByCreature) {
       target.killedByCreature = false;
       addKillfeed({ name: "??????", team: -1 }, target);
@@ -1920,6 +2635,25 @@
     if (!teamAlive(target.team)) {
       if (!teamInPlay(target.team)) banner(`${G.armyNames[target.team]} 全滅！`);
       checkVictory();
+    }
+  }
+
+  // 的の転送演出。青い光の柱が立ち、盤面が上へ吸い上げられて消える。
+  const WARP_RISE = 150;          // 盤面が上へ運ばれる距離
+  const WARP_MS = 620;
+  const WARP_RGB = "86,168,255";       // 柱の色
+  const WARP_CORE_RGB = "186,230,255"; // 芯と光の粒(白に近い水色)
+
+  function warpOutDummy(target) {
+    addParticle(target.x, target.y, { kind: "warpBeam", life: WARP_MS, size: DUMMY_R + 6 });
+    addParticle(target.x, target.y, { kind: "warpDisc", life: WARP_MS, size: DUMMY_R });
+    for (let i = 0; i < 3; i++) {
+      addParticle(target.x, target.y, { kind: "warpRing", life: WARP_MS * 0.7, size: DUMMY_R, a: i * 0.22 });
+    }
+    for (let i = 0; i < 14; i++) {
+      addParticle(target.x + rand(-DUMMY_R, DUMMY_R), target.y + rand(-DUMMY_R, DUMMY_R), {
+        kind: "warpMote", life: rand(WARP_MS * 0.5, WARP_MS), size: rand(1.5, 3.4), a: rand(60, 190),
+      });
     }
   }
 
@@ -1944,7 +2678,12 @@
   }
 
   function respawn(s) {
-    const sp = teamSpawn(s.team);
+    const sp = s.dummy ? dummyPost(s) : teamSpawn(s.team);
+    // 転送されて消えた的は、同じ光の柱で戻ってくる
+    if (s.dummy) {
+      addParticle(sp.x, sp.y, { kind: "warpBeam", life: 380, size: DUMMY_R + 6 });
+      addParticle(sp.x, sp.y, { kind: "warpRing", life: 380, size: DUMMY_R, a: 0 });
+    }
     s.x = sp.x; s.y = sp.y; s.rx = sp.x; s.ry = sp.y;
     s.hp = s.maxHp; s.dead = false; s.vx = 0; s.vy = 0;
     s.lastDamagedAt = -99999;
@@ -2051,6 +2790,7 @@
         damageBase(base, b.dmg * 0.9 * (1 - clamp(d / (radius + BASE_CORE_R), 0, 0.78)), attacker, b.team);
       }
     }
+    damageBeastsInBlast(b.x, b.y, radius, b.dmg, attacker);
     for (const o of G.obstacles) {
       if (o.type === "barrel" && dist2(o.x + o.w / 2, o.y + o.h / 2, b.x, b.y) < radius * radius) o.hp = 0;
     }
@@ -2088,6 +2828,7 @@
         damageBase(base, 115 * (1 - clamp(d / (GRENADE_RADIUS + BASE_CORE_R), 0, 0.78)), attacker, g.team);
       }
     }
+    damageBeastsInBlast(g.x, g.y, GRENADE_RADIUS, 130, attacker);
     for (const o of G.obstacles) {
       if (o.type === "barrel" && dist2(o.x + o.w / 2, o.y + o.h / 2, g.x, g.y) < GRENADE_RADIUS ** 2) o.hp = 0;
     }
@@ -2154,6 +2895,8 @@
   // ============================================================
   //  パーティクル
   // ============================================================
+  const WARP_KINDS = { warpBeam: 1, warpDisc: 1, warpRing: 1, warpMote: 1 };
+
   function addParticle(x, y, opt) {
     if (G.particles.length >= MAX_PARTICLES && opt.kind !== "boom") return;
     G.particles.push({
@@ -2169,7 +2912,8 @@
       const p = ps[i];
       p.life -= dt * 1000;
       if (p.life <= 0) { ps.splice(i, 1); continue; }
-      if (p.kind === "stain" || p.kind === "flash" || p.kind === "boom") continue;
+      // 転送エフェクトは経過時間だけで形を決めるので、速度も摩擦もかけない
+      if (p.kind === "stain" || p.kind === "flash" || p.kind === "boom" || WARP_KINDS[p.kind]) continue;
       p.x += p.vx * dt; p.y += p.vy * dt;
       const fr = p.kind === "casing" ? 0.86 : 0.9;
       p.vx *= Math.pow(fr, dt * 60); p.vy *= Math.pow(fr, dt * 60);
@@ -2521,6 +3265,8 @@
         continue;
       }
       if (tank.driverId >= 0) tank.driverId = -1;
+      // 練習場では無人の戦車は動かない。的を勝手に壊さず、基地の前で乗り手を待つ。
+      if (isTraining()) continue;
 
       let target = nearestEnemyBase(tank.x, tank.y, tank.team);
       let best = target ? dist2(tank.x, tank.y, target.x, target.y) : Infinity;
@@ -2577,7 +3323,8 @@
       const dogSight = 430 * daylightVisionMul();
       let target = null, best = Infinity;
       for (const enemy of G.soldiers) {
-        if (enemy.dead || enemy.vehicleId >= 0 || enemy.team === dog.team) continue;
+        // 練習用の的は犬に襲わせない(プレイヤーの練習を邪魔しないため)
+        if (enemy.dead || enemy.dummy || enemy.vehicleId >= 0 || enemy.team === dog.team) continue;
         const d2v = dist2(dog.x, dog.y, enemy.x, enemy.y);
         if (d2v >= best) continue;
         if (canSee(dog, enemy, dogSight, null) || canHear(dog, enemy, 130)) { best = d2v; target = enemy; }
@@ -2682,7 +3429,8 @@
     const me = localSoldier();
     if (!me || me.dead) return;
     for (const enemy of G.soldiers) {
-      if (enemy.dead || enemy.vehicleId >= 0 || enemy.team === me.team || !enemy.moving) continue;
+      if (enemy.dead || enemy.dummy || enemy.vehicleId >= 0 || enemy.team === me.team || !enemy.moving) continue;
+      if (isDropping(enemy)) continue;
       const loud = enemy.noiseRadius || 430;
       const interval = loud > 500 ? 280 : 440;
       if (t - (enemy.lastFootstepAt || -99999) < interval) continue;
@@ -2718,15 +3466,20 @@
         }
       }
     }
+    updateDrops(t);
     // AI
     for (const s of G.soldiers) {
       if (s.dead) continue;
+      if (s.dummy) { updateDummy(s, dt); continue; }
+      if (isDropping(s)) { s.moving = false; s.noiseRadius = 0; continue; }
       const human = s.controller === "local" || (s.controller && s.controller !== "cpu");
       if (!human) updateAI(s, t, dt);
     }
     updateTanks(dt, t);
     updateTurrets(dt, t);
     updateCreature(dt, t);
+    updateBeasts(dt, t);
+    updateSwordRock(dt);
     updateDogs(dt, t);
     updateFootsteps(dt, t);
     // リロード完了
@@ -2737,8 +3490,8 @@
       }
       if (s.hitFlash > 0) s.hitFlash = Math.max(0, s.hitFlash - dt * 4);
       if (s.recoil > 0) s.recoil = Math.max(0, s.recoil - dt * 26);
-      // 基地を失った軍は復活できない(サバイバル形式)
-      if (s.dead && t >= s.respawnAt && teamAlive(s.team)) respawn(s);
+      // 基地を失った軍は復活できない(サバイバル形式)。的だけは基地と無関係に立て直る。
+      if (s.dead && t >= s.respawnAt && (s.dummy || teamAlive(s.team))) respawn(s);
     }
     // 弾
     updateBullets(dt);
@@ -2757,7 +3510,12 @@
       }
     }
     updateParticles(dt);
+    updateTraining(dt, t);
+    // 実績の判定は毎フレームやる必要がないので、少し間引く
+    if (t - lastAchievementCheck > 600) { lastAchievementCheck = t; checkAchievements(); }
   }
+
+  let lastAchievementCheck = 0;
 
   // 銃座に取り付いている間は動けない。照準と射撃だけ。
   function applyTurretInput(turret, s, inp, t) {
@@ -2777,6 +3535,17 @@
   }
 
   function applyLocalToSoldier(s, inp, t) {
+    // 降下中は攻撃も乗り込みもできない。傘で流されるぶんだけ動かせる。
+    if (isDropping(s)) {
+      s.aimAngle = inp.aimAngle != null ? inp.aimAngle : s.aimAngle;
+      applyMove(s, inp.mvx * DROP_DRIFT_MUL, inp.mvy * DROP_DRIFT_MUL, dtGlobal, false);
+      s.noiseRadius = 0;
+      s.shieldRaised = false;
+      inp.reloadEdge = false; inp.grenadeEdge = false; inp.interactEdge = false;
+      inp.parryEdge = false; inp.mineEdge = false; inp.wireEdge = false;
+      inp.weaponWanted = -1;
+      return;
+    }
     if (inp.interactEdge) { enterOrExitTank(s); inp.interactEdge = false; }
     if (s.turretId >= 0) {
       const turret = G.turrets.find((x) => x.id === s.turretId && !x.dead);
@@ -2825,9 +3594,18 @@
 
   function updateBullets(dt) {
     const bs = G.bullets;
+    // 時の剣の持ち主のまわりでは、飛んできた弾が時間を止めたように遅くなる
+    const holder = swordHolder();
     for (let i = bs.length - 1; i >= 0; i--) {
       const b = bs[i];
-      const stepX = b.vx * dt, stepY = b.vy * dt;
+      let speedMul = 1;
+      if (holder && b.owner !== holder.id && dist2(b.x, b.y, holder.x, holder.y) < TIME_FIELD_R ** 2) {
+        speedMul = TIME_SLOW_MUL;
+        b.slowed = true;
+      } else {
+        b.slowed = false;
+      }
+      const stepX = b.vx * dt * speedMul, stepY = b.vy * dt * speedMul;
       b.x += stepX; b.y += stepY;
       b.traveled += Math.hypot(stepX, stepY);
       let dead = false;
@@ -2903,6 +3681,21 @@
             else {
               damageDog(dog, b.dmg, attacker);
               addParticle(b.x, b.y, { kind: "dust", vx: rand(-80, 80), vy: rand(-80, 80), life: 230, size: 3 });
+            }
+            dead = true; break;
+          }
+        }
+      }
+      if (!dead) {
+        // 魔物 (時の森)。銃も効くが硬いので、削り切るには撃ち込む必要がある。
+        for (const beast of G.beasts) {
+          if (beast.dead) continue;
+          if (dist2(b.x, b.y, beast.x, beast.y) < (BEAST_R + 3) ** 2) {
+            const attacker = projectileAttacker(b);
+            if (b.kind === "shell") explodeProjectile(b);
+            else {
+              damageBeast(beast, b.dmg, attacker, false);
+              addParticle(b.x, b.y, { kind: "spark", vx: rand(-80, 80), vy: rand(-80, 80), life: 220, size: 3 });
             }
             dead = true; break;
           }
@@ -2985,7 +3778,7 @@
     const vw = viewW(), vh = viewH();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     // 背景
-    ctx.fillStyle = "#3a4a26";
+    ctx.fillStyle = stageDef().backdrop || "#3a4a26";
     ctx.fillRect(0, 0, vw, vh);
 
     let sx = 0, sy = 0;
@@ -2998,6 +3791,8 @@
     // 影 → 車両 → 兵士 → 投擲物/弾 → パーティクル
     drawStains();
     drawObstaclesBack();
+    drawTimeField();
+    drawSwordRock();
     drawWires();
     drawMines();
     drawPickups();
@@ -3009,14 +3804,17 @@
     for (const turret of G.turrets) if (!turret.dead && isEntityVisible(turret)) drawTurret(turret);
     for (const tank of G.tanks) if (!tank.dead && isEntityVisible(tank)) drawTank(tank);
     for (const dog of G.dogs) if (!dog.dead && isEntityVisible(dog)) drawDog(dog);
-    for (const s of G.soldiers) if (!s.dead && s.vehicleId < 0 && isEntityVisible(s)) drawSoldier(s);
+    for (const beast of G.beasts) if (!beast.dead && isEntityVisible(beast)) drawBeast(beast);
+    for (const s of G.soldiers) if (!s.dead && s.vehicleId < 0 && isEntityVisible(s)) (s.dummy ? drawDummy(s) : drawSoldier(s));
     if (G.creature && creatureVisible()) drawCreature(G.creature);
     drawObstaclesOver();
+    drawParachutes();
     drawGrenades();
     drawBullets();
     drawParticlesOver();
     drawFootstepPings();
     drawNameTags();
+    drawDropPlanes();
 
     ctx.restore();
 
@@ -3041,10 +3839,13 @@
         ctx.fillRect(x, y, TS, TS);
       }
     }
-    // 4隅のスポーンゾーンをチーム色で薄く塗る
+    // 4隅のスポーンゾーンをチーム色で薄く塗る(白と灰色だけのステージでは白)
+    const mono = isMonochrome();
     for (const base of G.bases) {
+      if (base.hidden) continue;
       const def = teamDef(base.team);
-      ctx.fillStyle = hexToRgba(def.flag, base.hp > 0 ? 0.06 : 0.02);
+      const alpha = base.hp > 0 ? 0.06 : 0.02;
+      ctx.fillStyle = mono ? `rgba(255,255,255,${alpha * 2})` : hexToRgba(def.flag, alpha);
       ctx.fillRect(base.x - 200, base.y - 190, 400, 380);
     }
   }
@@ -3056,6 +3857,7 @@
 
   function drawBases() {
     for (const base of G.bases) {
+      if (base.hidden) continue;
       const def = teamDef(base.team);
       const fallen = base.hp <= 0;
       ctx.save();
@@ -3101,7 +3903,13 @@
     }
   }
 
+  // 朝のあいだは夜明けの光で戦場全体が見渡せる。視界制限が完全に外れる。
+  function fullVisionNow() {
+    return dayPhase().key === "morning";
+  }
+
   function currentVisionRadius() {
+    if (fullVisionNow()) return WORLD_W + WORLD_H;
     const me = localSoldier();
     const shortSide = Math.min(viewW(), viewH());
     // 画面サイズで頭打ちにしたうえで、時間帯の倍率をかける
@@ -3113,6 +3921,8 @@
 
   function isEntityVisible(entity) {
     if (spectating) return true;   // 観戦中は全部見える
+    if (entity.dummy) return true; // 練習用の的は敵ではないので常に見える
+    if (fullVisionNow()) return true;
     const me = localSoldier();
     if (!me || entity.team === me.team) return true;
     const bonus = entity.kind === "tank" ? 65 : 0;
@@ -3135,7 +3945,7 @@
     for (const p of G.particles) {
       if (p.kind !== "stain") continue;
       const a = clamp(p.life / p.maxLife, 0, 1) * 0.5;
-      ctx.fillStyle = `rgba(110,12,12,${a})`;
+      ctx.fillStyle = isMonochrome() ? `rgba(118,118,118,${a})` : `rgba(110,12,12,${a})`;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size, 0, 6.283);
       ctx.fill();
@@ -3184,31 +3994,56 @@
     }
   }
 
+  // 白と灰色だけのステージ用に、色を明るさだけの灰色へ置き換える。
+  // ctx.filter でのグレースケール化は毎フレーム重すぎたので、色を先に変換して使う。
+  const grayCache = new Map();
+  function toGray(color) {
+    const hit = grayCache.get(color);
+    if (hit) return hit;
+    let r = 0, g = 0, b = 0, a = 1;
+    if (color[0] === "#") {
+      const hex = color.slice(1);
+      const n = parseInt(hex.slice(0, 6), 16);
+      r = (n >> 16) & 255; g = (n >> 8) & 255; b = n & 255;
+      if (hex.length === 8) a = parseInt(hex.slice(6, 8), 16) / 255;
+    } else {
+      const parts = (color.match(/[\d.]+/g) || []).map(Number);
+      r = parts[0] || 0; g = parts[1] || 0; b = parts[2] || 0;
+      if (parts.length > 3) a = parts[3];
+    }
+    const l = Math.round(0.2126 * r + 0.7152 * g + 0.0722 * b);
+    const out = `rgba(${l},${l},${l},${a})`;
+    grayCache.set(color, out);
+    return out;
+  }
+  const keepColor = (c) => c;
+
   function drawObstacle(o) {
+    // C() を通した色だけが、白と灰色だけのステージで灰色に置き換わる
+    const C = isMonochrome() ? toGray : keepColor;
     if (o.type === "wall") {
-      ctx.fillStyle = "#4a4640";
+      ctx.fillStyle = C("#4a4640");
       ctx.fillRect(o.x, o.y, o.w, o.h);
       ctx.fillStyle = "rgba(0,0,0,0.22)";
       ctx.fillRect(o.x, o.y + o.h - 6, o.w, 6);
       ctx.strokeStyle = "rgba(0,0,0,0.3)"; ctx.lineWidth = 2;
       ctx.strokeRect(o.x + 1, o.y + 1, o.w - 2, o.h - 2);
     } else if (o.type === "crate") {
-      ctx.fillStyle = "#8a5a2b"; ctx.fillRect(o.x, o.y, o.w, o.h);
-      ctx.strokeStyle = "#5e3c1c"; ctx.lineWidth = 3;
+      ctx.fillStyle = C("#8a5a2b"); ctx.fillRect(o.x, o.y, o.w, o.h);
+      ctx.strokeStyle = C("#5e3c1c"); ctx.lineWidth = 3;
       ctx.strokeRect(o.x + 2, o.y + 2, o.w - 4, o.h - 4);
       ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(o.x + o.w, o.y + o.h);
       ctx.moveTo(o.x + o.w, o.y); ctx.lineTo(o.x, o.y + o.h); ctx.stroke();
     } else if (o.type === "sandbag") {
-      ctx.fillStyle = "#6f6a44";
       const n = Math.max(2, Math.round(o.w / 24));
       for (let i = 0; i < n; i++) {
-        ctx.fillStyle = i % 2 ? "#7a754d" : "#67623f";
+        ctx.fillStyle = C(i % 2 ? "#7a754d" : "#67623f");
         ctx.beginPath();
         ctx.ellipse(o.x + (i + 0.5) * (o.w / n), o.y + o.h / 2, o.w / n / 2 + 1, o.h / 2, 0, 0, 6.283);
         ctx.fill();
       }
     } else if (o.type === "rock") {
-      ctx.fillStyle = "#6b6f72";
+      ctx.fillStyle = C("#6b6f72");
       ctx.beginPath();
       ctx.ellipse(o.x + o.w / 2, o.y + o.h / 2, o.w / 2, o.h / 2, 0, 0, 6.283);
       ctx.fill();
@@ -3217,16 +4052,16 @@
       ctx.ellipse(o.x + o.w / 2, o.y + o.h * 0.62, o.w / 2.4, o.h / 3, 0, 0, 6.283);
       ctx.fill();
     } else if (o.type === "barrel") {
-      ctx.fillStyle = "#b03a2e";
+      ctx.fillStyle = C("#b03a2e");
       ctx.beginPath(); ctx.arc(o.x + o.w / 2, o.y + o.h / 2, (o.r || 15), 0, 6.283); ctx.fill();
-      ctx.strokeStyle = "#2c2c2c"; ctx.lineWidth = 2;
+      ctx.strokeStyle = C("#2c2c2c"); ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(o.x + o.w / 2, o.y + o.h / 2, (o.r || 15) - 4, 0, 6.283); ctx.stroke();
-      ctx.fillStyle = "#ffd23f"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillStyle = C("#ffd23f"); ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText("⚠", o.x + o.w / 2, o.y + o.h / 2 + 1);
     } else if (o.type === "ruin") {
       // 崩れかけたコンクリート壁。上辺をギザギザにして瓦礫感を出す。
       const seg = Math.max(3, Math.round(o.w / 18));
-      ctx.fillStyle = "#5d5951";
+      ctx.fillStyle = C("#5d5951");
       for (let i = 0; i < seg; i++) {
         const sw = o.w / seg;
         const drop = ((Math.sin((o.seed || 0) * 40 + i * 2.3) + 1) / 2) * o.h * 0.4;
@@ -3239,12 +4074,12 @@
       const cx = o.x + o.w / 2, cy = o.y + o.h / 2, r = o.w / 2;
       ctx.fillStyle = "rgba(0,0,0,0.2)";
       ctx.beginPath(); ctx.ellipse(cx + 4, cy + 6, r, r * 0.82, 0, 0, 6.283); ctx.fill();
-      ctx.fillStyle = "#5a4029";
+      ctx.fillStyle = C("#5a4029");
       ctx.beginPath(); ctx.arc(cx, cy, r * 0.28, 0, 6.283); ctx.fill();
       // 葉は3枚重ねて厚みを出す
       const leaves = ["#2f5127", "#3a6330", "#46753a"];
       for (let i = 0; i < 3; i++) {
-        ctx.fillStyle = leaves[i];
+        ctx.fillStyle = C(leaves[i]);
         ctx.beginPath();
         ctx.arc(cx - i * 2, cy - i * 3, r * (1 - i * 0.18), 0, 6.283);
         ctx.fill();
@@ -3255,26 +4090,26 @@
       const blobs = 5;
       for (let i = 0; i < blobs; i++) {
         const a = i * Math.PI * 2 / blobs + (o.seed || 0) * 6;
-        ctx.fillStyle = i % 2 ? "rgba(52,92,44,0.86)" : "rgba(63,108,52,0.86)";
+        ctx.fillStyle = C(i % 2 ? "rgba(52,92,44,0.86)" : "rgba(63,108,52,0.86)");
         ctx.beginPath();
         ctx.ellipse(cx + Math.cos(a) * o.w * 0.2, cy + Math.sin(a) * o.h * 0.2, o.w * 0.34, o.h * 0.34, a, 0, 6.283);
         ctx.fill();
       }
-      ctx.fillStyle = "rgba(126,176,102,0.35)";
+      ctx.fillStyle = C("rgba(126,176,102,0.35)");
       ctx.beginPath(); ctx.ellipse(cx - o.w * 0.1, cy - o.h * 0.12, o.w * 0.2, o.h * 0.16, 0, 0, 6.283); ctx.fill();
     } else if (o.type === "wreck") {
       // 焼け落ちた車両
       const cx = o.x + o.w / 2, cy = o.y + o.h / 2;
       ctx.save();
       ctx.translate(cx, cy); ctx.rotate(((o.seed || 0) - 0.5) * 0.7);
-      ctx.fillStyle = "#3b3630";
+      ctx.fillStyle = C("#3b3630");
       ctx.fillRect(-o.w / 2, -o.h / 2, o.w, o.h);
-      ctx.fillStyle = "#57504533"; ctx.fillRect(-o.w / 2, -o.h / 2, o.w, o.h * 0.3);
-      ctx.fillStyle = "#26221e";
+      ctx.fillStyle = C("#57504533"); ctx.fillRect(-o.w / 2, -o.h / 2, o.w, o.h * 0.3);
+      ctx.fillStyle = C("#26221e");
       ctx.fillRect(-o.w * 0.18, -o.h * 0.34, o.w * 0.4, o.h * 0.68);
-      ctx.fillStyle = "#6b4a2c";
+      ctx.fillStyle = C("#6b4a2c");
       ctx.fillRect(-o.w / 2 + 3, -o.h / 2 - 3, o.w * 0.3, 4);
-      ctx.fillStyle = "#181513";
+      ctx.fillStyle = C("#181513");
       ctx.beginPath(); ctx.arc(-o.w * 0.28, -o.h / 2, 6, 0, 6.283); ctx.fill();
       ctx.beginPath(); ctx.arc(o.w * 0.3, o.h / 2, 6, 0, 6.283); ctx.fill();
       ctx.restore();
@@ -3282,15 +4117,15 @@
       const cx = o.x + o.w / 2, cy = o.y + o.h / 2;
       for (let i = 2; i >= 0; i--) {
         const r = o.w / 2 - i * 3;
-        ctx.fillStyle = i === 0 ? "#33322f" : "#232220";
+        ctx.fillStyle = C(i === 0 ? "#33322f" : "#232220");
         ctx.beginPath(); ctx.arc(cx - i * 2, cy - i * 3, r, 0, 6.283); ctx.fill();
-        ctx.fillStyle = "#4a4844";
+        ctx.fillStyle = C("#4a4844");
         ctx.beginPath(); ctx.arc(cx - i * 2, cy - i * 3, r * 0.42, 0, 6.283); ctx.fill();
       }
     } else if (o.type === "hedgehog") {
       // 対戦車バリケード。歩兵も車両も通れないが、弾と視線は抜ける。
       const cx = o.x + o.w / 2, cy = o.y + o.h / 2, r = o.w / 2;
-      ctx.strokeStyle = "#7d8288"; ctx.lineWidth = 5; ctx.lineCap = "round";
+      ctx.strokeStyle = C("#7d8288"); ctx.lineWidth = 5; ctx.lineCap = "round";
       for (let i = 0; i < 3; i++) {
         const a = i * Math.PI / 3 + (o.seed || 0);
         ctx.beginPath();
@@ -3298,7 +4133,7 @@
         ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
         ctx.stroke();
       }
-      ctx.strokeStyle = "#4c5054"; ctx.lineWidth = 2;
+      ctx.strokeStyle = C("#4c5054"); ctx.lineWidth = 2;
       for (let i = 0; i < 3; i++) {
         const a = i * Math.PI / 3 + (o.seed || 0);
         ctx.beginPath();
@@ -3310,7 +4145,11 @@
   }
 
   function teamColors(s) {
-    if (s.id === G.localId) return { u: YOU_UNIFORM, a: YOU_ACCENT };
+    // 自分だけはチーム色ではなく、選んだスキンの色で描く
+    if (s.id === G.localId) {
+      const skin = activeSkin();
+      return { u: skin.uniform, a: skin.accent };
+    }
     const def = teamDef(s.team);
     return { u: def.uniform, a: def.accent };
   }
@@ -3537,6 +4376,52 @@
       ctx.beginPath(); ctx.moveTo(10, 1); ctx.quadraticCurveTo(28, -1, 42, -7); ctx.stroke();
       ctx.strokeStyle = "#9fb0b8"; ctx.lineWidth = 1.4;
       ctx.beginPath(); ctx.moveTo(10, 1); ctx.quadraticCurveTo(28, -1, 42, -7); ctx.stroke();
+    } else if (style === "timesword") {
+      // 時の剣: 鍛えたものではなく、森が育てた聖剣。
+      // 節くれだった枝の柄、葉の鍔、樹液が固まった琥珀色の刃。
+      const t = now();
+      const breathe = 0.72 + 0.28 * Math.sin(t / 620);
+      // 柄 (曲がった枝)
+      ctx.strokeStyle = "#5f4a2c"; ctx.lineWidth = 6; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(-7, 2); ctx.quadraticCurveTo(0, -1, 8, 0); ctx.stroke();
+      ctx.strokeStyle = "#7d6238"; ctx.lineWidth = 2.4;
+      ctx.beginPath(); ctx.moveTo(-6, 1); ctx.quadraticCurveTo(0, -2, 7, -1); ctx.stroke();
+      // 柄尻の木の実
+      ctx.fillStyle = "#8a5a2b";
+      ctx.beginPath(); ctx.arc(-9, 2, 3.2, 0, 6.283); ctx.fill();
+      // 鍔のかわりに広がる二枚の葉
+      ctx.fillStyle = "#4f7f3a";
+      ctx.beginPath(); ctx.moveTo(8, 0); ctx.quadraticCurveTo(14, -13, 3, -11); ctx.quadraticCurveTo(6, -4, 8, 0); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(8, 0); ctx.quadraticCurveTo(14, 13, 3, 11); ctx.quadraticCurveTo(6, 4, 8, 0); ctx.fill();
+      ctx.strokeStyle = "#7fb45c"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(7, -1); ctx.lineTo(11, -8); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(7, 1); ctx.lineTo(11, 8); ctx.stroke();
+      // 刃: 木の葉のように膨らんで先が尖る。中は透けた琥珀色。
+      ctx.save();
+      ctx.shadowColor = `rgba(226,255,190,${breathe})`;
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = "rgba(232,246,196,0.92)";
+      ctx.beginPath();
+      ctx.moveTo(10, 0);
+      ctx.quadraticCurveTo(24, -8, 44, 0);
+      ctx.quadraticCurveTo(24, 8, 10, 0);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+      // 葉脈のような筋
+      ctx.strokeStyle = `rgba(126,178,92,${0.55 + breathe * 0.35})`; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(43, 0); ctx.stroke();
+      ctx.lineWidth = 0.9;
+      for (let i = 0; i < 4; i++) {
+        const x = 15 + i * 7;
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + 5, -3.4 + i * 0.4); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + 5, 3.4 - i * 0.4); ctx.stroke();
+      }
+      // 刃に沿って漂う光の粒
+      ctx.fillStyle = `rgba(255,255,225,${breathe})`;
+      for (let i = 0; i < 3; i++) {
+        const p = ((t / 1400 + i * 0.33) % 1);
+        ctx.beginPath(); ctx.arc(12 + p * 30, Math.sin(p * 6.283 + i) * 3.5, 1.5, 0, 6.283); ctx.fill();
+      }
     } else {
       // knife
       ctx.fillStyle = "#5b3a22"; ctx.fillRect(-2, -3, 9, 6);
@@ -3549,29 +4434,26 @@
   function drawSoldier(s) {
     const c = teamColors(s);
     const a = s.aimAngle;
+    // スキンの半透明・発光は ctx の状態なので、末尾の restore() でまとめて元に戻る
+    const skin = s.id === G.localId ? activeSkin() : null;
     ctx.save();
-    ctx.translate(s.x, s.y);
+    if (skin && skin.alpha) ctx.globalAlpha = skin.alpha;
+    if (skin && skin.glow) { ctx.shadowColor = skin.glow; ctx.shadowBlur = 11; }
+    // 降下中は高度のぶんだけ上へずらして描く(影は地面に残る)
+    ctx.translate(s.x, s.y - dropAltitude(s));
+    const style = skin ? skin.style : null;
     // 脚 (歩行)
     const legSwing = s.moving ? Math.sin(s.legPhase) * 5 : 0;
     ctx.save();
     ctx.rotate(a);
-    ctx.fillStyle = "#2a2a22";
-    ctx.fillRect(-4, -10 - legSwing * 0.3, 9, 6);
-    ctx.fillRect(-4, 4 + legSwing * 0.3, 9, 6);
+    drawSkinLegs(style, skin, c, legSwing);
     ctx.restore();
     // 胴 (照準方向に回転)
     ctx.rotate(a);
     const recoilBack = s.recoil * 0.6;
-    // 胴体(ベスト)
-    ctx.fillStyle = c.u;
-    ctx.beginPath();
-    ctx.ellipse(-recoilBack, 0, SOLDIER_R - 1, SOLDIER_R + 1, 0, 0, 6.283);
-    ctx.fill();
-    // ベスト中央ライン
-    ctx.fillStyle = "rgba(0,0,0,0.18)";
-    ctx.fillRect(-recoilBack - 2, -SOLDIER_R, 4, SOLDIER_R * 2);
-    // 防弾鎧プレート
-    if (s.armor > 0) {
+    drawSkinTorso(style, skin, s, c, recoilBack);
+    // 防弾鎧プレート (ホログラムとボクセルは体の作りが違うので付けない)
+    if (s.armor > 0 && style !== "hologram" && style !== "voxel") {
       const ar = clamp(s.armor / s.maxArmor, 0, 1);
       ctx.fillStyle = `rgba(126,165,194,${0.35 + ar * 0.45})`;
       ctx.fillRect(-10 - recoilBack, -12, 13, 8); ctx.fillRect(-10 - recoilBack, 4, 13, 8);
@@ -3592,8 +4474,11 @@
     } else if (w.melee) {
       const attackAge = now() - s.muzzle;
       // 振りかぶり → 振り抜きを1回のスイングで表現。武器が重いほど大きく振る。
-      const swingSpan = w.style === "shovel" ? 2.5 : w.style === "hatchet" ? 2.1 : w.style === "katana" ? 2.3 : w.style === "bayonet" ? 0.5 : 1.9;
-      const swingMs = w.style === "bayonet" ? 110 : 180;
+      // 刀の範囲攻撃だけは、全方位に届くことが分かるよう1回転させる。
+      const sweeping = !!s.sweepAt && s.sweepAt === s.muzzle;
+      const swingSpan = sweeping ? Math.PI * 2
+        : w.style === "shovel" ? 2.5 : w.style === "hatchet" ? 2.1 : w.style === "katana" ? 2.3 : w.style === "bayonet" ? 0.5 : 1.9;
+      const swingMs = w.style === "bayonet" ? 110 : sweeping ? 230 : 180;
       const swing = attackAge < swingMs ? -swingSpan / 2 + (attackAge / swingMs) * swingSpan : 0;
       // 銃剣だけは振らずに前へ突き出す
       const thrust = w.style === "bayonet" && attackAge < swingMs ? 10 * (1 - attackAge / swingMs) : 0;
@@ -3612,10 +4497,7 @@
       ctx.beginPath(); ctx.arc(SOLDIER_R + w.len * 0.55 - recoilBack, 1, 3.2, 0, 6.283); ctx.fill();
     }
     // 頭(ヘルメット)
-    ctx.fillStyle = c.a;
-    ctx.beginPath(); ctx.arc(0, 0, 8.5, 0, 6.283); ctx.fill();
-    ctx.fillStyle = "rgba(0,0,0,0.18)";
-    ctx.beginPath(); ctx.arc(2, 0, 8.5, -0.9, 0.9); ctx.fill();
+    drawSkinHead(style, skin, c);
     // マズルフラッシュ
     if (!s.shieldRaised && !w.melee && now() - s.muzzle < 55) {
       const ml = SOLDIER_R + w.len - recoilBack;
@@ -3635,6 +4517,458 @@
     ctx.restore();
   }
 
+  // 練習用の的。台に的の輪を描いた板。兵士とはひと目で見分けられるようにする。
+  const DUMMY_R = SOLDIER_R + 2;
+
+  function drawDummy(s) {
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    // 支柱
+    ctx.fillStyle = "#6a5636";
+    ctx.save();
+    ctx.rotate(s.angle);
+    ctx.fillRect(-SOLDIER_R - 4, -5, 12, 10);
+    ctx.restore();
+    drawDummyFace(DUMMY_R, 1);
+    // 動く的は回っている向きが分かるように矢印を足す
+    if (s.orbit) {
+      ctx.save();
+      ctx.rotate(s.angle);
+      ctx.fillStyle = "rgba(30,26,18,0.75)";
+      ctx.beginPath();
+      ctx.moveTo(DUMMY_R - 3, 0); ctx.lineTo(DUMMY_R - 11, -5); ctx.lineTo(DUMMY_R - 11, 5);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+    if (s.hitFlash > 0) {
+      ctx.fillStyle = `rgba(255,255,255,${s.hitFlash * 0.6})`;
+      ctx.beginPath(); ctx.arc(0, 0, DUMMY_R + 2, 0, 6.283); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // 的の盤面。転送エフェクトでも同じ絵を使うので切り出してある。
+  // 地形は白と灰色でも、的だけは紅白のままにして狙う場所が一目で分かるようにする。
+  function drawDummyFace(r, alpha) {
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "#e4dcc2";
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.283); ctx.fill();
+    ctx.strokeStyle = "#8b7448"; ctx.lineWidth = 2.5; ctx.stroke();
+    ctx.fillStyle = "#c8483c";
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.72, 0, 6.283); ctx.fill();
+    ctx.fillStyle = "#e4dcc2";
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.46, 0, 6.283); ctx.fill();
+    ctx.fillStyle = "#c8483c";
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.2, 0, 6.283); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // 岩に刺さった時の剣。抜かれるまで中央に立っている。
+  function drawSwordRock() {
+    const rock = G.swordRock;
+    if (!rock) return;
+    const t = now();
+    // 岩
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.beginPath(); ctx.ellipse(rock.x + 5, rock.y + 12, SWORD_ROCK_R, SWORD_ROCK_R * 0.5, 0, 0, 6.283); ctx.fill();
+    ctx.fillStyle = "#5a5f6b";
+    ctx.beginPath();
+    ctx.moveTo(rock.x - SWORD_ROCK_R, rock.y + 14);
+    ctx.lineTo(rock.x - SWORD_ROCK_R * 0.62, rock.y - SWORD_ROCK_R * 0.6);
+    ctx.lineTo(rock.x + SWORD_ROCK_R * 0.2, rock.y - SWORD_ROCK_R * 0.78);
+    ctx.lineTo(rock.x + SWORD_ROCK_R * 0.86, rock.y - SWORD_ROCK_R * 0.2);
+    ctx.lineTo(rock.x + SWORD_ROCK_R, rock.y + 14);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#6f7684";
+    ctx.beginPath();
+    ctx.moveTo(rock.x - SWORD_ROCK_R * 0.62, rock.y - SWORD_ROCK_R * 0.6);
+    ctx.lineTo(rock.x + SWORD_ROCK_R * 0.2, rock.y - SWORD_ROCK_R * 0.78);
+    ctx.lineTo(rock.x + SWORD_ROCK_R * 0.1, rock.y - 2);
+    ctx.lineTo(rock.x - SWORD_ROCK_R * 0.5, rock.y - 6);
+    ctx.closePath(); ctx.fill();
+    // 岩を覆う苔
+    ctx.fillStyle = "rgba(96,142,86,0.5)";
+    ctx.beginPath(); ctx.ellipse(rock.x - 16, rock.y + 4, 15, 7, -0.3, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(rock.x + 20, rock.y + 8, 11, 5, 0.4, 0, 6.283); ctx.fill();
+
+    if (!rock.pulled) {
+      // 抜かれるまでは剣が生えたまま。手をかけていると光が強まる。
+      const p = rock.progress / SWORD_PULL_MS;
+      const glow = 0.45 + 0.25 * Math.sin(t / 320) + p * 0.5;
+      ctx.save();
+      ctx.translate(rock.x, rock.y - 18 - p * 12);
+      ctx.rotate(-Math.PI / 2);
+      ctx.shadowColor = "rgba(214,255,190,0.95)";
+      ctx.shadowBlur = 14 + p * 22;
+      ctx.globalAlpha = clamp(glow, 0, 1);
+      drawMeleeWeapon("timesword");
+      ctx.restore();
+      // 進み具合のリング
+      if (rock.progress > 0) {
+        ctx.strokeStyle = "rgba(226,255,196,0.9)"; ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(rock.x, rock.y + 6, SWORD_ROCK_R + 16, -Math.PI / 2, -Math.PI / 2 + p * Math.PI * 2);
+        ctx.stroke();
+      }
+    } else {
+      // 抜けたあとの割れ目
+      ctx.strokeStyle = "rgba(20,24,20,0.8)"; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(rock.x - 3, rock.y - 20); ctx.lineTo(rock.x + 2, rock.y + 2); ctx.stroke();
+    }
+  }
+
+  // 時の剣の持ち主のまわりに広がる、弾が遅くなる領域
+  function drawTimeField() {
+    const holder = swordHolder();
+    if (!holder) return;
+    const t = now();
+    const pulse = 0.5 + 0.5 * Math.sin(t / 700);
+    ctx.save();
+    ctx.strokeStyle = `rgba(198,246,176,${0.16 + pulse * 0.12})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(holder.x, holder.y, TIME_FIELD_R, 0, 6.283); ctx.stroke();
+    ctx.fillStyle = `rgba(150,220,150,${0.05 + pulse * 0.03})`;
+    ctx.beginPath(); ctx.arc(holder.x, holder.y, TIME_FIELD_R, 0, 6.283); ctx.fill();
+    // 内側にゆっくり回る目盛り
+    ctx.strokeStyle = `rgba(214,255,196,${0.2 + pulse * 0.1})`;
+    ctx.lineWidth = 1.4;
+    for (let i = 0; i < 12; i++) {
+      const a = t / 3600 + i * Math.PI / 6;
+      const r0 = TIME_FIELD_R - 16, r1 = TIME_FIELD_R - 4;
+      ctx.beginPath();
+      ctx.moveTo(holder.x + Math.cos(a) * r0, holder.y + Math.sin(a) * r0);
+      ctx.lineTo(holder.x + Math.cos(a) * r1, holder.y + Math.sin(a) * r1);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // 魔物。硬い森の主。時の剣なら一撃で倒せる。
+  function drawBeast(beast) {
+    const swing = Math.sin(beast.limbPhase) * 4;
+    ctx.save();
+    ctx.translate(beast.x, beast.y);
+    ctx.fillStyle = "rgba(0,0,0,0.32)";
+    ctx.beginPath(); ctx.ellipse(3, 7, BEAST_R * 0.95, BEAST_R * 0.5, 0, 0, 6.283); ctx.fill();
+    ctx.rotate(beast.angle);
+    // 四肢
+    ctx.strokeStyle = "#2c2418"; ctx.lineWidth = 5; ctx.lineCap = "round";
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(-4, side * 8);
+      ctx.lineTo(10, side * (14 + swing * side * 0.6));
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-12, side * 8);
+      ctx.lineTo(-20, side * (15 - swing * side * 0.6));
+      ctx.stroke();
+    }
+    // 胴。苔むした岩のような背中。
+    ctx.fillStyle = "#3d4a33";
+    ctx.beginPath(); ctx.ellipse(-2, 0, BEAST_R, BEAST_R * 0.82, 0, 0, 6.283); ctx.fill();
+    ctx.fillStyle = "#556b45";
+    ctx.beginPath(); ctx.ellipse(-6, -4, BEAST_R * 0.6, BEAST_R * 0.45, -0.3, 0, 6.283); ctx.fill();
+    // 背中の棘
+    ctx.fillStyle = "#232a1d";
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath();
+      ctx.moveTo(-4 + i * 8, -BEAST_R * 0.7);
+      ctx.lineTo(-1 + i * 8, -BEAST_R * 1.15);
+      ctx.lineTo(2 + i * 8, -BEAST_R * 0.7);
+      ctx.closePath(); ctx.fill();
+    }
+    // 頭と光る眼
+    ctx.fillStyle = "#2f3a28";
+    ctx.beginPath(); ctx.ellipse(BEAST_R * 0.72, 0, 9, 8, 0, 0, 6.283); ctx.fill();
+    ctx.fillStyle = "#ffd05a";
+    ctx.beginPath(); ctx.arc(BEAST_R * 0.9, -4, 2.6, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.arc(BEAST_R * 0.9, 4, 2.6, 0, 6.283); ctx.fill();
+    if (beast.hitFlash > 0) {
+      ctx.fillStyle = `rgba(255,255,255,${beast.hitFlash * 0.55})`;
+      ctx.beginPath(); ctx.ellipse(-2, 0, BEAST_R + 2, BEAST_R * 0.9, 0, 0, 6.283); ctx.fill();
+    }
+    ctx.restore();
+    // 体力バー
+    const bw = 46, ratio = clamp(beast.hp / beast.maxHp, 0, 1);
+    const by = beast.y - BEAST_R - 14;
+    ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(beast.x - bw / 2 - 1, by, bw + 2, 6);
+    ctx.fillStyle = "#c56a3a"; ctx.fillRect(beast.x - bw / 2, by + 1, bw * ratio, 4);
+  }
+
+  // パラシュート。兵士より手前・輸送機より奥に描く。
+  function drawParachutes() {
+    for (const s of G.soldiers) {
+      if (s.dead || s.vehicleId >= 0 || !isDropping(s) || !isEntityVisible(s)) continue;
+      const alt = dropAltitude(s);
+      const def = teamDef(s.team);
+      const canopy = s.id === G.localId ? activeSkin().accent : def.flag;
+      const cx = s.x, cy = s.y - alt - 30;
+      // 傘の張り綱
+      ctx.strokeStyle = "rgba(240,240,230,0.75)"; ctx.lineWidth = 1.2;
+      for (const dx of [-20, -7, 7, 20]) {
+        ctx.beginPath(); ctx.moveTo(cx + dx, cy + 6); ctx.lineTo(s.x, s.y - alt - 4); ctx.stroke();
+      }
+      // 傘体。左右で明暗を分けて膨らみを出す。
+      ctx.fillStyle = canopy;
+      ctx.beginPath(); ctx.ellipse(cx, cy, 30, 17, 0, Math.PI, 0); ctx.fill();
+      ctx.fillStyle = "rgba(0,0,0,0.22)";
+      ctx.beginPath(); ctx.ellipse(cx + 9, cy, 21, 17, 0, Math.PI, 0); ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(cx, cy, 30, 17, 0, Math.PI, 0); ctx.stroke();
+    }
+  }
+
+  // 輸送機。開始直後に基地の上空を通り過ぎる。
+  function drawDropPlanes() {
+    if (!G.dropAt) return;
+    const age = now() - G.dropAt;
+    if (age > PLANE_MS) return;
+    const p = age / PLANE_MS;
+    const fade = clamp((1 - p) * 2.2, 0, 1);
+    for (const base of G.bases) {
+      if (base.hidden) continue;
+      const h = BASE_SPOTS[base.team].heading;
+      const travel = (p - 0.32) * 1600;
+      const px = base.x + Math.cos(h) * travel;
+      const py = base.y + Math.sin(h) * travel;
+      // 地面に落ちる影
+      ctx.fillStyle = `rgba(0,0,0,${0.16 * fade})`;
+      ctx.save();
+      ctx.translate(px, py); ctx.rotate(h);
+      ctx.beginPath(); ctx.ellipse(0, 0, 46, 13, 0, 0, 6.283); ctx.fill();
+      ctx.restore();
+      // 機体
+      ctx.save();
+      ctx.globalAlpha = fade;
+      ctx.translate(px, py - PLANE_ALT); ctx.rotate(h);
+      ctx.fillStyle = "#4b5252";
+      ctx.beginPath();
+      ctx.moveTo(46, 0); ctx.lineTo(14, -11); ctx.lineTo(-40, -9);
+      ctx.lineTo(-46, 0); ctx.lineTo(-40, 9); ctx.lineTo(14, 11);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#39403f";
+      ctx.fillRect(-10, -44, 16, 88);          // 主翼
+      ctx.fillRect(-40, -22, 10, 44);          // 尾翼
+      ctx.fillStyle = "#9fd4e8";
+      ctx.beginPath(); ctx.ellipse(32, 0, 8, 6, 0, 0, 6.283); ctx.fill();
+      ctx.fillStyle = "#2a2f2e";
+      ctx.beginPath(); ctx.arc(-2, -30, 5, 0, 6.283); ctx.fill();
+      ctx.beginPath(); ctx.arc(-2, 30, 5, 0, 6.283); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // ---- スキンごとの体つき ----
+  // 原点は兵士の中心、+X が照準の向き。style を持つスキンは輪郭から作り替える。
+
+  function drawSkinLegs(style, skin, c, legSwing) {
+    if (style === "hologram") {
+      // 脚は無く、投影機のように光の裾が広がる
+      ctx.fillStyle = "rgba(140,233,255,0.22)";
+      ctx.beginPath();
+      ctx.moveTo(-3, -7); ctx.lineTo(-3, 7);
+      ctx.lineTo(-16, 13); ctx.lineTo(-16, -13);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "rgba(160,240,255,0.5)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.ellipse(-15, 0, 4, 13, 0, 0, 6.283); ctx.stroke();
+      return;
+    }
+    if (style === "mech") {
+      // 太い脚部とつま先の装甲
+      ctx.fillStyle = "#5b6068";
+      ctx.fillRect(-7, -13 - legSwing * 0.3, 13, 8);
+      ctx.fillRect(-7, 5 + legSwing * 0.3, 13, 8);
+      ctx.fillStyle = "#8f979f";
+      ctx.fillRect(3, -13 - legSwing * 0.3, 4, 8);
+      ctx.fillRect(3, 5 + legSwing * 0.3, 4, 8);
+      return;
+    }
+    if (style === "voxel") {
+      // 脚もブロック
+      ctx.fillStyle = "#2b1f4a";
+      ctx.fillRect(-6, -12 - legSwing * 0.3, 6, 6);
+      ctx.fillRect(-6, 6 + legSwing * 0.3, 6, 6);
+      ctx.fillStyle = "#4a3780";
+      ctx.fillRect(0, -12 - legSwing * 0.3, 6, 6);
+      ctx.fillRect(0, 6 + legSwing * 0.3, 6, 6);
+      return;
+    }
+    if (style === "neon") {
+      // 細い発光バー
+      ctx.fillStyle = skin.accent;
+      ctx.fillRect(-5, -12 - legSwing * 0.3, 11, 3);
+      ctx.fillRect(-5, 9 + legSwing * 0.3, 11, 3);
+      return;
+    }
+    ctx.fillStyle = "#2a2a22";
+    ctx.fillRect(-4, -10 - legSwing * 0.3, 9, 6);
+    ctx.fillRect(-4, 4 + legSwing * 0.3, 9, 6);
+  }
+
+  function drawSkinTorso(style, skin, s, c, back) {
+    const t = now();
+    if (style === "hologram") {
+      // 実体を持たない六角形のワイヤーフレーム。走査線が下から上へ流れる。
+      const pts = [[10, -7], [3, -14], [-9, -12], [-12, 0], [-9, 12], [3, 14], [10, 7]];
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0] - back, pts[0][1]);
+      for (const p of pts) ctx.lineTo(p[0] - back, p[1]);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(90,190,225,0.35)"; ctx.fill();
+      ctx.strokeStyle = "rgba(180,248,255,0.95)"; ctx.lineWidth = 1.7; ctx.stroke();
+      ctx.save();
+      ctx.clip();
+      ctx.strokeStyle = "rgba(200,250,255,0.55)"; ctx.lineWidth = 1;
+      for (let i = 0; i < 5; i++) {
+        const y = ((t / 900 + i * 0.2) % 1) * 30 - 15;
+        ctx.beginPath(); ctx.moveTo(-16 - back, y); ctx.lineTo(12 - back, y); ctx.stroke();
+      }
+      ctx.restore();
+      // ときどき像がずれるグリッチ
+      if (Math.floor(t / 140) % 17 === 0) {
+        ctx.fillStyle = "rgba(200,250,255,0.35)";
+        ctx.fillRect(-14 - back, -4, 26, 5);
+      }
+      return;
+    }
+    if (style === "neon") {
+      // 角ばった装甲。輪郭とコアだけが強く光る。
+      const pts = [[12, -6], [5, -14], [-10, -11], [-13, 0], [-10, 11], [5, 14], [12, 6]];
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0] - back, pts[0][1]);
+      for (const p of pts) ctx.lineTo(p[0] - back, p[1]);
+      ctx.closePath();
+      ctx.fillStyle = c.u; ctx.fill();
+      ctx.strokeStyle = skin.accent; ctx.lineWidth = 2; ctx.stroke();
+      ctx.strokeStyle = "#4ff0ff"; ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.moveTo(-11 - back, -6); ctx.lineTo(9 - back, -6); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-11 - back, 6); ctx.lineTo(9 - back, 6); ctx.stroke();
+      const pulse = 0.55 + 0.45 * Math.sin(t / 260);
+      ctx.fillStyle = `rgba(255,120,230,${pulse})`;
+      ctx.beginPath(); ctx.arc(-2 - back, 0, 4, 0, 6.283); ctx.fill();
+      return;
+    }
+    if (style === "mech") {
+      // 箱型のシャーシに肩アーマーを載せた重機械
+      ctx.fillStyle = "#727a83";
+      ctx.fillRect(-12 - back, -12, 23, 24);
+      ctx.fillStyle = "#a7b1ba";
+      ctx.fillRect(-12 - back, -12, 23, 5);
+      ctx.fillStyle = "#4e555c";
+      ctx.fillRect(-12 - back, 7, 23, 5);
+      // 肩アーマー
+      ctx.fillStyle = "#8d959d";
+      ctx.fillRect(-6 - back, -18, 12, 7);
+      ctx.fillRect(-6 - back, 11, 12, 7);
+      ctx.strokeStyle = "#3c4248"; ctx.lineWidth = 1.4;
+      ctx.strokeRect(-12 - back, -12, 23, 24);
+      // 胸部ハッチと動力炉の光
+      ctx.fillStyle = "#333a40";
+      ctx.fillRect(-3 - back, -6, 10, 12);
+      ctx.fillStyle = "#9ce6ff";
+      ctx.fillRect(-1 - back, -4, 6, 8);
+      return;
+    }
+    if (style === "voxel") {
+      // 3×3のブロックで胴を組む。色を市松に散らして粗いドット感を出す。
+      const shades = ["#4a3780", "#5c46a0", "#3b2a63"];
+      for (let ix = 0; ix < 3; ix++) {
+        for (let iy = 0; iy < 3; iy++) {
+          ctx.fillStyle = shades[(ix + iy) % 3];
+          ctx.fillRect(-13 - back + ix * 9, -13 + iy * 9, 9, 9);
+        }
+      }
+      ctx.fillStyle = skin.accent;
+      ctx.fillRect(-4 - back, -4, 9, 9);
+      ctx.strokeStyle = "rgba(215,200,255,0.7)"; ctx.lineWidth = 1;
+      ctx.strokeRect(-13 - back, -13, 27, 27);
+      return;
+    }
+    // 標準・迷彩系: 従来のシルエットに、スキンごとの模様を足す
+    ctx.fillStyle = c.u;
+    ctx.beginPath();
+    ctx.ellipse(-back, 0, SOLDIER_R - 1, SOLDIER_R + 1, 0, 0, 6.283);
+    ctx.fill();
+    if (style === "camo") {
+      // 迷彩の斑。位置は固定なので毎フレーム同じ模様になる。
+      ctx.save();
+      ctx.beginPath();
+      ctx.ellipse(-back, 0, SOLDIER_R - 1, SOLDIER_R + 1, 0, 0, 6.283);
+      ctx.clip();
+      ctx.fillStyle = skin.accent;
+      const blobs = [[-7, -8, 7, 5], [2, -3, 6, 4], [-5, 5, 8, 6], [5, 8, 5, 4]];
+      for (const b of blobs) {
+        ctx.beginPath();
+        ctx.ellipse(b[0] - back, b[1], b[2] / 2, b[3] / 2, 0.5, 0, 6.283);
+        ctx.fill();
+      }
+      ctx.restore();
+    } else if (style === "plated") {
+      // 尖った胸甲と肩当て
+      ctx.fillStyle = skin.accent;
+      ctx.beginPath();
+      ctx.moveTo(11 - back, 0); ctx.lineTo(1 - back, -11); ctx.lineTo(-7 - back, -6);
+      ctx.lineTo(-7 - back, 6); ctx.lineTo(1 - back, 11);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "rgba(0,0,0,0.35)";
+      ctx.fillRect(-9 - back, -16, 8, 6);
+      ctx.fillRect(-9 - back, 10, 8, 6);
+    }
+    ctx.fillStyle = "rgba(0,0,0,0.18)";
+    ctx.fillRect(-back - 2, -SOLDIER_R, 4, SOLDIER_R * 2);
+  }
+
+  function drawSkinHead(style, skin, c) {
+    if (style === "hologram") {
+      // 頭は菱形のワイヤーフレーム
+      ctx.beginPath();
+      ctx.moveTo(8, 0); ctx.lineTo(0, -7); ctx.lineTo(-8, 0); ctx.lineTo(0, 7);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(120,215,245,0.5)"; ctx.fill();
+      ctx.strokeStyle = "rgba(200,250,255,0.95)"; ctx.lineWidth = 1.5; ctx.stroke();
+      return;
+    }
+    if (style === "neon") {
+      ctx.beginPath();
+      ctx.moveTo(8, -4); ctx.lineTo(2, -8); ctx.lineTo(-7, -5);
+      ctx.lineTo(-7, 5); ctx.lineTo(2, 8); ctx.lineTo(8, 4);
+      ctx.closePath();
+      ctx.fillStyle = "#0e0e1c"; ctx.fill();
+      ctx.strokeStyle = skin.accent; ctx.lineWidth = 1.6; ctx.stroke();
+      ctx.fillStyle = "#4ff0ff";
+      ctx.fillRect(2, -4, 5, 8);
+      return;
+    }
+    if (style === "mech") {
+      // 箱の頭に一文字のバイザー
+      ctx.fillStyle = "#b6bec6";
+      ctx.fillRect(-7, -7, 15, 14);
+      ctx.fillStyle = "#7d858d";
+      ctx.fillRect(-7, -7, 15, 4);
+      ctx.strokeStyle = "#3c4248"; ctx.lineWidth = 1.2;
+      ctx.strokeRect(-7, -7, 15, 14);
+      ctx.fillStyle = "#151b21";
+      ctx.fillRect(2, -5, 6, 10);
+      ctx.fillStyle = "#9ce6ff";
+      ctx.fillRect(3.4, -3.6, 3, 7.2);
+      return;
+    }
+    if (style === "voxel") {
+      ctx.fillStyle = skin.accent;
+      ctx.fillRect(-7, -7, 14, 14);
+      ctx.fillStyle = "rgba(255,255,255,0.28)";
+      ctx.fillRect(-7, -7, 14, 5);
+      ctx.fillStyle = "#1c1430";
+      ctx.fillRect(1, -4, 6, 3);
+      ctx.fillRect(1, 1, 6, 3);
+      return;
+    }
+    ctx.fillStyle = c.a;
+    ctx.beginPath(); ctx.arc(0, 0, 8.5, 0, 6.283); ctx.fill();
+    ctx.fillStyle = "rgba(0,0,0,0.18)";
+    ctx.beginPath(); ctx.arc(2, 0, 8.5, -0.9, 0.9); ctx.fill();
+  }
+
   function drawBullets() {
     ctx.lineCap = "round";
     for (const b of G.bullets) {
@@ -3647,13 +4981,18 @@
       }
       const m = Math.hypot(b.vx, b.vy) || 1;
       const ux = b.vx / m, uy = b.vy / m;
-      const len = b.len;
-      ctx.strokeStyle = b.col;
-      ctx.lineWidth = 2.4;
+      // 時が遅くなっている弾は、尾を縮めて緑がかった残光をまとう
+      const len = b.slowed ? b.len * 0.35 : b.len;
+      ctx.strokeStyle = b.slowed ? "#cdf3a8" : b.col;
+      ctx.lineWidth = b.slowed ? 3.2 : 2.4;
       ctx.beginPath();
       ctx.moveTo(b.x, b.y);
       ctx.lineTo(b.x - ux * len, b.y - uy * len);
       ctx.stroke();
+      if (b.slowed) {
+        ctx.fillStyle = "rgba(205,243,168,0.28)";
+        ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, 6.283); ctx.fill();
+      }
     }
   }
 
@@ -3758,15 +5097,63 @@
       if (p.kind === "casing") {
         ctx.fillStyle = "#d8b24a";
         ctx.fillRect(p.x - 1, p.y - 1, 2.4, 2.4);
+      } else if (p.kind === "warpRing") {
+        // 足元から広がる転送リング。a は輪ごとの時間差。
+        const prog = clamp(1 - p.life / p.maxLife - p.a, 0, 1);
+        if (prog <= 0) continue;
+        ctx.strokeStyle = `rgba(${WARP_RGB},${(1 - prog) * 0.9})`;
+        ctx.lineWidth = 3 * (1 - prog) + 1;
+        ctx.beginPath();
+        ctx.ellipse(p.x, p.y, p.size + prog * 58, (p.size + prog * 58) * 0.42, 0, 0, 6.283);
+        ctx.stroke();
       }
+    }
+  }
+
+  // 的が上へ転送されて消える演出。柱・盤面・光の粒の3層で描く。
+  function drawWarpParticle(p) {
+    const prog = clamp(1 - p.life / p.maxLife, 0, 1);
+    if (p.kind === "warpBeam") {
+      // 上へ伸びる光の柱。終わりぎわに細くすぼまって消える。
+      const fade = 1 - prog;
+      const halfW = p.size * (prog < 0.25 ? prog / 0.25 : Math.max(0.12, 1 - (prog - 0.25) * 1.15));
+      const grad = ctx.createLinearGradient(p.x, p.y, p.x, p.y - WARP_RISE - 60);
+      grad.addColorStop(0, `rgba(${WARP_CORE_RGB},${0.85 * fade})`);
+      grad.addColorStop(0.55, `rgba(${WARP_RGB},${0.4 * fade})`);
+      grad.addColorStop(1, `rgba(${WARP_RGB},0)`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(p.x - halfW, p.y - WARP_RISE - 60, halfW * 2, WARP_RISE + 60);
+      // 走査線
+      ctx.strokeStyle = `rgba(${WARP_CORE_RGB},${0.6 * fade})`;
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 4; i++) {
+        const y = p.y - ((prog * 1.6 + i * 0.25) % 1) * (WARP_RISE + 40);
+        ctx.beginPath(); ctx.moveTo(p.x - halfW, y); ctx.lineTo(p.x + halfW, y); ctx.stroke();
+      }
+    } else if (p.kind === "warpDisc") {
+      // 盤面そのものが吸い上げられていく
+      const ease = prog * prog;
+      ctx.save();
+      ctx.translate(p.x, p.y - ease * WARP_RISE);
+      ctx.scale(1, Math.max(0.06, 1 - prog * 0.95));
+      drawDummyFace(p.size, Math.max(0, 1 - prog * 1.25));
+      ctx.restore();
+    } else if (p.kind === "warpMote") {
+      // a は粒ごとの上昇速度
+      ctx.fillStyle = `rgba(${WARP_CORE_RGB},${(1 - prog) * 0.95})`;
+      const y = p.y - prog * p.a;
+      ctx.fillRect(p.x - p.size / 2, y - p.size / 2, p.size, p.size * 2.2);
     }
   }
 
   function drawParticlesOver() {
     for (const p of G.particles) {
       const lr = clamp(p.life / p.maxLife, 0, 1);
-      if (p.kind === "blood") {
-        ctx.fillStyle = `rgba(150,15,15,${lr})`;
+      if (WARP_KINDS[p.kind]) {
+        drawWarpParticle(p);
+      } else if (p.kind === "blood") {
+        // 白と灰色だけのステージでは血の色を使わず、砕けた破片として描く
+        ctx.fillStyle = isMonochrome() ? `rgba(238,238,238,${lr})` : `rgba(150,15,15,${lr})`;
         ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, 6.283); ctx.fill();
       } else if (p.kind === "spark") {
         ctx.fillStyle = `rgba(255,${180 + Math.random() * 60 | 0},80,${lr})`;
@@ -3875,6 +5262,7 @@
 
   function drawVisionMask(vw, vh) {
     if (spectating) return;        // 観戦中は視界制限なし
+    if (fullVisionNow()) return;   // 朝は戦場全体が見える
     const me = localSoldier();
     if (!me) return;
     const px = me.x - camX, py = me.y - camY;
@@ -3914,22 +5302,25 @@
     for (const s of G.soldiers) {
       if (s.dead || s.vehicleId >= 0 || !isEntityVisible(s)) continue;
       const def = teamDef(s.team);
-      const tx = s.x, ty = s.y - SOLDIER_R - 16;
+      // 降下中は本体が上にずれているので、名札も持ち上げる(傘に重ならない高さへ)
+      const alt = dropAltitude(s);
+      const tx = s.x, ty = s.y - alt - (alt > 0 ? 58 : SOLDIER_R + 16);
       // HPバー: 味方は緑、それ以外はその軍の色
       const bw = 38, bh = 4;
       const ratio = clamp(s.hp / s.maxHp, 0, 1);
       ctx.fillStyle = "rgba(0,0,0,0.55)";
       ctx.fillRect(tx - bw / 2 - 1, ty + 3, bw + 2, bh + 2);
-      ctx.fillStyle = s.team === mine ? "#46d36a" : def.flag;
+      ctx.fillStyle = s.dummy ? "#d9c98f" : s.team === mine ? "#46d36a" : def.flag;
       ctx.fillRect(tx - bw / 2, ty + 4, bw * ratio, bh);
       // 名前 + Lv (味方には◆を付けて見分けやすく)
       ctx.font = "bold 12px -apple-system, sans-serif";
       const mark = s.id === G.localId ? "▼ " : s.team === mine ? "◆ " : "";
       const cls = classDef(s.classKey);
-      const label = mark + (cls.key === "soldier" ? "" : cls.icon + " ") + s.name + " Lv" + s.level;
+      const label = s.dummy ? s.name
+        : mark + (cls.key === "soldier" ? "" : cls.icon + " ") + s.name + " Lv" + s.level;
       ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.8)";
       ctx.strokeText(label, tx, ty);
-      ctx.fillStyle = s.id === G.localId ? YOU_ACCENT : def.text;
+      ctx.fillStyle = s.dummy ? "#e6dcbb" : s.id === G.localId ? YOU_ACCENT : def.text;
       ctx.fillText(label, tx, ty);
     }
     for (const dog of G.dogs) {
@@ -3966,6 +5357,7 @@
     mctx.fillRect(0, 0, mw, mh);
     const sx = mw / WORLD_W, sy = mh / WORLD_H;
     for (const base of G.bases) {
+      if (base.hidden) continue;
       const def = teamDef(base.team);
       mctx.strokeStyle = hexToRgba(def.flag, base.hp > 0 ? 0.85 : 0.3);
       mctx.lineWidth = 1.5; mctx.strokeRect(base.x * sx - 5, base.y * sy - 5, 10, 10);
@@ -3995,7 +5387,7 @@
     // 兵士
     for (const s of G.soldiers) {
       if (s.dead || s.vehicleId >= 0 || !isEntityVisible(s)) continue;
-      mctx.fillStyle = s.id === G.localId ? YOU_ACCENT : teamDef(s.team).flag;
+      mctx.fillStyle = s.id === G.localId ? YOU_ACCENT : s.dummy ? "#d9c98f" : teamDef(s.team).flag;
       const r = s.id === G.localId ? 3 : 2;
       mctx.beginPath(); mctx.arc(s.x * sx, s.y * sy, r, 0, 6.283); mctx.fill();
     }
@@ -4008,6 +5400,18 @@
       if (tank.dead || !isEntityVisible(tank)) continue;
       mctx.fillStyle = tank.driverId === G.localId ? YOU_ACCENT : teamDef(tank.team).tankBar;
       mctx.fillRect(tank.x * sx - 3, tank.y * sy - 3, 6, 6);
+    }
+    for (const beast of G.beasts) {
+      if (beast.dead) continue;
+      mctx.fillStyle = "rgba(197,106,58,0.9)";
+      mctx.beginPath(); mctx.arc(beast.x * sx, beast.y * sy, 2.4, 0, Math.PI * 2); mctx.fill();
+    }
+    if (G.swordRock && !G.swordRock.pulled) {
+      // 剣のある岩は、どこからでも分かるように印を出す
+      mctx.strokeStyle = "#e2ffc4"; mctx.lineWidth = 1.5;
+      const rx = G.swordRock.x * sx, ry = G.swordRock.y * sy;
+      mctx.beginPath(); mctx.moveTo(rx, ry - 5); mctx.lineTo(rx, ry + 5); mctx.stroke();
+      mctx.beginPath(); mctx.moveTo(rx - 4, ry - 1); mctx.lineTo(rx + 4, ry - 1); mctx.stroke();
     }
     const cr = G.creature;
     if (cr && (spectating || cr.hunting)) {
@@ -4063,6 +5467,10 @@
     for (const team of TEAMS) {
       const c = teamCards[team];
       const base = G.bases[team];
+      // 練習場には他の軍がいないのでカードごと隠す
+      const absent = !!(base && base.hidden);
+      c.card.classList.toggle("hidden", absent);
+      if (absent) continue;
       const fallen = !base || base.hp <= 0;
       // 既定名のままなら短縮名を出す(狭いHUDで省略されないように)
       const def = teamDef(team);
@@ -4165,7 +5573,14 @@
       }
 
       let hint = "";
-      if (!me.dead && tank) hint = isTouch ? "「戦車」で降りる" : "E：戦車から降りる";
+      const rock = G.swordRock;
+      if (!me.dead && rock && !rock.pulled && me.vehicleId < 0 && me.turretId < 0 &&
+          dist2(me.x, me.y, rock.x, rock.y) < (SWORD_ROCK_R + SWORD_REACH) ** 2) {
+        const left = Math.max(0, (SWORD_PULL_MS - rock.progress) / 1000);
+        hint = rock.progress > 0
+          ? `剣を抜いている… あと ${left.toFixed(1)} 秒`
+          : (isTouch ? "「戦車」を押し続けて剣を抜く" : "E を押し続けて剣を抜く");
+      } else if (!me.dead && tank) hint = isTouch ? "「戦車」で降りる" : "E：戦車から降りる";
       else if (!me.dead && me.turretId >= 0) hint = isTouch ? "「戦車」で銃座から離れる" : "E：銃座から離れる";
       else if (!me.dead) {
         const nearby = G.tanks.some((x) => !x.dead && x.team === me.team && x.driverId < 0 && dist2(me.x, me.y, x.x, x.y) < 78 ** 2);
@@ -4207,6 +5622,230 @@
     el.levelup.style.animation = "";
     clearTimeout(showLevelup._t);
     showLevelup._t = setTimeout(() => el.levelup.classList.add("hidden"), 1400);
+  }
+
+  // ============================================================
+  //  チュートリアル (練習場)
+  //  1項目ずつ案内し、実際にその操作をしたら次へ進む。
+  //  判定は毎フレームの状態監視だけで行い、戦闘処理には手を入れない。
+  // ============================================================
+  const TRAINING_STEPS = [
+    {
+      key: "move", label: "歩いて動いてみる",
+      hint: "W A S D キーで前後左右に動きます。",
+      hintTouch: "画面左下のスティックを指で倒すと動きます。",
+      reset: (c) => { c.movedFor = 0; },
+      done: (c) => c.movedFor > 0.8,
+    },
+    {
+      key: "aim", label: "向きを変える",
+      hint: "マウスを動かすと、その方向を向きます。",
+      hintTouch: "画面右下のスティックを倒した方向を向きます。",
+      reset: (c) => { c.turned = 0; },
+      done: (c) => c.turned > 1.8,
+    },
+    {
+      key: "attack", label: "マップ中央の的まで行って攻撃する",
+      hint: "的は右上のミニマップの真ん中に集まっています。マウスの左ボタンを押している間、撃ち続けます。",
+      hintTouch: "的は右上のミニマップの真ん中に集まっています。右下のスティックを倒している間、自動で撃ちます。",
+      reset: (c) => { c.attacked = false; },
+      done: (c) => c.attacked,
+    },
+    {
+      key: "hit", label: "的に当てる",
+      hint: "遠いと当たりません。近づいてから撃つと当てやすいです。",
+      reset: (c) => { c.hitTarget = false; },
+      done: (c) => c.hitTarget,
+    },
+    {
+      key: "kill", label: "的を1つ壊す",
+      hint: "壊れた的は数秒で立て直ります。何度でも練習できます。",
+      reset: (c, me) => { c.killsAtStart = me.kills; },
+      done: (c, me) => me.kills > c.killsAtStart,
+    },
+    {
+      key: "reload", label: "弾を入れかえる（リロード）",
+      hint: "R キーでリロードします。撃ち切ったときも自動で始まります。",
+      hintTouch: "右下の「リロード」ボタンを押します。",
+      applies: (me) => me.loadout.some((i) => !WEAPONS[i].melee),
+      reset: (c) => { c.reloaded = false; },
+      done: (c) => c.reloaded,
+    },
+    {
+      key: "swap", label: "武器を持ちかえる",
+      hint: "1〜3 キー、またはマウスホイールで切り替えます。",
+      hintTouch: "右下の「武器」ボタンで切り替えます。",
+      applies: (me) => me.loadout.length > 1,
+      reset: (c) => { c.swapped = false; },
+      done: (c) => c.swapped,
+    },
+    {
+      key: "dash", label: "ダッシュで走る",
+      hint: "Shift を押しながら動くと速く走れます。そのぶん足音は大きくなります。",
+      hintTouch: "スティックをいっぱいまで倒すと走ります。足音は大きくなります。",
+      reset: (c) => { c.dashedFor = 0; },
+      done: (c) => c.dashedFor > 0.5,
+    },
+    {
+      key: "grenade", label: "グレネードを投げる",
+      hint: "G キーで、向いている方向へ投げます。自分も巻きこまれるので離れて投げましょう。",
+      hintTouch: "「💣 投げる」ボタンで投げます。自分も巻きこまれるので離れて投げましょう。",
+      applies: (me) => (me.maxGrenades || 0) > 0,
+      reset: (c) => { c.threwGrenade = false; },
+      done: (c) => c.threwGrenade,
+    },
+    {
+      key: "mine", label: "地雷を置く",
+      hint: "F キーで足元に置きます。約1秒後に作動するので、置いたらすぐ離れましょう。",
+      hintTouch: "「🧨 地雷」ボタンで足元に置きます。置いたらすぐ離れましょう。",
+      applies: (me) => (me.maxMines || 0) > 0,
+      reset: (c) => { c.placedMine = false; },
+      done: (c) => c.placedMine,
+    },
+    {
+      key: "wire", label: "有刺鉄線を張る",
+      hint: "C キーで張ります。踏んだ敵の足が止まり、じわじわ体力が減ります。",
+      hintTouch: "「🪤 鉄線」ボタンで張ります。踏んだ敵の足が止まります。",
+      applies: (me) => (me.maxWires || 0) > 0,
+      reset: (c) => { c.placedWire = false; },
+      done: (c) => c.placedWire,
+    },
+    {
+      key: "shield", label: "盾を構える",
+      hint: "Q を押すとパリィ、押しっぱなしで防御します。",
+      hintTouch: "「🛡 盾」を押すとパリィ、押しっぱなしで防御します。",
+      reset: (c) => { c.usedShield = false; },
+      done: (c) => c.usedShield,
+    },
+    {
+      key: "turret", label: "機関銃座に取り付く",
+      hint: "射撃場のまわりに3つあります。近づいて E キーです。",
+      hintTouch: "射撃場のまわりに3つあります。近づいて「戦車」ボタンです。",
+      done: (c, me) => me.turretId >= 0,
+    },
+    {
+      key: "tank", label: "戦車に乗る",
+      hint: "自分の基地のそばにあります。近づいて E キーです。",
+      hintTouch: "自分の基地のそばにあります。近づいて「戦車」ボタンです。",
+      done: (c, me) => me.vehicleId >= 0,
+    },
+    {
+      key: "base", label: "自分の基地に戻る",
+      hint: "基地の円の中に入ると、体力・弾薬・グレネードが回復します。",
+      done: (c, me) => inFriendlyBase(me),
+    },
+  ];
+
+  let training = null;
+
+  // 試合の開始時に、実績の集計と練習メニューをまとめて初期化する
+  function beginMatchTracking() {
+    runStats = emptyRunStats();
+    resetTraining();
+  }
+
+  function resetTraining() {
+    training = isTraining() ? {
+      idx: 0, armed: false, done: false, skip: false,
+      movedFor: 0, turned: 0, dashedFor: 0, killsAtStart: 0,
+      attacked: false, hitTarget: false, reloaded: false, swapped: false,
+      threwGrenade: false, placedMine: false, placedWire: false, usedShield: false,
+      lastAim: null, lastShot: null, lastWeapon: null,
+      lastGrenades: null, lastMines: null, lastWires: null, dummyHp: null,
+    } : null;
+    renderTrainingPanel();
+  }
+
+  // 兵科によって出番のない項目(侍のリロード等)は最初から数えない
+  function trainingApplicable(me) {
+    return TRAINING_STEPS.filter((step) => !step.applies || !me || step.applies(me));
+  }
+
+  function trackTrainingInput(me, dt, t) {
+    const c = training;
+    if (me.moving) c.movedFor += dt;
+    if (c.lastAim != null) {
+      c.turned += Math.abs(((me.aimAngle - c.lastAim + Math.PI) % (Math.PI * 2)) - Math.PI);
+    }
+    c.lastAim = me.aimAngle;
+    if (localInput.dash && me.moving) c.dashedFor += dt;
+    if (c.lastShot != null && me.lastShot !== c.lastShot) c.attacked = true;
+    c.lastShot = me.lastShot;
+    if (me.reloading) c.reloaded = true;
+    if (c.lastWeapon != null && me.weapon !== c.lastWeapon) c.swapped = true;
+    c.lastWeapon = me.weapon;
+    if (c.lastGrenades != null && me.grenades < c.lastGrenades) c.threwGrenade = true;
+    c.lastGrenades = me.grenades;
+    if (c.lastMines != null && me.mines < c.lastMines) c.placedMine = true;
+    c.lastMines = me.mines;
+    if (c.lastWires != null && me.wires < c.lastWires) c.placedWire = true;
+    c.lastWires = me.wires;
+    if (me.shieldRaised || (me.parryUntil > 0 && t <= me.parryUntil)) c.usedShield = true;
+    // 的の合計体力が減っていたら、どれかに当たったということ
+    let hp = 0;
+    for (const s of G.soldiers) if (s.dummy && !s.dead) hp += s.hp;
+    if (c.dummyHp != null && hp < c.dummyHp - 0.5) c.hitTarget = true;
+    c.dummyHp = hp;
+  }
+
+  function updateTraining(dt, t) {
+    if (!training || training.done) return;
+    const me = localSoldier();
+    if (!me || me.dead) return;
+    trackTrainingInput(me, dt, t);
+    // 上限を付けて回す(判定が一気に通っても1フレームで暴走させない)
+    for (let guard = 0; guard <= TRAINING_STEPS.length; guard++) {
+      const step = TRAINING_STEPS[training.idx];
+      if (!step) { finishTraining(); return; }
+      if (step.applies && !step.applies(me)) { training.idx++; training.armed = false; continue; }
+      // 案内を出したフレームでは判定しない(前の操作で即クリアさせないため)
+      if (!training.armed) {
+        training.armed = true;
+        if (step.reset) step.reset(training, me);
+        renderTrainingPanel();
+        return;
+      }
+      if (!training.skip && !step.done(training, me)) return;
+      training.skip = false;
+      training.idx++;
+      training.armed = false;
+      if (training.idx < TRAINING_STEPS.length) Audio.heal();
+    }
+  }
+
+  function finishTraining() {
+    if (!training || training.done) return;
+    training.done = true;
+    banner("練習メニュー修了！　このまま好きなだけ練習できます");
+    renderTrainingPanel();
+    if (runStats) runStats.trainedAll = true;
+    checkAchievements();
+  }
+
+  function renderTrainingPanel() {
+    if (!training || !isTraining()) { el.trainingPanel.classList.add("hidden"); return; }
+    el.trainingPanel.classList.remove("hidden");
+    const me = localSoldier();
+    const list = trainingApplicable(me);
+    const step = TRAINING_STEPS[training.idx] || null;
+    const cleared = training.done || !step ? list.length : Math.max(0, list.indexOf(step));
+    el.tpProgress.textContent = `${cleared} / ${list.length}`;
+    if (training.done || !step) {
+      el.tpSteps.innerHTML =
+        `<li class="tp-cur clear">🎖 ぜんぶクリア！</li>` +
+        `<li class="tp-hint">このまま自由に練習できます。メニューから本番のステージへどうぞ。</li>`;
+      el.tpSkip.classList.add("hidden");
+      return;
+    }
+    const rows = [
+      `<li class="tp-cur">▶ ${esc(step.label)}</li>`,
+      `<li class="tp-hint">${esc(isTouch && step.hintTouch ? step.hintTouch : step.hint)}</li>`,
+    ];
+    for (let i = cleared + 1; i < Math.min(cleared + 3, list.length); i++) {
+      rows.push(`<li class="tp-next">○ ${esc(list[i].label)}</li>`);
+    }
+    el.tpSteps.innerHTML = rows.join("");
+    el.tpSkip.classList.remove("hidden");
   }
 
   // ============================================================
@@ -4294,13 +5933,18 @@
     spawnTanks();
     spawnTurrets();
     spawnCreature();
+    spawnSwordRock();
+    spawnBeasts();
     spawnMedkits();
-    el.scoreGoal.textContent = "他3軍の基地をすべて破壊";
+    el.scoreGoal.textContent = isTraining() ? "練習メニューを順番にこなそう" : "他3軍の基地をすべて破壊";
     resize();
     hideOverlays();
+    beginMatchTracking();
+    beginDrop();
     G.running = true;
     G.over = false;
     Audio.startBgm(stageDef().bgm);
+    if (G.dropAt) banner("降下開始！　着地したら戦闘開始だ");
   }
 
   function endMatch(winnerTeam) {
@@ -4314,6 +5958,7 @@
   function showMatchResult(winnerTeam) {
     const me = localSoldier();
     const win = !!me && winnerTeam === me.team;
+    commitRun(win);
     let reward = 0;
     if (!G.rewardClaimed) {
       G.rewardClaimed = true;
@@ -4353,6 +5998,7 @@
     el.resultStats.innerHTML = table + `<div class="result-divider"></div>` + personal;
     renderShop();
     el.eliminated.classList.add("hidden");
+    el.trainingPanel.classList.add("hidden");
     Audio.stopBgm();
     el.touch.classList.add("hidden");
     el.result.classList.remove("hidden");
@@ -4380,7 +6026,7 @@
   // 自軍が全滅したら一度だけ「観戦する / やめる」を聞く。
   // 試合は止めない(オンラインでは他のプレイヤーが戦い続けているため)。
   function checkElimination() {
-    if (!G || G.over || eliminationPrompted || spectating) return;
+    if (!G || G.over || isTraining() || eliminationPrompted || spectating) return;
     const me = localSoldier();
     if (!me || !me.dead) return;
     const team = me.team;
@@ -4409,6 +6055,8 @@
     stickAim.x = 0; stickAim.y = 0; stickAim.active = false;
     document.querySelectorAll(".stick .knob").forEach((knob) => { knob.style.transform = "translate(0,0)"; });
     releaseTouchShield();
+    touchInteract = false;
+    localInput.interactHold = false;
     localInput.mvx = 0; localInput.mvy = 0; localInput.shoot = false; localInput.dash = false;
     localInput.reloadEdge = false; localInput.grenadeEdge = false; localInput.interactEdge = false; localInput.parryEdge = false; localInput.mineEdge = false; localInput.wireEdge = false;
     localInput.weaponWanted = -1; localInput.shield = false;
@@ -4425,10 +6073,12 @@
     };
 
     for (const s of G.soldiers) {
-      shift(s, ["respawnAt", "lastDamagedAt", "parryUntil", "parryCooldownUntil", "stunnedUntil", "reloadUntil", "lastShot", "lastGrenade", "lastMine", "lastBaseSupplyAt", "lastFootstepAt", "heardUntil", "muzzle"]);
+      shift(s, ["respawnAt", "lastDamagedAt", "parryUntil", "parryCooldownUntil", "stunnedUntil", "reloadUntil", "lastShot", "lastGrenade", "lastMine", "lastBaseSupplyAt", "lastFootstepAt", "heardUntil", "muzzle", "dropUntil", "sweepAt"]);
       shift(s.ai, ["think", "strafeUntil", "lastSeen", "lostAt", "fireUntil"]);
     }
+    if (G.dropAt) G.dropAt += delta;
     for (const dog of G.dogs) shift(dog, ["respawnAt", "lastAttack", "biteAt", "stunnedUntil"]);
+    for (const beast of G.beasts) shift(beast, ["respawnAt", "lastAttack", "roamUntil"]);
     if (G.creature) shift(G.creature, ["lastHeardAt", "roamUntil", "lastRoarAt", "lungeAt"]);
     for (const turret of G.turrets) shift(turret, ["respawnAt", "lastShot", "muzzle"]);
     for (const tank of G.tanks) {
@@ -4578,6 +6228,8 @@
       spawnTanks();
       spawnTurrets();
       spawnCreature();
+      spawnSwordRock();
+      spawnBeasts();
       spawnMedkits();
       el.scoreGoal.textContent = "他3軍の基地をすべて破壊";
       resize();
@@ -4699,6 +6351,7 @@
         try { sendInit(c); } catch (e) {}
       }
       hideOverlays();
+      beginMatchTracking();
       G.running = true; G.over = false;
       Audio.startBgm(stageDef().bgm);
       showRoomBanner();
@@ -4819,6 +6472,7 @@
         el.scoreGoal.textContent = "他3軍の基地をすべて破壊";
         resize();
         hideOverlays();
+        beginMatchTracking();
         G.running = true; G.over = false;
         Audio.startBgm(stageDef().bgm);
         if (d.paused) applyNetworkPause(true);
@@ -5159,14 +6813,23 @@
         b.classList.toggle("on", b.dataset.stage === playerStage);
       });
     }
+    // 練習場は1人用なので、選んでいる間はオンライン対戦を伏せる
+    const onlineBtn = document.getElementById("btn-online");
+    function syncOnlineAvailability() {
+      const solo = stageIsTraining(playerStage);
+      onlineBtn.disabled = solo;
+      onlineBtn.textContent = solo ? "オンライン対戦（練習場では使えません）" : "オンライン対戦";
+    }
     el.stageSeg.addEventListener("click", (e) => {
       const b = e.target.closest && e.target.closest("[data-stage]");
       if (!b) return;
       playerStage = b.dataset.stage;
       localStorage.setItem("wz-stage", playerStage);
       syncStageButtons();
+      syncOnlineAvailability();
     });
     syncStageButtons();
+    syncOnlineAvailability();
 
     // キャラクター(兵科)
     const savedClass = localStorage.getItem("wz-class");
@@ -5187,6 +6850,28 @@
       syncClassButtons();
     });
     syncClassButtons();
+
+    // スキン(見た目だけ)
+    const savedSkin = localStorage.getItem("wz-skin");
+    playerSkin = SKIN_BY_KEY[savedSkin] ? savedSkin : "standard";
+    el.skinSeg.innerHTML = SKINS.map((sk) =>
+      `<button data-skin="${sk.key}" style="--skin:${sk.accent};--skin-body:${sk.uniform}">` +
+      `<span class="skin-chip"></span>` +
+      `<span class="skin-body"><span class="class-head">${sk.icon} ${esc(sk.name)}</span>` +
+      `<span class="class-desc">${esc(sk.desc)}</span></span></button>`).join("");
+    function syncSkinButtons() {
+      el.skinSeg.querySelectorAll("button").forEach((b) => {
+        b.classList.toggle("on", b.dataset.skin === playerSkin);
+      });
+    }
+    el.skinSeg.addEventListener("click", (e) => {
+      const b = e.target.closest && e.target.closest("[data-skin]");
+      if (!b) return;
+      playerSkin = b.dataset.skin;
+      localStorage.setItem("wz-skin", playerSkin);
+      syncSkinButtons();
+    });
+    syncSkinButtons();
 
     const savedArmy = localStorage.getItem("wz-army");
     if (savedArmy) el.armyInput.value = savedArmy;
@@ -5233,6 +6918,11 @@
     });
 
     // 操作方法 (対戦中に開いた場合はゲームを停止)
+    // 実績(メダル)
+    document.getElementById("btn-medals").addEventListener("click", openMedals);
+    document.getElementById("btn-medals-close").addEventListener("click", () => el.medals.classList.add("hidden"));
+    document.getElementById("btn-result-medals").addEventListener("click", openMedals);
+
     document.getElementById("btn-controls").addEventListener("click", () => openHelp("menu"));
     document.getElementById("btn-help").addEventListener("click", () => openHelp(isMatchActive() ? "game" : "menu"));
     document.getElementById("btn-help-close").addEventListener("click", closeHelp);
@@ -5253,6 +6943,8 @@
     document.getElementById("btn-tomenu").addEventListener("click", openMenu);
     document.getElementById("btn-spectate").addEventListener("click", startSpectating);
     document.getElementById("btn-give-up").addEventListener("click", openMenu);
+    // どうしてもできない項目は飛ばせるようにしておく
+    el.tpSkip.addEventListener("click", () => { if (training && !training.done) training.skip = true; });
     el.shopItems.addEventListener("click", (e) => {
       const button = e.target.closest && e.target.closest("[data-shop-buy]");
       if (button && !button.disabled) buyShopItem(button.dataset.shopBuy);
@@ -5260,7 +6952,8 @@
 
     window.addEventListener("keydown", (e) => {
       if (e.key !== "Escape" || e.repeat) return;
-      if (!el.help.classList.contains("hidden")) closeHelp();
+      if (!el.medals.classList.contains("hidden")) el.medals.classList.add("hidden");
+      else if (!el.help.classList.contains("hidden")) closeHelp();
       else if (!el.pause.classList.contains("hidden")) resumeMatch();
       else if (isMatchActive()) openPauseMenu();
       else return;
@@ -5279,6 +6972,8 @@
   }
 
   function openMenu() {
+    // 途中でやめた試合も、そこまでの戦果は実績に反映する
+    commitRun(false);
     if (G) { G.running = false; }
     Audio.stopBgm();
     matchPaused = false;
@@ -5297,6 +6992,8 @@
     el.menuMain.classList.remove("hidden");
     el.menu.classList.remove("hidden");
     el.vehicleHint.classList.add("hidden");
+    el.trainingPanel.classList.add("hidden");
+    el.medals.classList.add("hidden");
     const b = document.getElementById("net-banner"); if (b) b.style.display = "none";
   }
 
