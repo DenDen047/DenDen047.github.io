@@ -360,15 +360,18 @@ body.touch-ui .vehicle-hint { bottom: 226px; }
   position: absolute;
   inset: 0;
   display: flex;
-  align-items: center;
   justify-content: center;
   background: radial-gradient(circle at 50% 30%, rgba(40, 50, 24, 0.6), rgba(5, 6, 3, 0.92));
   z-index: 20;
   padding: 16px;
-  overflow: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .overlay.hidden { display: none; }
 .panel {
+  /* 中央寄せは auto margin で行う。align-items: center だと
+     パネルが画面より高いとき上端がスクロール範囲外に出て届かなくなる。 */
+  margin: auto;
   background: var(--panel);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 16px;
