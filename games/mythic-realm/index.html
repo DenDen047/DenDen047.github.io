@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>MYTHIC REALM 2D ― 神話の魔境</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- ===== ゲーム画面 ===== -->
+    <div id="stage-wrap">
+      <canvas id="game" width="960" height="600"></canvas>
+
+      <!-- HUD -->
+      <div id="hud">
+        <div class="hud-top">
+          <div class="objective"><span id="daytime" class="daytime">🌅 朝</span><b id="score-goal">魔界の門を破壊 → ボスを討伐</b></div>
+          <div id="team-board" class="team-board"></div>
+        </div>
+        <div class="hud-bottom">
+          <div class="vitals">
+            <div class="hp-row">
+              <span class="hp-bar"><span id="hp-fill" class="fill"></span></span>
+              <span id="hp-text" class="hp-text">100</span>
+            </div>
+            <div id="recovery-text" class="recovery-text">5秒間被弾なしで自動回復</div>
+            <div class="xp-row">
+              <span class="lv">Lv <b id="lv-text">1</b></span>
+              <span class="xp-bar"><span id="xp-fill" class="fill"></span></span>
+            </div>
+          </div>
+        </div>
+        <div class="weapon">
+          <span id="weapon-name" class="wname">長剣</span>
+          <span id="ammo-text" class="ammo">近接 / ∞</span>
+          <span id="bomb-text" class="bomb-count">🔥 2　🔮 1</span>
+          <div class="equipment-status">
+            <div class="equip-row armor"><span class="equip-label">鎧</span><span class="equip-bar"><span id="armor-fill"></span></span><b id="armor-text">100</b></div>
+            <div class="equip-row shield"><span class="equip-label">盾</span><span class="equip-bar"><span id="shield-fill"></span></span><b id="shield-text">160</b></div>
+            <span id="shield-state" class="shield-state">Qを攻撃直前に押してパリィ</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="vehicle-hint" class="vehicle-hint hidden"></div>
+
+      <!-- 訓練の間のチュートリアル -->
+      <div id="training-panel" class="training-panel hidden">
+        <div class="tp-head"><span class="tp-title">🎯 練習メニュー</span><span id="tp-progress" class="tp-progress">0 / 0</span></div>
+        <ul id="tp-steps" class="tp-steps"></ul>
+        <button id="tp-skip" class="tp-skip">この項目をとばす</button>
+      </div>
+
+      <!-- ミニマップ -->
+      <canvas id="minimap" width="160" height="106"></canvas>
+
+      <!-- 討伐ログ -->
+      <div id="killfeed"></div>
+
+      <!-- 上部ボタン -->
+      <div id="topbtns">
+        <button id="btn-help" class="ui-btn" aria-label="あそびかた">?</button>
+        <button id="btn-mute" class="ui-btn" aria-label="ミュート">🔊</button>
+        <button id="btn-menu" class="ui-btn" aria-label="メニュー">≡</button>
+      </div>
+
+      <!-- レベルアップ通知 -->
+      <div id="levelup" class="hidden"></div>
+
+      <!-- ===== タッチ操作 (スマホ) ===== -->
+      <div id="touch" class="hidden">
+        <div id="stick-move" class="stick"><div class="knob"></div></div>
+        <div id="stick-aim" class="stick"><div class="knob"></div></div>
+        <div id="touch-btns">
+          <button id="t-bomb" class="tbtn action">🔥 火炎</button>
+          <button id="t-glyph" class="tbtn action">🔮 呪印</button>
+          <button id="t-thorn" class="tbtn action hidden">🌿 茨</button>
+          <button id="t-golem" class="tbtn action">ゴーレム</button>
+          <button id="t-shield" class="tbtn shield-btn">🛡 盾</button>
+          <button id="t-reload" class="tbtn">整える</button>
+          <button id="t-swap" class="tbtn">武器</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== メニュー / ロビー ===== -->
+    <div id="menu" class="overlay">
+      <div class="panel">
+        <h1>MYTHIC REALM <span class="sub">2D ― 神話の魔境</span></h1>
+        <p class="lead">勇者パーティで魔物の軍勢に挑む、見下ろし型の剣と魔法のアクション。魔界の門を砕き、奥に潜むボスを討ち取れ。</p>
+
+        <label class="field">
+          <span>あなたの名前</span>
+          <input id="name-input" type="text" maxlength="12" placeholder="勇者" value="">
+        </label>
+
+        <label class="field">
+          <span>パーティの名前</span>
+          <input id="party-input" type="text" maxlength="16" placeholder="勇者パーティ" value="">
+        </label>
+
+        <div class="field">
+          <span>ステージ</span>
+          <div id="stage-seg" class="class-seg"></div>
+        </div>
+
+        <div class="field">
+          <span>職業（見た目と戦い方が変わります）</span>
+          <div id="class-seg" class="class-seg"></div>
+        </div>
+
+        <div id="menu-main">
+          <p class="menu-wallet">所持金 <b id="menu-money">0</b> G</p>
+          <button id="btn-solo" class="big-btn primary">ひとりで挑む（CPUの仲間と）</button>
+          <button id="btn-online" class="big-btn">オンライン協力プレイ</button>
+          <div class="diff-row">
+            <span>難易度</span>
+            <div class="seg" id="diff-seg">
+              <button data-diff="easy">かんたん</button>
+              <button data-diff="normal" class="on">ふつう</button>
+              <button data-diff="hard">むずかしい</button>
+            </div>
+          </div>
+          <button id="btn-controls" class="big-btn">🎮 操作方法</button>
+        </div>
+
+        <!-- オンラインのサブパネル -->
+        <div id="menu-online" class="hidden">
+          <p class="lead small">同じルームコードを共有すると、ブラウザ同士で一緒に遊べます（P2P / サーバー不要）。参加者は全員おなじ勇者パーティの仲間になります。</p>
+          <div id="online-actions">
+            <button id="btn-host" class="big-btn primary">ルームを作成（ホスト）</button>
+            <div class="join-row">
+              <input id="join-code" type="text" maxlength="8" placeholder="ルームコード" autocapitalize="characters">
+              <button id="btn-join" class="big-btn">参加</button>
+            </div>
+          </div>
+          <div id="room-lobby" class="room-lobby hidden" aria-live="polite">
+            <span class="room-lobby-label">ルームコード</span>
+            <strong id="room-code">----</strong>
+            <p id="lobby-status">参加者を待っています…</p>
+            <div id="lobby-roster" class="lobby-roster"></div>
+            <button id="btn-lobby-start" class="big-btn primary hidden">参加者を待っています…</button>
+          </div>
+          <div id="net-status" class="net-status"></div>
+          <button id="btn-back" class="link-btn">← もどる</button>
+        </div>
+
+        <p class="hint" id="menu-hint"></p>
+      </div>
+    </div>
+
+    <!-- ===== 全滅（観戦するか、やめるか） ===== -->
+    <div id="eliminated" class="overlay hidden">
+      <div class="panel pause-panel">
+        <p class="pause-kicker">PARTY WIPED</p>
+        <h2>勇者パーティは全滅しました</h2>
+        <p class="lead" id="eliminated-detail">祭壇を失い、仲間も倒れました。もう復活はできません。</p>
+        <button id="btn-spectate" class="big-btn primary">観戦する（決着まで見届ける）</button>
+        <button id="btn-give-up" class="big-btn">やめてメニューへ</button>
+      </div>
+    </div>
+
+    <!-- ===== 一時停止 ===== -->
+    <div id="pause" class="overlay hidden">
+      <div class="panel pause-panel">
+        <p class="pause-kicker">QUEST PAUSED</p>
+        <h2>一時停止</h2>
+        <p class="lead">戦闘・復活・詠唱など、ゲーム内の時間は停止しています。</p>
+        <button id="btn-resume" class="big-btn primary">ゲームに戻る</button>
+        <button id="btn-pause-help" class="big-btn">🎮 操作方法</button>
+        <button id="btn-pause-quit" class="big-btn">メインメニューへ</button>
+      </div>
+    </div>
+
+    <!-- ===== あそびかた ===== -->
+    <div id="help" class="overlay hidden">
+      <div class="panel">
+        <h2>操作方法</h2>
+        <div class="help-cols">
+          <div>
+            <h3>PC</h3>
+            <ul>
+              <li><b>WASD</b> … 移動</li>
+              <li><b>マウス</b> … 照準</li>
+              <li><b>左クリック長押し</b> … 攻撃</li>
+              <li><b>R</b> … 詠唱しなおす / 矢をつがえる</li>
+              <li><b>G</b> … 火炎瓶を投げる</li>
+              <li><b>F</b> … 足元に呪印の罠を描く</li>
+              <li><b>C</b> … 茨の呪縛を張る（狩人・獣使いのみ）</li>
+              <li><b>E</b> … ゴーレム・魔導砲台に乗る / 降りる</li>
+              <li><b>Q</b> … 攻撃直前に押してパリィ / 長押しで防御</li>
+              <li><b>1〜3</b> / ホイール … 武器切替（持てる武器は職業ごとに固定）</li>
+              <li><b>Shift</b> … ダッシュ</li>
+            </ul>
+          </div>
+          <div>
+            <h3>スマホ</h3>
+            <ul>
+              <li><b>左スティック</b> … 移動</li>
+              <li><b>右スティック</b> … 照準＆自動攻撃</li>
+              <li>指を離しても<b>最後に向いた方向を維持</b>します</li>
+              <li><b>🔥 火炎瓶</b> … 投げる</li>
+              <li><b>🔮 呪印</b> … 足元に描く</li>
+              <li><b>🌿 茨</b> … 茨の呪縛を張る</li>
+              <li><b>ゴーレム</b> … 近くのゴーレム・魔導砲台に乗る / 降りる</li>
+              <li><b>🛡 盾</b> … 攻撃直前に押してパリィ / 長押しで防御</li>
+              <li><b>整える / 武器</b> … 右下ボタン</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3 style="margin-top:6px">戦い方</h3>
+        <p class="help-rpg"><b>勇者パーティ vs 魔物の軍勢</b>です。プレイヤー同士は戦いません。マップの反対側にある<b>魔界の門</b>から魔物が次々と湧いてくるので、門を攻撃して壊しましょう。門が砕けると増援は止まり、代わりに奥から<b>そのステージのボス</b>が現れます。ボスと残った魔物をすべて倒せば勝ちです。</p>
+        <p class="help-rpg">自分たちの拠点は<b>勇者の祭壇</b>です。倒れてもここから復活できますが、祭壇を壊されると<b>それ以降いっさい復活できません</b>。生き残りが全員倒れたら負けです。祭壇の円の中に入ると体力・鎧・盾が回復し、マナ・矢・火炎瓶・呪印も補給できます。</p>
+        <p class="help-rpg">門の体力が減るほど、<b>湧いてくる魔物が強くなります</b>。最初はゴブリンだけですが、やがてオーク・骸骨の射手・闇術師・石のガーゴイルが混ざってきます。オンラインでは参加者全員が同じパーティの仲間になります。</p>
+
+        <h3 style="margin-top:6px">職業</h3>
+        <p class="help-rpg">職業ごとに<b>見た目と持てる武器が決まっています</b>。数字キーの1〜3は、その職業の武器の1番目〜3番目に対応します。</p>
+        <ul class="help-classes">
+          <li><b>⚔️ 剣士</b> … 長剣 / 大剣 / 短剣。体力がいちばん高く、近接ダメージ1.35倍。パリィの受付も長めで、前に出て敵を引きつける役です。</li>
+          <li><b>🔮 魔法使い</b> … 火球 / 雷撃 / 氷の矢。魔法の威力1.35倍。火球は着弾して爆発、雷撃は敵を貫通、氷の矢は当たった敵の足を鈍らせます。体力は最も低いので後ろから撃ちましょう。</li>
+          <li><b>🏹 狩人</b> … 長弓 / 速射弓 / 狩猟ナイフ。弓の威力1.25倍で足も速い。呪印の罠を4枚持ち、敵の罠も見抜けます。茨の呪縛（Cキー）で敵の足を止められます。</li>
+          <li><b>✨ 僧侶</b> … 聖光 / 癒しの光 / 聖なる槌。<b>癒しの光で味方の傷をふさげる唯一の職業</b>です。聖属性は骸骨や闇術師などのアンデッドに1.8倍のダメージを与えます。</li>
+          <li><b>🗡️ 冒険者</b> … 片手剣 / 速射弓 / 投げ斧。近接も遠距離もそこそこ扱える万能型。火炎瓶4個・呪印3枚と道具が豊富で、どんな場面でも仕事があります。</li>
+          <li><b>🐺 獣使い</b> … 槍 / 獣の鞭 / 投げ斧。<b>狼を2匹つれて戦います</b>。狼は勝手に敵へ噛みつき、倒されてもしばらくすると戻ってきます。槍はリーチが長く、鞭はさらに長く広く払えます。</li>
+        </ul>
+
+        <h3 style="margin-top:6px">魔物とボス</h3>
+        <ul class="help-classes">
+          <li><b>ゴブリン</b> … 素早いが弱い。数で押してきます。</li>
+          <li><b>オーク</b> … 棍棒を振り回す重量級。体力が高く、まともに殴られると痛い。</li>
+          <li><b>骸骨の射手</b> … 骨の矢を撃ってくるアンデッド。聖属性が効きます。</li>
+          <li><b>闇術師</b> … 闇弾を飛ばすアンデッド。宙に浮いていて、遠くから削ってきます。</li>
+          <li><b>石のガーゴイル</b> … 門が半分削れたころに現れる精鋭。岩を投げ、近づけば爪で殴ります。</li>
+          <li><b>魔狼</b> … 主を持たない野良の狼。まっすぐ祭壇を目指して走ってきます。</li>
+        </ul>
+        <p class="help-rpg">ボスは門を壊した瞬間に現れます。古代遺跡には<b>炎竜 イグニス</b>（爆発する竜炎と巨爪）、常闇の樹海には<b>魔狼王 フェンリル</b>（とにかく速く、噛みつきが重い）。どちらも体力が桁違いなので、パーティで囲んで削りましょう。</p>
+
+        <h3 style="margin-top:6px">ステージ「訓練の間」</h3>
+        <p class="help-rpg">はじめての人のための訓練施設です。<b>魔物はいません</b>。マップの中央に木人が並んでいて、攻撃しても反撃されません。壊した木人は数秒で立て直るので、何度でも練習できます。</p>
+        <p class="help-rpg">画面の左に<b>練習メニュー</b>が出ます。案内された操作をそのとおりにやると、次の項目へ進みます。移動・攻撃・詠唱・武器の持ちかえ・火炎瓶・呪印・盾・魔導砲台・ゴーレム・祭壇での補給まで、ひととおり試せば本番のステージで困りません。うまくいかない項目は「この項目をとばす」で先に進めます。</p>
+
+        <h3 style="margin-top:6px">ステージ「常闇の樹海」</h3>
+        <p class="help-rpg">夜が明けない密林のステージです。木と茂みが密生していて視界はほとんど利きません。そしてこの森には、魔物とは別に<b>得体の知れない影が1体だけ</b>棲んでいます。</p>
+        <p class="help-rpg">影は<b>音に反応します</b>。Shift でダッシュすると足音が響いて気づかれ、攻撃するとさらに遠くから寄ってきます。歩いている限りは、すぐ近くまで行かないかぎり見つかりません。</p>
+        <p class="help-rpg"><b>倒すことはできません。</b>どんな武器も効かないので、見つかったら逃げるしかありません。そして<b>触れられたら一撃で死にます</b>。追われている間は画面の縁が赤く脈打ち、ミニマップに赤い点が出ます。走って逃げれば足音でずっと追われるので、遮蔽に隠れて歩いて撒くのが賢いやり方です。</p>
+
+        <h3 style="margin-top:6px">ゴーレムと魔導砲台</h3>
+        <p class="help-rpg"><b>守護ゴーレム</b>は乗り込んで操れる石の巨人です。<b>岩塊砲</b>（爆発・大型に強い）と<b>魔力連弾</b>（連射・雑魚に強い）を撃ち分けられます。数字キーかホイール（スマホは「武器」ボタン）で切り替えてください。魔物側にも<b>魔像ゴーレム</b>がいて、こちらは勝手に暴れます。</p>
+        <p class="help-rpg"><b>魔導砲台</b>はマップ上に8つ置かれた中立の設備です。近づいてEキー（スマホは「ゴーレム」ボタン）で取り付きます。動けなくなる代わりに光の矢を連射でき、石垣のおかげで被弾も半分になります。先に取り付いた者が使えます。</p>
+        <p class="help-rpg"><b>隠れる</b>：魔物は壁や石柱の裏にいる相手を見つけられず、正面の視野角の外も見えません。<b>茂み</b>は通り抜けられるのに視線を遮るので、待ち伏せに最適です。ただし至近距離まで近づくと向きに関係なく気づかれます。走ると足音が響くので、忍び寄るときは歩きましょう。</p>
+        <p class="help-rpg"><b>昼と夜</b>：時間が進むと朝→昼→夕方→夜と移り変わります。夜は視界がぐっと狭まるので奇襲のチャンス、昼は遠くまで見渡せます。</p>
+        <p class="help-rpg"><b>呪印の罠</b>：足元に描くと約1秒後に起動し、踏んだ敵を吹き飛ばします。味方には見えますが、敵にはすぐ近くに来るまで見えません。ゴーレムにも大ダメージ。</p>
+        <p class="help-rpg">攻撃直前に盾を構えるとパリィ成功。飛び道具は敵へ跳ね返し、近接攻撃や狼の噛みつきは相手をひるませます。パリィ受付は短く、成功後も約1秒の再使用待ちがあります。通常の盾防御は正面攻撃を軽減しますが、構え中は攻撃不可・移動速度低下。聖銀の鎧と魔法の盾はフィールドで拾うか、祭壇で補給できます。</p>
+        <button id="btn-help-close" class="big-btn primary">とじる</button>
+      </div>
+    </div>
+
+    <!-- ===== 結果 ===== -->
+    <div id="result" class="overlay hidden">
+      <div class="panel result-panel">
+        <h2 id="result-title">魔境を制覇！</h2>
+        <div id="reward-summary" class="reward-summary"></div>
+        <div id="result-stats" class="result-stats"></div>
+        <section class="shop-panel" aria-labelledby="shop-title">
+          <div class="shop-head">
+            <h3 id="shop-title">道具屋</h3>
+            <span>所持金 <b id="shop-money">0</b> G</span>
+          </div>
+          <p class="shop-note">購入した強化は次の挑戦から適用されます。</p>
+          <div id="shop-items" class="shop-items"></div>
+          <p id="shop-message" class="shop-message" aria-live="polite"></p>
+        </section>
+        <button id="btn-again" class="big-btn primary">もう一度</button>
+        <button id="btn-tomenu" class="big-btn">メニューへ</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
