@@ -164,6 +164,13 @@ html, body {
 .ult-state { display: block; margin-top: 3px; color: #c3b6d8; font-size: 10px; font-weight: 800; }
 .ult-state.ready { color: #ffd23f; text-shadow: 0 0 8px rgba(255, 210, 63, 0.65); }
 .ult-state.hidden { display: none; }
+.equip-row.mana .equip-bar > span { background: linear-gradient(90deg,#4a7fe0,#9fc8ff); }
+.equip-row.mana.hidden { display: none; }
+.mana-note { display: block; margin-top: 1px; color: #a9c8ff; font-size: 9px; font-weight: 700; }
+.mana-note.hidden { display: none; }
+.mana-note.boosted { color: #8cf0ff; }
+.charge-note { display: block; margin-top: 1px; color: #ffe08a; font-size: 9px; font-weight: 800; letter-spacing: 0.08em; }
+.charge-note.hidden { display: none; }
 
 .vehicle-hint {
   position: absolute;
@@ -567,6 +574,11 @@ body.touch-ui .vehicle-hint { bottom: 226px; }
 .class-seg button.on .class-head { color: var(--you); }
 .class-seg button.on .class-desc { opacity: 0.85; }
 .class-ult { display: block; margin-top: 3px; font-size: 10px; font-weight: 800; color: #ffd23f; opacity: 0.8; }
+.class-element { margin-left: 6px; font-size: 9.5px; font-weight: 700; color: #b9a8e0; }
+.stage-lock { display: block; margin-top: 3px; font-size: 10px; font-weight: 700; color: #d0a06a; }
+.stage-clear { margin-left: 6px; font-size: 9.5px; font-weight: 800; color: #8cf06a; }
+.class-seg button:disabled { opacity: 0.42; cursor: not-allowed; }
+.tbtn.ult-btn.hidden, .tbtn.action.hidden { display: none; }
 .class-seg button.on .class-ult { opacity: 1; }
 .net-status { font-size: 12px; min-height: 18px; margin: 10px 0 0; color: #b8a4dd; white-space: pre-line; }
 .net-status.err { color: var(--enemy); }

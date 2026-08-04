@@ -50,10 +50,18 @@
   const FLAME_DROP_MS = 210;      // 歩きながら炎を落とす間隔
   const FLAME_MAX = 90;           // 同時に存在できる炎の上限
   const DRAKE_CRUSH_PAD = 6;      // 体のまわりこのぶんまで薙ぎ倒す
+  const LAVA_R = 66;              // 魔界の溶岩だまりの広さ
+  const LAVA_DPS = 22;            // 溶岩に浸かっている間の毎秒ダメージ
+  const LAVA_POOLS = 14;          // 魔界に置く溶岩だまりの数
   const THORN_R = 52;             // 茨の呪縛の効果半径
   const THORN_DPS = 14;           // 中にいる敵への毎秒ダメージ
   const THORN_SLOW = 0.42;        // 中にいる敵の移動速度倍率
   const THORN_PLACE_COOLDOWN = 900;
+  // 魔法使いと闇魔導士だけが持つ魔力。魔法を撃つと減り、時間で戻る。
+  const MANA_REGEN = 7;              // 毎秒の自然回復
+  const MANA_REGEN_POTION = 30;      // 秘薬が効いている間の毎秒回復
+  const MANA_POTION_MS = 7000;       // 秘薬の効き目
+  const MANA_POTION_MAX = 3;         // 持てる秘薬の数
   const AUTO_HEAL_DELAY_MS = 5000;
   const AUTO_HEAL_PER_SEC = 5;
   const POTION_HEAL = 45;
@@ -69,7 +77,44 @@
   const SNAP_HZ = 20;             // ホストの状態送信レート
   const INPUT_HZ = 30;            // クライアントの入力送信レート
   const MATCH_COUNTDOWN_SECONDS = 3;
-  const HOLY_VS_UNDEAD = 1.8;     // 聖属性がアンデッドに与える倍率
+  // ============================================================
+  //  属性の相性
+  //  武器は1つの属性を持ち、キャラクターは1つの属性を身にまとう。
+  //  ELEMENT_CHART[攻撃の属性][受け手の属性] = ダメージ倍率。
+  //  書いていない組み合わせは 1.0 (等倍)。
+  //  同じ属性どうしはほとんど通らない = 炎竜に火球を撃っても効かない。
+  // ============================================================
+  const ELEMENTS = {
+    none: { name: "無", icon: "" },
+    fire: { name: "炎", icon: "🔥" },
+    ice:  { name: "氷", icon: "❄️" },
+    bolt: { name: "雷", icon: "⚡" },
+    holy: { name: "聖", icon: "✨" },
+    dark: { name: "闇", icon: "🌑" },
+    // ここから下は魔界編で表に出てくる属性
+    poison: { name: "毒", icon: "🧪" },
+    dragon: { name: "竜", icon: "🐲" },
+  };
+  const ELEMENT_CHART = {
+    fire:   { fire: 0.1, ice: 1.8, dragon: 0.6 },
+    ice:    { ice: 0.1, fire: 1.8, dragon: 1.3 },
+    bolt:   { bolt: 0.1, ice: 1.4 },
+    holy:   { holy: 0.1, dark: 1.8, poison: 1.4, dragon: 1.5 },
+    dark:   { dark: 0.1, holy: 1.8, poison: 0.6 },
+    poison: { poison: 0.1, holy: 0.6, none: 1.3 },
+    dragon: { dragon: 0.1, ice: 1.4, holy: 0.7, none: 1.25 },
+  };
+  const RESIST_MUL = 0.5;         // 「効果が薄い」と知らせる境目
+  const WEAK_MUL = 1.2;           // 「効果抜群」と知らせる境目
+  const elementDef = (key) => ELEMENTS[key] || ELEMENTS.none;
+
+  // 攻撃の属性と受け手の属性から倍率を出す。
+  function elementMul(element, target) {
+    if (!element || element === "none" || !target) return 1;
+    const row = ELEMENT_CHART[element];
+    if (!row) return 1;
+    return row[target.element || "none"] || 1;
+  }
 
   // 陣営の見た目と既定名。配列の添字がそのまま陣営番号。
   const TEAM_DEFS = [
@@ -123,6 +168,15 @@
     speed: 0, range: 90, len: 18, kick: 3, pierce: 0,
     melee: false, arc: 0.9, style: "sword", proj: "arrow", snd: "melee",
     bow: false, magic: false, blast: false, holy: false, heal: 0, slow: 0,
+    // 属性。ELEMENT_CHART で受け手の属性と突き合わせて倍率が決まる。
+    element: "none",
+    // charge = 引き絞れる (押した長さで矢の本数が変わる)
+    // holdRanged = 短く押すと近接、長く押すと遠距離に切り替わる
+    // ratioDamage = 相手の最大体力に対する割合ダメージ (装備を無視する)
+    // friendlyFire = 味方にも当たる
+    // lifesteal = 与えたダメージのうち自分の回復に回る割合
+    // manaCost = 魔力を持つ職業が1発に使う魔力
+    charge: false, holdRanged: "", ratioDamage: 0, friendlyFire: false, lifesteal: 0, manaCost: 0,
     // 刃物が描く白い斬撃線。素手のように刃の無い武器では出さない。
     slashFx: true,
   };
@@ -134,29 +188,47 @@
     { key: "sword",      name: "片手剣",       dmg: 64,  interval: 390, range: 96,  arc: 1.05, kick: 3.0, style: "sword",      melee: true },
     { key: "spear",      name: "槍",           dmg: 72,  interval: 430, range: 138, arc: 0.42, kick: 2.6, style: "spear",      melee: true },
     { key: "whip",       name: "獣の鞭",       dmg: 40,  interval: 300, range: 160, arc: 1.15, kick: 2.0, style: "whip",       melee: true },
-    { key: "mace",       name: "聖なる槌",     dmg: 86,  interval: 660, range: 92,  arc: 1.15, kick: 4.6, style: "mace",       melee: true, holy: true },
+    { key: "mace",       name: "聖なる槌",     dmg: 86,  interval: 660, range: 92,  arc: 1.15, kick: 4.6, style: "mace",       melee: true, holy: true, element: "holy" },
     { key: "huntknife",  name: "狩猟ナイフ",   dmg: 52,  interval: 300, range: 74,  arc: 0.85, kick: 2.2, style: "dagger",     melee: true },
     // 素手。武器を持てない魔神像の唯一の攻撃手段。連打はできないが一撃が重い。
     { key: "stonefist",  name: "岩の拳",       dmg: 118, interval: 900, range: 118, arc: 1.25, kick: 5.2, style: "fist",       melee: true, slashFx: false },
     // ---- 弓・投擲 ----
-    { key: "longbow",  name: "長弓",   dmg: 66, interval: 900, mag: 6,  reload: 1500, spread: 0.012, speed: 1700, range: 1100, len: 26, kick: 4.2, pierce: 1, proj: "arrow", bow: true, snd: "bowheavy" },
+    { key: "longbow",  name: "長弓",   dmg: 66, interval: 900, mag: 6,  reload: 1500, spread: 0.012, speed: 1700, range: 1100, len: 26, kick: 4.2, pierce: 1, proj: "arrow", bow: true, snd: "bowheavy", charge: true },
     { key: "shortbow", name: "速射弓", dmg: 24, interval: 150, mag: 14, reload: 1150, spread: 0.075, speed: 1250, range: 640,  len: 20, kick: 1.4, auto: true, proj: "arrow", bow: true, snd: "bow" },
     { key: "throwaxe", name: "投げ斧", dmg: 54, interval: 520, mag: 5,  reload: 1400, spread: 0.05,  speed: 820,  range: 470,  len: 16, kick: 3.4, proj: "axe", bow: true, snd: "bow" },
     // ---- 魔法 ----
-    { key: "fireball",  name: "火球",     dmg: 104, interval: 1150, mag: 4,  reload: 2000, spread: 0.02, speed: 620,  range: 840, len: 22, kick: 4.0, blast: true, proj: "fire",  magic: true, snd: "blast" },
-    { key: "lightning", name: "雷撃",     dmg: 40,  interval: 280,  mag: 10, reload: 1500, spread: 0.03, speed: 2400, range: 940, len: 30, kick: 2.2, pierce: 2, proj: "bolt", magic: true, snd: "cast" },
-    { key: "iceshard",  name: "氷の矢",   dmg: 22,  interval: 130,  mag: 18, reload: 1500, spread: 0.09, speed: 1150, range: 560, len: 16, kick: 1.2, auto: true, slow: 0.55, proj: "ice", magic: true, snd: "cast" },
-    { key: "holybolt",  name: "聖光",     dmg: 44,  interval: 420,  mag: 10, reload: 1600, spread: 0.02, speed: 1500, range: 800, len: 22, kick: 2.4, holy: true, proj: "holy", magic: true, snd: "holy" },
-    { key: "healray",   name: "癒しの光", dmg: 0,   interval: 900,  mag: 8,  reload: 1900, range: 176, arc: 0.9, kick: 1.0, heal: 34, style: "staff", melee: true, magic: true, snd: "holy" },
+    { key: "fireball",  name: "火球",     dmg: 104, interval: 1150, mag: 4,  reload: 2000, spread: 0.02, speed: 620,  range: 840, len: 22, kick: 4.0, blast: true, proj: "fire",  magic: true, snd: "blast", element: "fire", manaCost: 30 },
+    { key: "lightning", name: "雷撃",     dmg: 40,  interval: 280,  mag: 10, reload: 1500, spread: 0.03, speed: 2400, range: 940, len: 30, kick: 2.2, pierce: 2, proj: "bolt", magic: true, snd: "cast", element: "bolt", manaCost: 11 },
+    { key: "iceshard",  name: "氷の矢",   dmg: 22,  interval: 130,  mag: 18, reload: 1500, spread: 0.09, speed: 1150, range: 560, len: 16, kick: 1.2, auto: true, slow: 0.55, proj: "ice", magic: true, snd: "cast", element: "ice", manaCost: 5 },
+    { key: "holybolt",  name: "聖光",     dmg: 44,  interval: 420,  mag: 10, reload: 1600, spread: 0.02, speed: 1500, range: 800, len: 22, kick: 2.4, holy: true, proj: "holy", magic: true, snd: "holy", element: "holy" },
+    { key: "healray",   name: "癒しの光", dmg: 0,   interval: 900,  mag: 8,  reload: 1900, range: 176, arc: 0.9, kick: 1.0, heal: 34, style: "staff", melee: true, magic: true, snd: "holy", element: "holy" },
+    // ---- 闇の魔法 (闇魔導士) ----
+    { key: "darkspear", name: "闇の槍",   dmg: 88, interval: 620, mag: 6,  reload: 1800, spread: 0.02, speed: 1050, range: 780, len: 26, kick: 3.0, pierce: 1, proj: "dark", magic: true, snd: "cast", element: "dark", manaCost: 24 },
+    { key: "hex",       name: "呪詛",     dmg: 19, interval: 120, mag: 20, reload: 1500, spread: 0.085, speed: 1000, range: 520, len: 14, kick: 1.1, auto: true, slow: 0.6, proj: "dark", magic: true, snd: "cast", element: "dark", manaCost: 6 },
+    // 与えたダメージの一部を自分の体力に変える鎌
+    { key: "soulscythe", name: "魂喰らい", dmg: 72, interval: 520, range: 118, arc: 1.25, kick: 3.6, style: "scythe", melee: true, lifesteal: 0.35, element: "dark" },
+    // ---- 破壊の杖 (破壊の森の祭壇で拾う) ----
+    // 近距離は薙ぎ払い、遠距離は骨の眼から緑の光弾。どちらも味方を巻きこむ。
+    { key: "doomstaffSwing", name: "破壊の杖・薙ぎ払い", dmg: 300, interval: 1700, range: 132, arc: 1.3, kick: 6.0, style: "boneStaff", melee: true, slashFx: false, element: "poison", ratioDamage: 0.75, friendlyFire: true, holdRanged: "doomstaffBolt" },
+    { key: "doomstaffBolt",  name: "破壊の杖・破滅弾", dmg: 300, interval: 1900, mag: 99, reload: 0, spread: 0.02, speed: 900, range: 860, len: 26, kick: 5.4, blast: true, proj: "venom", magic: true, snd: "blast", element: "poison", ratioDamage: 0.75, friendlyFire: true },
+    // ---- 竜の武器 (竜騎士) ----
+    { key: "dragonlance", name: "竜槍",   dmg: 98, interval: 480, range: 152, arc: 0.5, kick: 3.4, style: "spear", melee: true, element: "dragon" },
+    { key: "dragonbolt",  name: "竜牙弾", dmg: 72, interval: 700, mag: 5, reload: 1700, spread: 0.025, speed: 1300, range: 820, len: 24, kick: 2.8, pierce: 1, proj: "dragon", magic: true, snd: "blast", element: "dragon" },
     // ---- 魔物の武器 ----
     { key: "claw",      name: "爪",       dmg: 26, interval: 620,  range: 62,  arc: 0.9,  kick: 2.4, style: "claw",  melee: true },
     { key: "club",      name: "棍棒",     dmg: 44, interval: 900,  range: 78,  arc: 1.1,  kick: 4.2, style: "club",  melee: true },
     { key: "bonearrow", name: "骨の矢",   dmg: 22, interval: 900,  mag: 4, reload: 1500, spread: 0.06, speed: 1000, range: 660, len: 20, kick: 1.6, proj: "bone", bow: true, snd: "bow" },
-    { key: "darkbolt",  name: "闇弾",     dmg: 26, interval: 780,  mag: 6, reload: 1700, spread: 0.05, speed: 780,  range: 620, len: 18, kick: 1.8, proj: "dark", magic: true, snd: "cast" },
+    { key: "darkbolt",  name: "闇弾",     dmg: 26, interval: 780,  mag: 6, reload: 1700, spread: 0.05, speed: 780,  range: 620, len: 18, kick: 1.8, proj: "dark", magic: true, snd: "cast", element: "dark" },
     { key: "rockthrow", name: "岩投げ",   dmg: 48, interval: 1500, mag: 3, reload: 2100, spread: 0.05, speed: 640,  range: 620, len: 16, kick: 3.4, proj: "rock", bow: true, snd: "bow" },
+    // ---- 魔界の魔物の武器 ----
+    { key: "cursedblade", name: "呪剣",   dmg: 64, interval: 700,  range: 96,  arc: 1.05, kick: 4.0, style: "longsword", melee: true, element: "dark" },
+    { key: "flamebolt",   name: "火炎弾", dmg: 58, interval: 1100, mag: 3, reload: 1800, spread: 0.05, speed: 700, range: 700, len: 20, kick: 3.0, blast: true, proj: "fire", magic: true, snd: "blast", element: "fire" },
+    { key: "venomspit",   name: "毒液",   dmg: 34, interval: 620,  mag: 6, reload: 1500, spread: 0.07, speed: 860, range: 620, len: 16, kick: 1.6, slow: 0.7, proj: "venom", magic: true, snd: "cast", element: "poison" },
     // ---- ボスの武器 ----
-    { key: "bossflame", name: "竜炎",     dmg: 120, interval: 1250, mag: 4, reload: 2000, spread: 0.05, speed: 560, range: 900, len: 26, kick: 5.0, blast: true, proj: "fire", magic: true, snd: "blast" },
+    { key: "bossflame", name: "竜炎",     dmg: 120, interval: 1250, mag: 4, reload: 2000, spread: 0.05, speed: 560, range: 900, len: 26, kick: 5.0, blast: true, proj: "fire", magic: true, snd: "blast", element: "fire" },
     { key: "bossclaw",  name: "巨爪",     dmg: 78,  interval: 560,  range: 128, arc: 1.25, kick: 6.0, style: "claw", melee: true },
+    { key: "demonblade", name: "魔王の剛剣", dmg: 118, interval: 700, range: 156, arc: 1.4, kick: 6.4, style: "greatsword", melee: true, element: "dark" },
+    { key: "doomwave",   name: "破滅の波動", dmg: 132, interval: 1500, mag: 4, reload: 2200, spread: 0.04, speed: 720, range: 950, len: 28, kick: 5.2, blast: true, proj: "dark", magic: true, snd: "blast", element: "dark" },
   ].map((w) => Object.assign({}, WEAPON_DEFAULTS, w));
   const WKEY = {}; WEAPONS.forEach((w, i) => (WKEY[w.key] = i));
 
@@ -175,6 +247,10 @@
   // ============================================================
   const CLASS_DEFAULTS = {
     hpBonus: 0, speedMul: 1, meleeMul: 1, rangedMul: 1, magicMul: 1, healMul: 1,
+    // 身にまとう属性と、解放に必要な章 (0 = 最初から選べる)
+    element: "none", unlockChapter: 0,
+    // mana = 魔力の最大値。0 の職業は魔力を使わない。
+    mana: 0,
     bombs: 2, glyphs: 1, thorns: 0, pets: 0,
     parryWindowMul: 1, parryCooldownMul: 1,
     glyphArmMul: 1, glyphBlastMul: 1, glyphStealthMul: 1, seesEnemyGlyphs: false,
@@ -194,7 +270,7 @@
       key: "mage", name: "魔法使い", icon: "🔮",
       desc: "火球・雷撃・氷の矢。魔法の威力が1.35倍で遠くから焼き払える。そのぶん体力は最も低い。",
       hpBonus: -25, speedMul: 0.95, magicMul: 1.35, meleeMul: 0.6, rangedMul: 0.8,
-      bombs: 3, glyphs: 2,
+      mana: 130, bombs: 3, glyphs: 2,
       weapons: ["fireball", "lightning", "iceshard"],
       look: { robe: "#4b3a8c", trim: "#9fd0ff", skin: "#f0c69c", hair: "#d9d2c4", head: "hat", cape: "#2f2564" },
     },
@@ -231,6 +307,22 @@
       look: { robe: "#6d5230", trim: "#c8b06a", skin: "#dfa877", hair: "#241a12", head: "fur", cape: "#7a6440" },
     },
     {
+      key: "darkmage", name: "闇魔導士", icon: "🌑",
+      desc: "闇の槍・呪詛・魂喰らい。自身が闇をまとうので闇の攻撃はほとんど効かないが、聖なる力には脆い。鎌で斬るとダメージの一部を吸って回復する。",
+      hpBonus: -15, speedMul: 0.98, magicMul: 1.3, meleeMul: 0.85, rangedMul: 0.8,
+      element: "dark", mana: 120, bombs: 2, glyphs: 3,
+      weapons: ["darkspear", "hex", "soulscythe"],
+      look: { robe: "#2e2340", trim: "#b07cff", skin: "#d8c8e4", hair: "#1d1626", head: "hood", cape: "#150f1e" },
+    },
+    {
+      key: "dragoon", name: "竜騎士", icon: "🐲",
+      desc: "竜槍・竜牙弾・片手剣。魔界で竜の血を浴びた者だけが名乗れる前衛。体力が高く、竜属性は氷にも生身にもよく通る。魔界編を解放すると選べる。",
+      hpBonus: 55, speedMul: 1.04, meleeMul: 1.2, magicMul: 1.1, rangedMul: 0.95,
+      element: "dragon", unlockChapter: 3, bombs: 3, glyphs: 2,
+      weapons: ["dragonlance", "dragonbolt", "sword"],
+      look: { robe: "#7a2f2a", trim: "#ffc46a", skin: "#e9b489", hair: "#2b1a14", head: "helm", cape: "#c2762c" },
+    },
+    {
       key: "colossus", name: "魔神像", icon: "🗿",
       desc: "岩の拳のみ。武器はいっさい持てない代わりに、体力が飛び抜けて高く一撃が重い石の巨体。連打は効かず足も最も遅い。体が大きいぶん敵の矢や魔法にも当たりやすい。",
       hpBonus: 120, speedMul: 0.76, meleeMul: 1.3, rangedMul: 1, magicMul: 1,
@@ -243,6 +335,8 @@
   const CLASS_BY_KEY = {};
   CLASSES.forEach((c) => (CLASS_BY_KEY[c.key] = c));
   const classDef = (key) => CLASS_BY_KEY[key] || CLASSES[0];
+  // 章を進めると選べるようになる職業がある (竜騎士は魔界編から)
+  const classUnlocked = (c) => !c || !c.unlockChapter || clearedChapter >= c.unlockChapter - 1;
 
   // ============================================================
   //  必殺技
@@ -267,41 +361,59 @@
   // ---- 聖域 (僧侶) ----
   const SANCT_MS = 6000, SANCT_R = 205, SANCT_TICK = 250, SANCT_HEAL = 13, SANCT_DAMAGE = 15;
   const SANCT_WARD = 0.62;             // 聖域の中で受けるダメージの倍率
-  // ---- 火炎乱舞 (冒険者) ----
-  const FIREDANCE_COUNT = 5;
+  // ---- 龍波斬 (冒険者) ----
+  const DRAGON_THRUST_MS = 380;    // 剣を突き立てるまで
+  const DRAGON_WAVE_MS = 1000;     // 波動が走っている時間
+  const DRAGON_SPEED = 980;        // 波動の速さ (px/秒)
+  const DRAGON_R = 62;             // 波動の当たり半径
+  const DRAGON_THRUST_DAMAGE = 150;
+  const DRAGON_WAVE_DAMAGE = 300;
   // ---- 獣王の咆哮 (獣使い) ----
   const ROAR_MS = 620, ROAR_R = 330, ROAR_RAGE_MS = 9000, ROAR_STUN_MS = 900;
   const ROAR_RAGE_SPEED = 1.35, ROAR_RAGE_DAMAGE = 1.7;
   // ---- 震天の一撃 (魔神像) ----
   const QUAKE_MS = 640, QUAKE_R = 340, QUAKE_DAMAGE = 235, QUAKE_STUN_MS = 900;
+  // ---- 暗黒領域 (闇魔導士) ----
+  const ABYSS_MS = 4200, ABYSS_R = 215, ABYSS_TICK = 260, ABYSS_DAMAGE = 40;
+  const ABYSS_FOCUS_D = 240, ABYSS_DRAIN = 0.4;   // 与えたダメージのこの割合を吸って回復する
+  // ---- 竜炎の息吹 (竜騎士) ----
+  const BREATH_MS = 1300, BREATH_TICK = 130, BREATH_RANGE = 470, BREATH_ARC = 0.5, BREATH_DAMAGE = 74;
 
   const ULTIMATES = {
     swordsman: {
-      name: "烈風斬", icon: "🌪", cooldown: 18000, aiRange: 210,
-      desc: "前へ踏み込みながら三連の斬撃。通り道の敵をまとめて斬り払う。",
+      name: "烈風斬", icon: "🌪", cooldown: 16000, aiRange: 210,
+      desc: "前へ踏み込みながら三連の斬撃。通り道の敵をまとめて斬り払う。手数で稼ぐぶん、待ち時間は短い。",
     },
     mage: {
-      name: "エクスプロージョン", icon: "💥", cooldown: 26000, aiRange: 700,
-      desc: "前方に魔力を集めて詠唱。近くの敵をすべて爆心へ引きずり寄せてから起爆する。撃ったあとは力尽きて少し動けない。",
+      name: "エクスプロージョン", icon: "💥", cooldown: 34000, aiRange: 700,
+      desc: "前方に魔力を集めて詠唱。近くの敵をすべて爆心へ引きずり寄せてから起爆する。撃ったあとは力尽きて少し動けない。全職業でいちばん重い一撃なので、待ち時間もいちばん長い。",
     },
     hunter: {
-      name: "千矢の雨", icon: "🏹", cooldown: 20000, aiRange: 620,
+      name: "千矢の雨", icon: "🏹", cooldown: 22000, aiRange: 620,
       desc: "狙った一帯へ矢を降らせ続ける。範囲の中にいる敵を止まらず削る。",
     },
     priest: {
-      name: "聖域", icon: "🕊", cooldown: 22000, aiRange: 430,
+      name: "聖域", icon: "🕊", cooldown: 26000, aiRange: 430,
       desc: "自分を中心に光の輪を張る。中の味方は回復して受けるダメージも減り、中の敵は聖なる光に焼かれる。",
     },
     adventurer: {
-      name: "火炎乱舞", icon: "🔥", cooldown: 18000, aiRange: 430,
-      desc: "火炎瓶を5本まとめて扇状にばらまく。手持ちは減らない。",
+      name: "龍波斬", icon: "🐉", cooldown: 30000, aiRange: 620,
+      desc: "剣を敵へ突き立て、その切っ先から龍の姿をした波動を放つ。波動は敵を貫いてまっすぐ走り抜ける。一撃が重いぶん待ち時間も長い。",
     },
     beastmaster: {
-      name: "獣王の咆哮", icon: "🐺", cooldown: 20000, aiRange: 310,
+      name: "獣王の咆哮", icon: "🐺", cooldown: 24000, aiRange: 310,
       desc: "咆哮で狼を呼び戻して立ち上がらせ、9秒間だけ荒ぶらせる。近くの敵はすくみ上がって動けなくなる。",
     },
+    darkmage: {
+      name: "暗黒領域", icon: "🌑", cooldown: 28000, aiRange: 560,
+      desc: "前方に闇の淵を開く。中にいる敵は闇に焼かれて足を取られ、吸い取った命は術者の傷をふさぐ。",
+    },
+    dragoon: {
+      name: "竜炎の息吹", icon: "🐲", cooldown: 26000, aiRange: 460,
+      desc: "竜の息を前方へ吐き続ける。扇の中の敵を焼き、通ったあとの地面はしばらく燃え続ける。",
+    },
     colossus: {
-      name: "震天の一撃", icon: "🗿", cooldown: 16000, aiRange: 270,
+      name: "震天の一撃", icon: "🗿", cooldown: 20000, aiRange: 270,
       desc: "地面を叩き割る。広がる衝撃波が敵を吹き飛ばし、しばらく起き上がれなくする。",
     },
   };
@@ -311,7 +423,7 @@
   //  魔物
   //  tier = 門の体力が減るほど、強い魔物が湧きやすくなる目安。
   // ============================================================
-  const FOE_DEFAULTS = { hp: 60, speed: 170, dmgMul: 1, r: 13, tier: 0, undead: false, xp: 1 };
+  const FOE_DEFAULTS = { hp: 60, speed: 170, dmgMul: 1, r: 13, tier: 0, undead: false, xp: 1, element: "none" };
   const FOES = [
     {
       key: "goblin", name: "ゴブリン", hp: 58, speed: 205, dmgMul: 0.85, r: 12, tier: 0, style: "goblin",
@@ -322,11 +434,11 @@
       weapons: ["club"], look: { skin: "#5f7f4c", cloth: "#4a3524", eye: "#ffb14a" },
     },
     {
-      key: "skeleton", name: "骸骨の射手", hp: 74, speed: 158, dmgMul: 1, r: 13, tier: 1, undead: true, style: "skeleton",
+      key: "skeleton", name: "骸骨の射手", hp: 74, speed: 158, dmgMul: 1, r: 13, tier: 1, undead: true, element: "dark", style: "skeleton",
       weapons: ["bonearrow"], look: { skin: "#e3ded0", cloth: "#5a5348", eye: "#8ff0ff" },
     },
     {
-      key: "warlock", name: "闇術師", hp: 96, speed: 142, dmgMul: 1.05, r: 14, tier: 2, xp: 2, undead: true, style: "warlock",
+      key: "warlock", name: "闇術師", hp: 96, speed: 142, dmgMul: 1.05, r: 14, tier: 2, xp: 2, undead: true, element: "dark", style: "warlock",
       weapons: ["darkbolt"], look: { skin: "#b9a6c8", cloth: "#3d2450", eye: "#d07cff" },
     },
     {
@@ -334,6 +446,25 @@
       weapons: ["rockthrow", "claw"], look: { skin: "#7c7d84", cloth: "#4d4e55", eye: "#ff7a4a" },
     },
   ].map((f) => Object.assign({}, FOE_DEFAULTS, f));
+  // ---- 魔界の魔物 (第3章) ----
+  FOES.push(...[
+    {
+      key: "wraith", name: "亡霊騎士", hp: 320, speed: 152, dmgMul: 1.2, r: 17, tier: 1, xp: 4,
+      undead: true, element: "dark", style: "wraith",
+      weapons: ["cursedblade"], look: { skin: "#8e9ab8", cloth: "#241b33", eye: "#8affe0" },
+    },
+    {
+      key: "ifrit", name: "業火の魔人", hp: 280, speed: 146, dmgMul: 1.15, r: 18, tier: 2, xp: 4,
+      element: "fire", style: "ifrit",
+      weapons: ["flamebolt"], look: { skin: "#c8442a", cloth: "#3b1408", eye: "#ffe07a" },
+    },
+    {
+      key: "venomspider", name: "瘴気蜘蛛", hp: 210, speed: 188, dmgMul: 1.05, r: 16, tier: 0, xp: 3,
+      element: "poison", style: "venomspider",
+      weapons: ["venomspit", "claw"], look: { skin: "#4f6b2c", cloth: "#2b3a18", eye: "#c8ff5a" },
+    },
+  ].map((f) => Object.assign({}, FOE_DEFAULTS, f)));
+
   const FOE_BY_KEY = {};
   FOES.forEach((f) => (FOE_BY_KEY[f.key] = f));
   const foeDef = (key) => FOE_BY_KEY[key] || FOES[0];
@@ -345,15 +476,21 @@
   const BOSSES = {
     drake: {
       key: "drake", name: "炎竜 イグニス", title: "遺跡に眠る古の竜",
-      hp: 2400, speed: 112, r: 46, dmgMul: 1, xp: 12, style: "drake",
+      hp: 2400, speed: 112, r: 46, dmgMul: 1, xp: 12, element: "fire", style: "drake",
       weapons: ["bossflame", "bossclaw"],
       look: { scale: "#a8382c", belly: "#e0b063", wing: "#6d1f19", eye: "#ffdc4a" },
     },
     fenrir: {
       key: "fenrir", name: "魔狼王 フェンリル", title: "樹海を統べる白き獣",
-      hp: 2000, speed: 196, r: 40, dmgMul: 1.1, xp: 12, style: "fenrir",
+      hp: 2000, speed: 196, r: 40, dmgMul: 1.1, xp: 12, element: "ice", style: "fenrir",
       weapons: ["bossclaw"],
       look: { scale: "#cfd4dc", belly: "#8e97a6", wing: "#5d6472", eye: "#7de3ff" },
+    },
+    demonlord: {
+      key: "demonlord", name: "魔王 ヴァルゼオス", title: "魔界の玉座に座す者",
+      hp: 3800, speed: 132, r: 50, dmgMul: 1.2, xp: 20, element: "dark", style: "demonlord",
+      weapons: ["doomwave", "demonblade"],
+      look: { scale: "#3a2148", belly: "#6d3f8c", wing: "#1c1026", eye: "#ff5a4a" },
     },
   };
 
@@ -362,34 +499,61 @@
   // ============================================================
   // fixedLight: 明るさを固定するステージだけが持つ (null = 昼夜サイクルどおり)。
   // phase: HUD の時間帯表示を固定するステージだけが持つ。
+  // chapter: 0 = 章に属さない練習場 / 1〜 = 順番に挑む本編。
+  //   前の章をクリアするまで次の章は選べない。
+  // foes: その章の門から湧く魔物。章が進むほど顔ぶれが変わる。
+  // foePower: 魔物とボスの体力・攻撃力の倍率。章が進むほど強くなる。
+  // heroBoost: 勇者側の底上げ。強敵しか出ない章だけ持つ。
+  const STAGE_DEFAULTS = { chapter: 0, foePower: 1, heroBoost: 0, creature: false, training: false, fixedLight: null, boss: null };
   const STAGES = [
     {
       key: "training", name: "訓練の間", icon: "🎯",
       desc: "はじめての人はここから。反撃してこない木人を相手に、操作を1つずつ順番に練習できる。",
-      bgm: "bgm-battle", creature: false, training: true, fixedLight: 1, boss: null,
+      bgm: "bgm-battle", training: true, fixedLight: 1,
       phase: { key: "noon", label: "🎯 訓練の間", note: "木人は反撃しない" },
       ground: ["#4c4535", "#544d3c", "#443e31"],
     },
     {
-      key: "ruins", name: "古代遺跡", icon: "🏛",
+      key: "ruins", name: "第1章 古代遺跡", icon: "🏛",
       desc: "崩れた神殿と石柱が並ぶ見通しの良い戦場。時間帯が朝から夜へ移り変わる。奥に炎竜がひそむ。",
-      bgm: "bgm-battle", creature: false, training: false, fixedLight: null, boss: "drake",
+      bgm: "bgm-battle", chapter: 1, boss: "drake", foePower: 1,
+      foes: ["goblin", "orc", "skeleton"],
       ground: ["#4a4636", "#53503c", "#423f31"],
     },
     {
-      key: "darkforest", name: "常闇の樹海", icon: "🌲",
-      desc: "夜が明けない密林。見通しは最悪で、倒せない何かが徘徊している。走ると気づかれる。",
-      bgm: "bgm-darkforest", creature: true, training: false, fixedLight: 0.1, boss: "fenrir",
+      key: "darkforest", name: "第2章 常闇の樹海", icon: "🌲",
+      desc: "夜が明けない密林。見通しは最悪で、倒せない何かが徘徊している。走ると気づかれる。第1章をクリアすると挑める。",
+      bgm: "bgm-darkforest", chapter: 2, creature: true, fixedLight: 0.1, boss: "fenrir", foePower: 1.3,
+      foes: ["orc", "skeleton", "warlock", "gargoyle"],
       phase: { key: "night", label: "🌲 常闇の樹海", note: "何かが見ている" },
       ground: ["#1b2416", "#1f291a", "#161e12"],
     },
-  ];
+    {
+      key: "abyss", name: "第3章 魔界", icon: "👹",
+      desc: "門の向こう側。溶岩の池と黒い岩の荒野で、魔王が玉座から見下ろしている。魔物は桁違いに強いが、こちらも魔界の力で底上げされる。第2章をクリアすると挑める。",
+      bgm: "bgm-battle", chapter: 3, fixedLight: 0.45, boss: "demonlord", foePower: 1.7, heroBoost: 0.25,
+      foes: ["warlock", "gargoyle", "wraith", "ifrit", "venomspider"],
+      phase: { key: "dusk", label: "👹 魔界", note: "空が燃えている" },
+      ground: ["#2a1418", "#33181c", "#211014"],
+    },
+    {
+      key: "ruinforest", name: "破壊の森", icon: "🥀",
+      desc: "枯れ木と岩だけの静かな森。木はまばらで見通しがよい。中央の祭壇に「破壊の杖」が祀られていて、拾えば誰でも振るえる。章には属さないので、いつでも遊べる。",
+      bgm: "bgm-darkforest", fixedLight: 0.7, boss: null, foePower: 1.15,
+      foes: ["goblin", "orc", "skeleton", "warlock"],
+      phase: { key: "dusk", label: "🥀 破壊の森", note: "中央に杖が眠る" },
+      ground: ["#3b3a2c", "#443f30", "#332f26"],
+    },
+  ].map((st) => Object.assign({}, STAGE_DEFAULTS, st));
   const STAGE_BY_KEY = {};
   STAGES.forEach((s) => (STAGE_BY_KEY[s.key] = s));
   const stageDef = () => STAGE_BY_KEY[G && G.stage ? G.stage : playerStage] || STAGE_BY_KEY.ruins;
   const stageIsTraining = (key) => !!(STAGE_BY_KEY[key] && STAGE_BY_KEY[key].training);
   const isTraining = () => !!stageDef().training;
   const bossDef = () => BOSSES[stageDef().boss] || null;
+  // 章の進み具合。clearedChapter までが踏破済みで、その次の章まで選べる。
+  const chapterUnlocked = (st) => !st.chapter || st.chapter <= clearedChapter + 1;
+  const nextChapterStage = (st) => STAGES.find((x) => x.chapter === (st.chapter || 0) + 1) || null;
 
   const DIFF = {
     easy:   { aimErr: 0.19, react: 430, fireChance: 0.62, hpMul: 0.80, dmgMul: 0.80, foeMul: 0.7 },
@@ -494,6 +658,11 @@
     shieldText: document.getElementById("shield-text"),
     shieldState: document.getElementById("shield-state"),
     ult: document.getElementById("ult-text"),
+    manaRow: document.getElementById("mana-row"),
+    manaFill: document.getElementById("mana-fill"),
+    manaText: document.getElementById("mana-text"),
+    manaNote: document.getElementById("mana-note"),
+    chargeNote: document.getElementById("charge-note"),
     vehicleHint: document.getElementById("vehicle-hint"),
     trainingPanel: document.getElementById("training-panel"),
     tpProgress: document.getElementById("tp-progress"),
@@ -511,6 +680,7 @@
     help: document.getElementById("help"),
     result: document.getElementById("result"),
     resultTitle: document.getElementById("result-title"),
+    nextStage: document.getElementById("btn-next-stage"),
     resultStats: document.getElementById("result-stats"),
     rewardSummary: document.getElementById("reward-summary"),
     shopItems: document.getElementById("shop-items"),
@@ -816,6 +986,7 @@
     if (!e.repeat && (e.key === "c" || e.key === "C")) localInput.thornEdge = true;
     if (!e.repeat && (e.key === "q" || e.key === "Q")) localInput.parryEdge = true;
     if (!e.repeat && (e.key === "x" || e.key === "X")) localInput.ultEdge = true;
+    if (!e.repeat && (e.key === "v" || e.key === "V")) localInput.potionEdge = true;
     // 数字キーは「所持している武器の何番目か」。全武器の通し番号ではない。
     if (e.key >= "1" && e.key <= "9") {
       const me = localUnit();
@@ -886,6 +1057,8 @@
   thornBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.thornEdge = true; });
   const ultBtn = document.getElementById("t-ult");
   ultBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.ultEdge = true; });
+  const potionBtn = document.getElementById("t-potion");
+  potionBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.potionEdge = true; });
   document.getElementById("t-golem").addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.interactEdge = true; });
   const touchShieldBtn = document.getElementById("t-shield");
   touchShieldBtn.addEventListener("pointerdown", (e) => {
@@ -907,7 +1080,7 @@
   const localInput = {
     mvx: 0, mvy: 0, aimx: 1, aimy: 0, shoot: false, dash: false,
     reloadEdge: false, bombEdge: false, interactEdge: false, parryEdge: false, glyphEdge: false, thornEdge: false,
-    ultEdge: false, weaponWanted: -1, aimAngle: 0, shield: false,
+    ultEdge: false, potionEdge: false, weaponWanted: -1, aimAngle: 0, shield: false,
   };
 
   function gatherLocalInput() {
@@ -995,6 +1168,7 @@
   let pauseStartedAt = 0;
   let helpOrigin = "menu";
   let money = 0;
+  let clearedChapter = 0;   // ここまでの章は踏破済み
   let shopLevels = Object.fromEntries(SHOP_ITEMS.map((item) => [item.key, 0]));
 
   function emptyState() {
@@ -1006,6 +1180,7 @@
       glyphs: [],
       thorns: [],
       flames: [],
+      doomStaff: null,
       golems: [],
       ballistas: [],
       particles: [],
@@ -1104,6 +1279,8 @@
   function loadProgress() {
     const savedMoney = Number(localStorage.getItem("mr-money"));
     money = Number.isFinite(savedMoney) ? Math.max(0, Math.floor(savedMoney)) : 0;
+    const savedChapter = Number(localStorage.getItem("mr-cleared"));
+    clearedChapter = Number.isFinite(savedChapter) ? clamp(Math.floor(savedChapter), 0, 99) : 0;
     try {
       shopLevels = sanitizeShopLevels(JSON.parse(localStorage.getItem("mr-shop") || "{}"));
     } catch (e) {
@@ -1113,6 +1290,7 @@
 
   function saveProgress() {
     localStorage.setItem("mr-money", String(money));
+    localStorage.setItem("mr-cleared", String(clearedChapter));
     localStorage.setItem("mr-shop", JSON.stringify(shopLevels));
     if (el.menuMoney) el.menuMoney.textContent = money;
   }
@@ -1199,7 +1377,11 @@
   // ---- マップ生成 ----
   function genMap() {
     const key = stageDef().key;
-    const obs = key === "darkforest" ? genForestMap() : key === "training" ? genTrainingMap() : genRuinsMap();
+    const obs = key === "darkforest" ? genForestMap()
+      : key === "training" ? genTrainingMap()
+      : key === "abyss" ? genAbyssMap()
+      : key === "ruinforest" ? genRuinForestMap()
+      : genRuinsMap();
     // 壊れた障害物をオンラインの仲間へ伝えるための通し番号
     obs.forEach((o, i) => (o.id = i));
     return obs;
@@ -1319,6 +1501,84 @@
     return obs;
   }
 
+  // 破壊の森: 枯れ木と岩だけ。数は控えめで見通しがよい。
+  // 中央には破壊の杖を祀る祭壇 (石積みの環) を置く。
+  const DOOMSTAFF_ALTAR = { x: WORLD_W / 2, y: WORLD_H / 2 };
+  function genRuinForestMap() {
+    const obs = [];
+    const wt = 26;
+    obs.push({ x: 0, y: 0, w: WORLD_W, h: wt, type: "wall", hp: Infinity, border: true });
+    obs.push({ x: 0, y: WORLD_H - wt, w: WORLD_W, h: wt, type: "wall", hp: Infinity, border: true });
+    obs.push({ x: 0, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity, border: true });
+    obs.push({ x: WORLD_W - wt, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity, border: true });
+
+    // 祭壇を囲む石積み。8方向のうち隙間を空けて置くので、必ず中へ入れる。
+    for (let i = 0; i < 8; i++) {
+      if (i % 3 === 0) continue;
+      const a = (i / 8) * Math.PI * 2;
+      const x = DOOMSTAFF_ALTAR.x + Math.cos(a) * 120 - 22;
+      const y = DOOMSTAFF_ALTAR.y + Math.sin(a) * 120 - 22;
+      obs.push({ x, y, w: 44, h: 44, type: "stonepile", hp: Infinity, seed: (i + 1) / 9 });
+    }
+
+    // 枯れ木と岩だけ。ぶつからないよう間隔をあけて、数も控えめにする。
+    const placed = obs.slice();
+    const LANE = 70;
+    for (let i = 0; i < 150; i++) {
+      const isTree = Math.random() < 0.62;
+      const w = isTree ? rand(42, 62) : rand(36, 58);
+      const h = isTree ? w : rand(34, 54);
+      const x = rand(120, WORLD_W - 120 - w);
+      const y = rand(120, WORLD_H - 120 - h);
+      if (BASE_SPOTS.some((spot) => dist2(x + w / 2, y + h / 2, spot.x, spot.y) < 300 ** 2)) continue;
+      if (dist2(x + w / 2, y + h / 2, DOOMSTAFF_ALTAR.x, DOOMSTAFF_ALTAR.y) < 230 ** 2) continue;
+      const blocked = placed.some((o) =>
+        x - LANE < o.x + o.w && x + w + LANE > o.x && y - LANE < o.y + o.h && y + h + LANE > o.y);
+      if (blocked) continue;
+      // 枯れ木は seed に 1 を足して覚えさせ、描画で葉を落とした姿にする
+      const o = { x, y, w, h, type: isTree ? "tree" : "rock", hp: Infinity, seed: Math.random(), withered: isTree };
+      obs.push(o); placed.push(o);
+    }
+    return obs;
+  }
+
+  // 魔界: 黒い岩の柱と割れた地面。遮蔽は少なく、逃げ場も少ない。
+  function genAbyssMap() {
+    const obs = [];
+    const wt = 26;
+    obs.push({ x: 0, y: 0, w: WORLD_W, h: wt, type: "wall", hp: Infinity, border: true });
+    obs.push({ x: 0, y: WORLD_H - wt, w: WORLD_W, h: wt, type: "wall", hp: Infinity, border: true });
+    obs.push({ x: 0, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity, border: true });
+    obs.push({ x: WORLD_W - wt, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity, border: true });
+
+    // 黒曜石の壁。玉座へ続く道をつくるように大きめに置く。
+    for (let i = 0; i < 10; i++) {
+      const w = rand(110, 260), h = rand(60, 180);
+      const x = rand(200, WORLD_W - 200 - w);
+      const y = rand(200, WORLD_H - 200 - h);
+      if (BASE_SPOTS.some((spot) => dist2(x + w / 2, y + h / 2, spot.x, spot.y) < 340 ** 2)) continue;
+      obs.push({ x, y, w, h, type: "wall", hp: Infinity });
+    }
+    // 突き出した岩と、崩れた魔神像
+    const kinds = ["rock", "rock", "column", "statue", "bones", "stonepile"];
+    for (let i = 0; i < 40; i++) {
+      const t = pick(kinds);
+      const w = t === "statue" ? 88 : t === "column" ? 44 : rand(38, 66);
+      const h = t === "statue" ? 46 : t === "column" ? 44 : rand(38, 66);
+      const x = rand(90, WORLD_W - 90 - w);
+      const y = rand(90, WORLD_H - 90 - h);
+      if (BASE_SPOTS.some((spot) => dist2(x + w / 2, y + h / 2, spot.x, spot.y) < 260 ** 2)) continue;
+      obs.push({ x, y, w, h, type: t, hp: Infinity, seed: Math.random() });
+    }
+    // 魔力の壺は魔界では溶けた鉱石。踏み込む前に撃って処理したい。
+    for (let i = 0; i < 8; i++) {
+      const x = rand(260, WORLD_W - 290), y = rand(260, WORLD_H - 290);
+      if (BASE_SPOTS.some((spot) => dist2(x, y, spot.x, spot.y) < 320 ** 2)) continue;
+      obs.push({ x, y, w: 30, h: 30, type: "manajar", hp: 30, r: 16 });
+    }
+    return obs;
+  }
+
   function genRuinsMap() {
     const obs = [];
     // 外周の壁
@@ -1426,6 +1686,19 @@
     s.seesEnemyGlyphs = c.seesEnemyGlyphs;
     // 0 のときは unitR() が標準の UNIT_R に落とす
     s.r = c.bodyR;
+    s.element = c.element || "none";
+    s.maxMana = c.mana || 0;
+    s.mana = s.maxMana;
+    s.manaPotions = s.maxMana ? 1 : 0;
+    s.manaBoostUntil = 0;
+    // 魔界の加護。強敵しか出ない章では勇者側も底上げされる。
+    const boost = stageDef().heroBoost || 0;
+    if (boost > 0) {
+      s.maxHp = Math.round(s.maxHp * (1 + boost));
+      s.hp = s.maxHp;
+      s.dmgMul *= 1 + boost * 0.6;
+      s.speed *= 1 + boost * 0.12;
+    }
     // 必殺技は職業ごとに1つ。最初から撃てる。
     s.ultKey = ULTIMATES[c.key] ? c.key : null;
     s.ult = null;
@@ -1443,13 +1716,15 @@
     s.foeKey = f.key;
     s.classKey = null;
     s.name = f.name;
-    s.maxHp = Math.round(f.hp * D.hpMul);
+    const power = stageDef().foePower || 1;
+    s.maxHp = Math.round(f.hp * D.hpMul * power);
     s.hp = s.maxHp;
     s.speed = f.speed * rand(0.94, 1.06);
     s.r = f.r;
     s.undead = f.undead;
+    s.element = f.element || "none";
     s.xpValue = f.xp;
-    s.dmgMul = f.dmgMul * D.dmgMul;
+    s.dmgMul = f.dmgMul * D.dmgMul * power;
     s.armor = 0; s.maxArmor = 0; s.shield = 0; s.maxShield = 0;
     s.bombs = 0; s.maxBombs = 0; s.glyphs = 0; s.maxGlyphs = 0; s.thorns = 0; s.maxThorns = 0;
     s.ultKey = null; s.ult = null;
@@ -1465,12 +1740,14 @@
     s.bossKey = def.key;
     s.classKey = null;
     s.name = def.name;
-    s.maxHp = Math.round(def.hp * D.hpMul);
+    const power = stageDef().foePower || 1;
+    s.maxHp = Math.round(def.hp * D.hpMul * power);
     s.hp = s.maxHp;
     s.speed = def.speed;
     s.r = def.r;
+    s.element = def.element || "none";
     s.xpValue = def.xp;
-    s.dmgMul = def.dmgMul * D.dmgMul;
+    s.dmgMul = def.dmgMul * D.dmgMul * power;
     s.armor = 0; s.maxArmor = 0; s.shield = 0; s.maxShield = 0;
     s.bombs = 0; s.maxBombs = 0; s.glyphs = 0; s.maxGlyphs = 0; s.thorns = 0; s.maxThorns = 0;
     s.ultKey = null; s.ult = null;
@@ -1500,7 +1777,9 @@
       parryWindowMul: 1, parryCooldownMul: 1,
       glyphArmMul: 1, glyphBlastMul: 1, glyphStealthMul: 1, seesEnemyGlyphs: false,
       thorns: 0, maxThorns: 0, lastThorn: -99999,
-      ultKey: null, ult: null, ultReadyAt: 0, wardedUntil: 0,
+      ultKey: null, ult: null, ultReadyAt: 0, wardedUntil: 0, element: "none",
+      maxMana: 0, mana: 0, manaPotions: 0, manaBoostUntil: 0,
+      holdStart: 0, holdFired: false, doomStaff: false,
       isHuman: !!opt.isHuman,
       controller: opt.controller || "cpu", // 'cpu' | 'local' | peerId
       x: sp.x, y: sp.y, vx: 0, vy: 0,
@@ -1565,8 +1844,11 @@
     const gate = G.bases[TEAM_FOE];
     const progress = gate && gate.maxHp ? 1 - clamp(gate.hp / gate.maxHp, 0, 1) : 0;
     const maxTier = progress > 0.75 ? 3 : progress > 0.45 ? 2 : progress > 0.18 ? 1 : 0;
-    const pool = FOES.filter((f) => f.tier <= maxTier);
-    return pick(pool).key;
+    // その章に出る顔ぶれだけを使う。門が削れるほど強い種類が混ざる。
+    const roster = stageDef().foes || FOES.map((f) => f.key);
+    const all = roster.map((key) => foeDef(key));
+    const pool = all.filter((f) => f.tier <= maxTier);
+    return pick(pool.length ? pool : all).key;
   }
 
   const aliveFoes = () => G.units.filter((s) => s.team === TEAM_FOE && !s.dead).length;
@@ -1923,12 +2205,132 @@
     }
   }
 
+  // ============================================================
+  //  破壊の杖
+  //  破壊の森の中央の祭壇に祀られている。触れた者が持ち主になり、
+  //  倒れると祭壇へ戻る。持っている間は身のまわりに緑のフィールドが張られ、
+  //  飛びこんできた敵の弾がそこで爆ぜる (持ち主とその仲間は傷つかない)。
+  // ============================================================
+  const DOOMSTAFF_PICK_R = 44;
+  const DOOMFIELD_R = 158;
+  const DOOMFIELD_BLAST_R = 76;
+  const DOOMFIELD_BLAST_DMG = 46;
+  const DOOMSTAFF_RETURN_MS = 6000;
+  const DOOM_HOLD_MS = 320;          // これ以上押し続けたら遠距離攻撃
+
+  function spawnDoomStaff() {
+    if (stageDef().key !== "ruinforest") return;
+    G.doomStaff = {
+      x: DOOMSTAFF_ALTAR.x, y: DOOMSTAFF_ALTAR.y,
+      onAltar: true, holderId: -1, returnAt: 0,
+    };
+  }
+
+  function giveDoomStaff(s) {
+    const staff = G.doomStaff;
+    if (!staff || s.doomStaff) return;
+    staff.onAltar = false;
+    staff.holderId = s.id;
+    s.doomStaff = true;
+    // 元の武器は預かったまま、杖の2つを先頭に足す
+    s.savedLoadout = s.loadout.slice();
+    s.savedWeapon = s.weapon;
+    s.loadout = [WKEY.doomstaffSwing].concat(s.savedLoadout);
+    s.weapon = WKEY.doomstaffSwing;
+    s.ammo = WEAPONS[s.weapon].mag;
+    s.reloading = false;
+    Audio.levelup();
+    if (s.id === G.localId) banner("💀 破壊の杖を手にした！　クリックで薙ぎ払い、長押しで破滅弾");
+    else banner(`${s.name} が破壊の杖を手にした`);
+  }
+
+  function dropDoomStaff(s) {
+    const staff = G.doomStaff;
+    if (!s.doomStaff) return;
+    s.doomStaff = false;
+    if (s.savedLoadout) {
+      s.loadout = s.savedLoadout;
+      s.weapon = s.savedWeapon != null && s.savedLoadout.indexOf(s.savedWeapon) >= 0 ? s.savedWeapon : s.savedLoadout[0];
+      s.ammo = WEAPONS[s.weapon].mag;
+      s.savedLoadout = null;
+    }
+    if (staff && staff.holderId === s.id) {
+      staff.holderId = -1;
+      staff.returnAt = now() + DOOMSTAFF_RETURN_MS;
+    }
+  }
+
+  function updateDoomStaff(dt, t) {
+    const staff = G.doomStaff;
+    if (!staff) return;
+    const holder = staff.holderId >= 0 ? G.units.find((s) => s.id === staff.holderId) : null;
+    if (holder && (holder.dead || !holder.doomStaff)) dropDoomStaff(holder);
+    if (staff.holderId >= 0) {
+      // 持ち主について回る
+      if (holder) { staff.x = holder.x; staff.y = holder.y; }
+      updateDoomField(holder, t);
+      return;
+    }
+    // 誰も持っていなければ祭壇へ戻り、また誰かを待つ
+    if (!staff.onAltar && t >= staff.returnAt) {
+      staff.onAltar = true;
+      staff.x = DOOMSTAFF_ALTAR.x; staff.y = DOOMSTAFF_ALTAR.y;
+      banner("💀 破壊の杖が祭壇へ戻った");
+    }
+    if (!staff.onAltar) return;
+    for (const s of G.units) {
+      // 味方も巻きこむ武器なので、拾えるのは人が操るキャラだけにする
+      if (s.dead || s.vehicleId >= 0 || s.ballistaId >= 0 || s.dummy || !s.isHuman) continue;
+      if (dist2(s.x, s.y, staff.x, staff.y) > DOOMSTAFF_PICK_R ** 2) continue;
+      giveDoomStaff(s);
+      break;
+    }
+  }
+
+  // 杖のフィールド。入ってきた敵の弾はここで爆ぜる。持ち主側は傷つかない。
+  function updateDoomField(holder, t) {
+    if (!holder || holder.dead) return;
+    for (let i = G.projectiles.length - 1; i >= 0; i--) {
+      const b = G.projectiles[i];
+      if (b.team === holder.team) continue;
+      if (dist2(b.x, b.y, holder.x, holder.y) > DOOMFIELD_R ** 2) continue;
+      createExplosionFx(b.x, b.y, 12);
+      // 爆風は敵側にだけ入る (holder.team を「撃った側」として渡す)
+      applyBlast(b.x, b.y, DOOMFIELD_BLAST_R, DOOMFIELD_BLAST_DMG, holder, holder.team, 0.6, "poison");
+      for (let k = 0; k < 6; k++) {
+        addParticle(b.x, b.y, { kind: "mist", vx: rand(-30, 30), vy: rand(-30, 30), life: rand(700, 1300), size: rand(6, 12) });
+      }
+      G.projectiles.splice(i, 1);
+    }
+  }
+
+  // 魔界の溶岩だまり。どちらの陣営にも等しく熱い。
+  function spawnLava() {
+    if (stageDef().key !== "abyss") return;
+    for (let i = 0; i < LAVA_POOLS; i++) {
+      let x = 0, y = 0, ok = false;
+      for (let attempt = 0; attempt < 40; attempt++) {
+        x = rand(220, WORLD_W - 220); y = rand(220, WORLD_H - 220);
+        if (BASE_SPOTS.some((spot) => dist2(x, y, spot.x, spot.y) < 360 ** 2)) continue;
+        if (G.obstacles.some((o) => isSolid(o) && circleRect(x, y, LAVA_R, o.x, o.y, o.w, o.h))) continue;
+        ok = true; break;
+      }
+      if (!ok) continue;
+      G.flames.push({
+        id: G.nextId++, x, y, team: -1, owner: -1, lava: true,
+        r: LAVA_R, dps: LAVA_DPS, bornAt: 0, dieAt: 0, seed: Math.random(),
+      });
+    }
+  }
+
   function spawnPickups() {
     G.pickups = [];
     const kinds = [
       "potion", "potion", "potion", "potion", "potion", "potion", "potion", "potion",
       "armor", "armor", "armor", "armor", "armor", "armor",
       "shield", "shield", "shield", "shield",
+      // 魔力の秘薬。魔法を使う職業だけが拾える。
+      "mana", "mana", "mana", "mana", "mana",
     ];
     for (let id = 0; id < kinds.length; id++) {
       let placed = null;
@@ -2040,38 +2442,32 @@
   // ============================================================
   //  攻撃 / ダメージ
   // ============================================================
-  function tryShoot(s, t) {
-    if (s.dead || s.reloading || s.shieldRaised || t < s.stunnedUntil || ultLocked(s, t)) return;
-    const w = WEAPONS[s.weapon];
-    if (t - s.lastShot < w.interval) return;
-    if (w.melee) { tryMelee(s, t, w); return; }
-    if (s.ammo <= 0) { startReload(s, t); return; }
-    s.lastShot = t;
-    s.ammo--;
-    s.recoil = Math.min(8, s.recoil + w.kick);
-    s.muzzle = t;
+  // 弾を1発つくる。通常射撃も、溜め撃ちの2本目3本目もここを通る。
+  function spawnShot(s, w, angle) {
+    if (G.projectiles.length >= MAX_PROJECTILES) return;
     const mx = s.x + Math.cos(s.aimAngle) * (unitR(s) + 14);
     const my = s.y + Math.sin(s.aimAngle) * (unitR(s) + 14);
     // 魔法は魔力、弓は腕前で威力が変わる
     const power = w.magic ? (s.magicMul || 1) : (s.rangedMul || 1);
-    for (let p = 0; p < w.pellets; p++) {
-      const a = s.aimAngle + (Math.random() - 0.5) * w.spread * 2;
-      if (G.projectiles.length < MAX_PROJECTILES) {
-        G.projectiles.push({
-          // 爆発する弾はゴーレムの岩塊砲と同じ「着弾して爆発する」種類として扱う
-          kind: w.blast ? "shell" : "projectile",
-          blast: !!w.blast,
-          x: mx, y: my,
-          vx: Math.cos(a) * w.speed, vy: Math.sin(a) * w.speed,
-          dmg: w.dmg * s.dmgMul * power, team: s.team, owner: s.id,
-          range: w.range, traveled: 0, pierce: w.pierce || 0,
-          proj: w.proj, holy: !!w.holy, slow: w.slow || 0,
-          col: PROJECTILE_COLORS[w.proj] || "#ffe49a",
-          len: w.len,
-        });
-      }
-    }
-    // 詠唱の光 / 弦のはじけ
+    G.projectiles.push({
+      // 爆発する弾はゴーレムの岩塊砲と同じ「着弾して爆発する」種類として扱う
+      kind: w.blast ? "shell" : "projectile",
+      blast: !!w.blast,
+      x: mx, y: my,
+      vx: Math.cos(angle) * w.speed, vy: Math.sin(angle) * w.speed,
+      dmg: w.dmg * s.dmgMul * power, team: s.team, owner: s.id,
+      range: w.range, traveled: 0, pierce: w.pierce || 0,
+      proj: w.proj, holy: !!w.holy, slow: w.slow || 0, element: w.element,
+      ratio: w.ratioDamage || 0, friendly: !!w.friendlyFire,
+      col: PROJECTILE_COLORS[w.proj] || "#ffe49a",
+      len: w.len,
+    });
+  }
+
+  // 撃った合図。銃口の光と手応え。
+  function shotFeedback(s, w) {
+    const mx = s.x + Math.cos(s.aimAngle) * (unitR(s) + 14);
+    const my = s.y + Math.sin(s.aimAngle) * (unitR(s) + 14);
     addParticle(mx, my, {
       kind: w.magic ? "cast" : "flash", life: w.magic ? 200 : 60,
       size: w.magic ? 13 : 9, a: s.aimAngle,
@@ -2080,10 +2476,53 @@
     if (s.id === G.localId || dist2(s.x, s.y, camX + viewW() / 2, camY + viewH() / 2) < 700 * 700) Audio.shot(w.snd);
   }
 
+  function tryShoot(s, t) {
+    if (s.dead || s.reloading || s.shieldRaised || t < s.stunnedUntil || ultLocked(s, t)) return;
+    const w = WEAPONS[s.weapon];
+    if (t - s.lastShot < w.interval) return;
+    if (w.melee) { tryMelee(s, t, w); return; }
+    if (!spendMana(s, w)) return;
+    if (s.ammo <= 0) { startReload(s, t); return; }
+    s.lastShot = t;
+    s.ammo--;
+    s.recoil = Math.min(8, s.recoil + w.kick);
+    s.muzzle = t;
+    for (let p = 0; p < w.pellets; p++) {
+      spawnShot(s, w, s.aimAngle + (Math.random() - 0.5) * w.spread * 2);
+    }
+    shotFeedback(s, w);
+  }
+
+  // ---- 溜め撃ち (狩人の長弓) ----
+  // 引き絞った長さで放つ矢の本数が変わる。短く=1本、中くらい=2本、長く=3本。
+  const CHARGE_STEP2 = 340, CHARGE_STEP3 = 760;
+  const chargeLevel = (heldMs) => (heldMs >= CHARGE_STEP3 ? 3 : heldMs >= CHARGE_STEP2 ? 2 : 1);
+
+  function fireCharged(s, t, level) {
+    if (s.dead || s.reloading || s.shieldRaised || t < s.stunnedUntil || ultLocked(s, t)) return;
+    const w = WEAPONS[s.weapon];
+    if (t - s.lastShot < w.interval) return;
+    if (s.ammo <= 0) { startReload(s, t); return; }
+    if (!spendMana(s, w)) return;
+    const shots = Math.min(level, s.ammo);
+    s.lastShot = t;
+    s.ammo -= shots;
+    s.recoil = Math.min(8, s.recoil + w.kick);
+    s.muzzle = t;
+    for (let i = 0; i < shots; i++) {
+      // 本数が増えるほど扇状に広がる
+      const fan = shots === 1 ? 0 : (i - (shots - 1) / 2) * 0.085;
+      spawnShot(s, w, s.aimAngle + fan + (Math.random() - 0.5) * w.spread * 2);
+    }
+    shotFeedback(s, w);
+    if (s.id === G.localId && shots > 1) banner(`引き絞った！　矢 ${shots} 本`);
+  }
+
   // 飛び道具の色。proj の種類ごとに固定。
   const PROJECTILE_COLORS = {
     arrow: "#e6d9ae", axe: "#cfd6da", bone: "#e8e2cf", rock: "#a89a86",
     fire: "#ff9b3d", bolt: "#a8e4ff", ice: "#9fe8ff", holy: "#ffef9f", dark: "#c07cff",
+    dragon: "#ffcf7a", venom: "#9ddc4a",
   };
 
   // 癒しの光。前方の扇の中にいる味方(自分も含む)をまとめて回復する。
@@ -2135,7 +2574,9 @@
     const dmg = w.dmg * s.dmgMul * (s.meleeMul || 1);
     let target = null, best = Infinity;
     for (const enemy of G.units) {
-      if (enemy.dead || enemy.vehicleId >= 0 || enemy.team === s.team) continue;
+      if (enemy.dead || enemy.vehicleId >= 0) continue;
+      // 味方に当たる武器 (破壊の杖) は、自分以外なら味方でも狙ってしまう
+      if (enemy.team === s.team && !(w.friendlyFire && enemy.id !== s.id)) continue;
       const d2v = dist2(s.x, s.y, enemy.x, enemy.y);
       if (d2v > (w.range + unitR(enemy)) ** 2 || d2v >= best || !lineClear(s.x, s.y, enemy.x, enemy.y)) continue;
       const a = Math.atan2(enemy.y - s.y, enemy.x - s.x);
@@ -2169,6 +2610,16 @@
     const sx = s.x + Math.cos(s.aimAngle) * 28, sy = s.y + Math.sin(s.aimAngle) * 28;
     if (w.slashFx) {
       addParticle(sx, sy, { kind: "slash", life: 150, size: w.range * 0.44, a: s.aimAngle, arc });
+    } else if (w.style === "boneStaff") {
+      // 振り抜いた跡に、緑の瘴気がしばらく漂う
+      for (let i = 0; i < 16; i++) {
+        const a = s.aimAngle + rand(-arc, arc);
+        const d = rand(w.range * 0.3, w.range);
+        addParticle(s.x + Math.cos(a) * d, s.y + Math.sin(a) * d, {
+          kind: "mist", vx: rand(-16, 16), vy: rand(-18, 6), life: rand(1400, 2400), size: rand(9, 20),
+        });
+      }
+      addParticle(sx, sy, { kind: "ring", life: 420, size: w.range, a: 4 });
     } else {
       // 素手は斬撃線の代わりに、拳の届いた先で土煙を上げる
       for (let i = 0; i < 6; i++) {
@@ -2190,9 +2641,16 @@
         damageBeast(target, dmg, s);
         addParticle(target.x, target.y, { kind: "dust", vx: rand(-80, 80), vy: rand(-80, 80), life: 300, size: 3 });
       } else {
-        // 聖属性はアンデッドによく効く
-        const holyDmg = w.holy && target.undead ? dmg * HOLY_VS_UNDEAD : dmg;
-        const result = damageUnit(target, holyDmg, s, { x: s.x, y: s.y, type: "melee" });
+        const before = target.hp;
+        const result = damageUnit(target, dmg, s, { x: s.x, y: s.y, type: "melee", element: w.element, ratio: w.ratioDamage });
+        // 魂喰らいは奪った命を術者へ返す
+        if (w.lifesteal > 0 && result === "hit" && s.hp < s.maxHp) {
+          const drained = Math.max(0, before - target.hp) * w.lifesteal;
+          if (drained > 0) {
+            s.hp = Math.min(s.maxHp, s.hp + drained);
+            addParticle(s.x, s.y, { kind: "heal", vx: 0, vy: -50, life: 460, size: 5 });
+          }
+        }
         if (result !== "parried") {
           for (let i = 0; i < 6; i++) {
             addParticle(target.x, target.y, { kind: "blood", vx: rand(-110, 110), vy: rand(-110, 110), life: rand(220, 420), size: rand(1.5, 3.5) });
@@ -2330,15 +2788,16 @@
 
   function updateFlames(dt, t) {
     for (let i = G.flames.length - 1; i >= 0; i--) {
-      if (t >= G.flames[i].dieAt) G.flames.splice(i, 1);
+      // 溶岩だまりは燃え尽きない
+      if (!G.flames[i].lava && t >= G.flames[i].dieAt) G.flames.splice(i, 1);
     }
     for (const s of G.units) {
       if (s.dead || s.vehicleId >= 0) continue;
       for (const flame of G.flames) {
         if (flame.team === s.team) continue;
-        if (dist2(s.x, s.y, flame.x, flame.y) > FLAME_R ** 2) continue;
+        if (dist2(s.x, s.y, flame.x, flame.y) > (flame.r || FLAME_R) ** 2) continue;
         const attacker = G.units.find((o) => o.id === flame.owner) || null;
-        damageUnit(s, FLAME_DPS * dt, attacker, { x: flame.x, y: flame.y, type: "explosion", bypassEquipment: true });
+        damageUnit(s, (flame.dps || FLAME_DPS) * dt, attacker, { x: flame.x, y: flame.y, type: "explosion", bypassEquipment: true, element: "fire" });
         break;
       }
     }
@@ -2346,8 +2805,8 @@
       if (beast.dead) continue;
       for (const flame of G.flames) {
         if (flame.team === beast.team) continue;
-        if (dist2(beast.x, beast.y, flame.x, flame.y) > FLAME_R ** 2) continue;
-        damageBeast(beast, FLAME_DPS * dt, null);
+        if (dist2(beast.x, beast.y, flame.x, flame.y) > (flame.r || FLAME_R) ** 2) continue;
+        damageBeast(beast, (flame.dps || FLAME_DPS) * dt, null);
         break;
       }
     }
@@ -2417,13 +2876,13 @@
   }
 
   // 爆風の共通処理。中心から離れるほど弱くなるダメージを、敵と敵拠点にまとめて与える。
-  function applyBlast(x, y, radius, damage, attacker, team, falloff) {
+  function applyBlast(x, y, radius, damage, attacker, team, falloff, element) {
     const drop = falloff == null ? 0.6 : falloff;
     const scale = (d, extra) => 1 - clamp(d / (radius + (extra || 0)), 0, 1) * drop;
     for (const s of G.units) {
       if (s.dead || s.vehicleId >= 0 || s.team === team) continue;
       const d = Math.sqrt(dist2(s.x, s.y, x, y));
-      if (d < radius + unitR(s)) damageUnit(s, damage * scale(d), attacker, { x, y, type: "explosion" });
+      if (d < radius + unitR(s)) damageUnit(s, damage * scale(d), attacker, { x, y, type: "explosion", element });
     }
     for (const beast of G.beasts) {
       if (beast.dead || beast.team === team) continue;
@@ -2505,27 +2964,36 @@
         Audio.heal();
         break;
       }
-      // ---- 冒険者: 火炎瓶を扇状にばらまく(手持ちは減らない) ----
+      // ---- 冒険者: 剣を突き立て、切っ先から龍の波動を放つ ----
       case "adventurer": {
-        s.ult = Object.assign(base, { endAt: t + 420 });
-        for (let i = 0; i < FIREDANCE_COUNT; i++) {
-          const spread = (i / (FIREDANCE_COUNT - 1) - 0.5) * 1.0;
-          const a = aim + spread;
-          const speed = 520 - Math.abs(spread) * 280;
-          G.bombs.push({
-            x: s.x + Math.cos(a) * 22, y: s.y + Math.sin(a) * 22,
-            vx: Math.cos(a) * speed, vy: Math.sin(a) * speed,
-            team: s.team, owner: s.id, fuseAt: t + 900 + i * 70, bornAt: t, rotation: 0,
+        s.ult = Object.assign(base, {
+          endAt: t + DRAGON_THRUST_MS + DRAGON_WAVE_MS,
+          lockUntil: t + DRAGON_THRUST_MS,
+          thrustAt: t + DRAGON_THRUST_MS, fired: false,
+          wx: s.x, wy: s.y, traveled: 0,
+        });
+        Audio.melee();
+        // 突き立てる構え。足元から力が立ちのぼる。
+        for (let i = 0; i < 16; i++) {
+          const a = rand(0, Math.PI * 2), d = rand(20, 60);
+          addParticle(s.x + Math.cos(a) * d, s.y + Math.sin(a) * d, {
+            kind: "spark", vx: Math.cos(a) * -60, vy: rand(-220, -90), life: rand(300, 620), size: rand(2, 5),
           });
         }
-        Audio.melee();
         break;
       }
       // ---- 獣使い: 狼を呼び戻し、敵をすくませる咆哮 ----
       case "beastmaster": {
         s.ult = Object.assign(base, { endAt: t + ROAR_MS });
         Audio.roar();
-        shake = Math.min(20, shake + 9);
+        shake = Math.min(22, shake + 12);
+        for (let i = 0; i < 3; i++) {
+          addParticle(s.x, s.y, { kind: "ring", life: 380 + i * 180, size: ROAR_R * (0.5 + i * 0.32), a: 0 });
+        }
+        for (let i = 0; i < 20; i++) {
+          const a = rand(0, Math.PI * 2), sp = rand(120, 420);
+          addParticle(s.x, s.y, { kind: "dust", vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(320, 620), size: rand(3, 7) });
+        }
         for (const beast of G.beasts) {
           // 自分の狼だけ。主のいない野良は呼べない。
           if (beast.team !== s.team || beast.handlerId !== s.id) continue;
@@ -2551,6 +3019,29 @@
         }
         break;
       }
+      // ---- 闇魔導士: 前方に闇の淵を開く ----
+      case "darkmage": {
+        s.ult = Object.assign(base, {
+          endAt: t + ABYSS_MS, nextTickAt: t,
+          x: clamp(s.x + Math.cos(aim) * ABYSS_FOCUS_D, 70, WORLD_W - 70),
+          y: clamp(s.y + Math.sin(aim) * ABYSS_FOCUS_D, 70, WORLD_H - 70),
+        });
+        Audio.shot("cast");
+        for (let i = 0; i < 24; i++) {
+          const a = rand(0, Math.PI * 2), d = rand(ABYSS_R * 0.4, ABYSS_R);
+          addParticle(s.ult.x + Math.cos(a) * d, s.ult.y + Math.sin(a) * d, {
+            kind: "drawin", vx: -Math.cos(a) * d * 1.6, vy: -Math.sin(a) * d * 1.6, life: rand(300, 620), size: rand(3, 6),
+          });
+        }
+        addParticle(s.ult.x, s.ult.y, { kind: "ring", life: 520, size: ABYSS_R, a: 3 });
+        break;
+      }
+      // ---- 竜騎士: 前方へ竜の息を吐き続ける ----
+      case "dragoon": {
+        s.ult = Object.assign(base, { endAt: t + BREATH_MS, nextTickAt: t, lockUntil: t + BREATH_MS });
+        Audio.shot("blast");
+        break;
+      }
       // ---- 魔神像: 地面を叩き割る衝撃波 ----
       case "colossus": {
         s.ult = Object.assign(base, { endAt: t + QUAKE_MS, lockUntil: t + 260, r: 40 });
@@ -2559,6 +3050,16 @@
         for (let i = 0; i < 18; i++) {
           const a = rand(0, Math.PI * 2), sp = rand(80, 260);
           addParticle(s.x, s.y, { kind: "dust", vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(350, 700), size: rand(4, 9) });
+        }
+        for (let i = 0; i < 16; i++) {
+          const a = rand(0, Math.PI * 2), sp = rand(150, 520);
+          addParticle(s.x, s.y, { kind: "rock", vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(450, 900), size: rand(4, 11), a });
+        }
+        for (let i = 0; i < 7; i++) {
+          addParticle(s.x, s.y, { kind: "crack", life: 1500, size: rand(100, 190), a: rand(0, Math.PI * 2) });
+        }
+        for (let i = 0; i < 2; i++) {
+          addParticle(s.x, s.y, { kind: "ring", life: 420 + i * 220, size: QUAKE_R * (0.6 + i * 0.5), a: 2 });
         }
         break;
       }
@@ -2578,7 +3079,10 @@
         case "hunter": tickArrowRain(s, u, dt, t); break;
         case "priest": tickSanctuary(s, u, dt, t); break;
         case "colossus": tickQuake(s, u, dt, t); break;
-        // 火炎乱舞と獣王の咆哮は撃った瞬間に効果が出ている。残りは見た目の余韻だけ。
+        case "adventurer": tickDragonWave(s, u, dt, t); break;
+        case "darkmage": tickAbyss(s, u, dt, t); break;
+        case "dragoon": tickBreath(s, u, dt, t); break;
+        // 獣王の咆哮は撃った瞬間に効果が出ている。残りは見た目の余韻だけ。
       }
       if (s.ult && t >= s.ult.endAt) s.ult = null;
     }
@@ -2599,10 +3103,23 @@
     resolveMovement(s, s.x + Math.cos(u.angle) * GALE_SPEED * dt, s.y + Math.sin(u.angle) * GALE_SPEED * dt);
     s.legPhase += dt * 20;
     u.x = s.x; u.y = s.y;
+    // 走り抜けた軌跡に残像と土煙を落とす
+    if (Math.random() < dt * 40) {
+      addParticle(s.x, s.y, { kind: "ghost", life: 260, size: 15 });
+      addParticle(s.x, s.y, { kind: "dust", vx: -Math.cos(u.angle) * 120, vy: -Math.sin(u.angle) * 120, life: 320, size: rand(3, 6) });
+    }
     if (t < u.nextTickAt) return;
     u.nextTickAt = t + GALE_MS / 3;
     const sx = s.x + Math.cos(u.angle) * 30, sy = s.y + Math.sin(u.angle) * 30;
     addParticle(sx, sy, { kind: "slash", life: 240, size: GALE_RANGE * 0.62, a: u.angle, arc: GALE_ARC });
+    // 斬るたびに風の輪と、足元に走る裂け目
+    addParticle(sx, sy, { kind: "ring", life: 320, size: GALE_RANGE, a: 3 });
+    addParticle(s.x, s.y, { kind: "crack", life: 800, size: rand(45, 80), a: u.angle + rand(-0.5, 0.5) });
+    for (let i = 0; i < 10; i++) {
+      const a = u.angle + rand(-GALE_ARC, GALE_ARC), sp = rand(140, 380);
+      addParticle(sx, sy, { kind: "spark", vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(220, 460), size: rand(2, 4) });
+    }
+    shake = Math.min(16, shake + (s.id === G.localId ? 5 : 0));
     Audio.melee();
     const dmg = GALE_DAMAGE * s.dmgMul * (s.meleeMul || 1);
     const inArc = (x, y, radius) =>
@@ -2657,7 +3174,7 @@
       return;
     }
     // 詠唱完了 → 起爆
-    applyBlast(u.x, u.y, EXPLOSION_BLAST_R, EXPLOSION_DAMAGE * s.dmgMul * (s.magicMul || 1), s, s.team, 0.5);
+    applyBlast(u.x, u.y, EXPLOSION_BLAST_R, EXPLOSION_DAMAGE * s.dmgMul * (s.magicMul || 1), s, s.team, 0.5, "fire");
     // 巻き込まれた障害物は跡形もなく吹き飛ぶ
     shatterObstacles(u.x, u.y, EXPLOSION_BLAST_R);
     Audio.boom();
@@ -2667,7 +3184,22 @@
       addParticle(u.x, u.y, { kind: "spark", vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(400, 900), size: rand(3, 8) });
     }
     addParticle(u.x, u.y, { kind: "shockring", life: 560, size: EXPLOSION_BLAST_R });
-    shake = Math.min(30, shake + 26);
+    // 三重の衝撃波・立ちのぼる火柱・地面に走る裂け目・吹き飛ぶ瓦礫
+    for (let i = 0; i < 3; i++) {
+      addParticle(u.x, u.y, { kind: "ring", life: 420 + i * 190, size: EXPLOSION_BLAST_R * (0.7 + i * 0.35), a: 0 });
+    }
+    for (let i = 0; i < 5; i++) {
+      const a = rand(0, Math.PI * 2), d = rand(0, EXPLOSION_BLAST_R * 0.7);
+      addParticle(u.x + Math.cos(a) * d, u.y + Math.sin(a) * d, { kind: "pillar", life: rand(420, 700), size: rand(34, 62), a: 0 });
+    }
+    for (let i = 0; i < 6; i++) {
+      addParticle(u.x, u.y, { kind: "crack", life: 1500, size: rand(80, 160), a: rand(0, Math.PI * 2) });
+    }
+    for (let i = 0; i < 18; i++) {
+      const a = rand(0, Math.PI * 2), sp = rand(200, 640);
+      addParticle(u.x, u.y, { kind: "rock", vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(500, 1000), size: rand(4, 10), a });
+    }
+    shake = Math.min(34, shake + 30);
     s.ult = null;
     // 撃ち切った反動でその場に崩れ落ちる
     s.stunnedUntil = Math.max(s.stunnedUntil, t + EXPLOSION_EXHAUST_MS);
@@ -2712,12 +3244,14 @@
       if (base.team === s.team || base.hp <= 0) continue;
       if (dist2(base.x, base.y, u.x, u.y) < (RAIN_R + BASE_CORE_R) ** 2) damageBase(base, dmg * 0.5, s, s.team);
     }
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 9; i++) {
       const a = rand(0, Math.PI * 2), d = Math.sqrt(Math.random()) * RAIN_R;
-      addParticle(u.x + Math.cos(a) * d, u.y + Math.sin(a) * d - 70, {
-        kind: "rainarrow", vx: 40, vy: 700, life: 200, size: 15,
-      });
+      const ax = u.x + Math.cos(a) * d, ay = u.y + Math.sin(a) * d;
+      addParticle(ax, ay - 70, { kind: "rainarrow", vx: 40, vy: 700, life: 200, size: 15 });
+      // 突き刺さった土煙
+      addParticle(ax, ay, { kind: "dust", vx: rand(-50, 50), vy: rand(-70, -20), life: rand(240, 460), size: rand(2, 5) });
     }
+    if (u.ticks % 3 === 1) addParticle(u.x, u.y, { kind: "ring", life: 420, size: RAIN_R, a: 2 });
     if (u.ticks % 2 === 1) Audio.shot("bow");
   }
 
@@ -2740,7 +3274,7 @@
           addParticle(e.x + rand(-8, 8), e.y, { kind: "heal", vx: rand(-12, 12), vy: rand(-55, -22), life: 520, size: 5 });
         }
       } else {
-        damageUnit(e, e.undead ? dmg * HOLY_VS_UNDEAD : dmg, s, { x: s.x, y: s.y, type: "projectile", bypassEquipment: true });
+        damageUnit(e, dmg, s, { x: s.x, y: s.y, type: "projectile", bypassEquipment: true, element: "holy" });
       }
     }
     for (const beast of G.beasts) {
@@ -2755,6 +3289,170 @@
         kind: "heal", vx: 0, vy: rand(-70, -30), life: rand(500, 800), size: rand(3, 5),
       });
     }
+    // 縁に立つ光の柱と、輪の中に舞う羽根
+    for (let i = 0; i < 2; i++) {
+      const a = rand(0, Math.PI * 2);
+      addParticle(s.x + Math.cos(a) * SANCT_R, s.y + Math.sin(a) * SANCT_R, {
+        kind: "pillar", life: rand(420, 700), size: rand(18, 30), a: 1,
+      });
+    }
+    const fa = rand(0, Math.PI * 2), fd = rand(0, SANCT_R);
+    addParticle(s.x + Math.cos(fa) * fd, s.y + Math.sin(fa) * fd, {
+      kind: "feather", vx: rand(-18, 18), vy: rand(-46, -18), life: rand(700, 1200), size: rand(4, 7),
+    });
+  }
+
+  // ---- 龍波斬 (冒険者) ----
+  // 前半は剣を突き立てる溜め、後半は切っ先から放たれた龍の波動が走る。
+  function tickDragonWave(s, u, dt, t) {
+    if (t < u.thrustAt) {
+      // 溜め。切っ先に光が集まる。
+      s.moving = false;
+      s.aimAngle = u.angle;
+      const tipX = s.x + Math.cos(u.angle) * 34, tipY = s.y + Math.sin(u.angle) * 34;
+      const a = rand(0, Math.PI * 2), d = rand(40, 110);
+      addParticle(tipX + Math.cos(a) * d, tipY + Math.sin(a) * d, {
+        kind: "drawin", vx: -Math.cos(a) * d * 2.2, vy: -Math.sin(a) * d * 2.2, life: 260, size: rand(2.5, 5),
+      });
+      if (s.id === G.localId) shake = Math.min(9, shake + 10 * dt);
+      return;
+    }
+    if (!u.fired) {
+      // 突き立てた瞬間。目の前の敵を刺し、波動を撃ち出す。
+      u.fired = true;
+      u.wx = s.x + Math.cos(u.angle) * 30;
+      u.wy = s.y + Math.sin(u.angle) * 30;
+      Audio.shot("blast");
+      shake = Math.min(22, shake + 14);
+      const stab = DRAGON_THRUST_DAMAGE * s.dmgMul * (s.meleeMul || 1);
+      for (const e of G.units) {
+        if (e.dead || e.vehicleId >= 0 || e.team === s.team) continue;
+        if (dist2(e.x, e.y, u.wx, u.wy) > (70 + unitR(e)) ** 2) continue;
+        damageUnit(e, stab, s, { x: s.x, y: s.y, type: "melee" });
+      }
+      addParticle(u.wx, u.wy, { kind: "ring", life: 420, size: 130, a: 3 });
+      addParticle(u.wx, u.wy, { kind: "slash", life: 260, size: 70, a: u.angle, arc: 1.5 });
+      for (let i = 0; i < 22; i++) {
+        const a = u.angle + rand(-0.9, 0.9), sp = rand(120, 460);
+        addParticle(u.wx, u.wy, { kind: i % 3 === 0 ? "spark" : "dust", vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(300, 700), size: rand(3, 7) });
+      }
+    }
+    // 波動が走る
+    const step = DRAGON_SPEED * dt;
+    u.wx += Math.cos(u.angle) * step;
+    u.wy += Math.sin(u.angle) * step;
+    u.traveled += step;
+    u.x = u.wx; u.y = u.wy;
+    const dmg = DRAGON_WAVE_DAMAGE * s.dmgMul * (s.meleeMul || 1);
+    const hitR = (radius) => (DRAGON_R + radius) ** 2;
+    for (const e of G.units) {
+      if (e.dead || e.vehicleId >= 0 || e.team === s.team) continue;
+      if (dist2(e.x, e.y, u.wx, u.wy) > hitR(unitR(e)) || !ultMarkHit(u, "u" + e.id)) continue;
+      damageUnit(e, dmg, s, { x: u.wx, y: u.wy, type: "melee" });
+      for (let i = 0; i < 10; i++) {
+        addParticle(e.x, e.y, { kind: "blood", vx: rand(-160, 160), vy: rand(-160, 160), life: rand(240, 480), size: rand(2, 4) });
+      }
+    }
+    for (const beast of G.beasts) {
+      if (beast.dead || beast.team === s.team) continue;
+      if (dist2(beast.x, beast.y, u.wx, u.wy) > hitR(BEAST_R) || !ultMarkHit(u, "b" + beast.id)) continue;
+      damageBeast(beast, dmg, s);
+    }
+    for (const golem of G.golems) {
+      if (golem.dead || golem.team === s.team) continue;
+      if (dist2(golem.x, golem.y, u.wx, u.wy) > hitR(GOLEM_R) || !ultMarkHit(u, "g" + golem.id)) continue;
+      damageGolem(golem, dmg * 0.5, s);
+    }
+    for (const base of G.bases) {
+      if (base.team === s.team || base.hp <= 0) continue;
+      if (dist2(base.x, base.y, u.wx, u.wy) > hitR(BASE_CORE_R) || !ultMarkHit(u, "s" + base.team)) continue;
+      damageBase(base, dmg * 0.7, s, s.team);
+    }
+    // 龍が地を這った跡
+    for (let i = 0; i < 2; i++) {
+      const a = u.angle + Math.PI / 2 * (i ? 1 : -1);
+      addParticle(u.wx + Math.cos(a) * rand(10, 34), u.wy + Math.sin(a) * rand(10, 34), {
+        kind: "dust", vx: Math.cos(a) * 90, vy: Math.sin(a) * 90, life: rand(260, 460), size: rand(3, 6),
+      });
+    }
+    // 壁にぶつかったら砕けて消える
+    if (u.traveled > 60 && !lineClear(u.wx - Math.cos(u.angle) * 12, u.wy - Math.sin(u.angle) * 12, u.wx, u.wy)) {
+      addParticle(u.wx, u.wy, { kind: "ring", life: 360, size: 110, a: 3 });
+      s.ult = null;
+    }
+  }
+
+  // ---- 暗黒領域 (闇魔導士) ----
+  // 開いた淵の中にいる敵を焼き、足を鈍らせ、吸った命を術者へ返す。
+  function tickAbyss(s, u, dt, t) {
+    if (t < u.nextTickAt) return;
+    u.nextTickAt = t + ABYSS_TICK;
+    const dmg = ABYSS_DAMAGE * s.dmgMul * (s.magicMul || 1);
+    let drained = 0;
+    for (const e of G.units) {
+      if (e.dead || e.vehicleId >= 0 || e.team === s.team) continue;
+      if (dist2(e.x, e.y, u.x, u.y) > (ABYSS_R + unitR(e)) ** 2) continue;
+      damageUnit(e, dmg, s, { x: u.x, y: u.y, type: "projectile", element: "dark" });
+      e.chilledUntil = Math.max(e.chilledUntil || 0, t + ABYSS_TICK + 220);
+      drained += dmg;
+      addParticle(e.x, e.y, { kind: "drawin", vx: rand(-40, 40), vy: rand(-90, -30), life: 420, size: rand(3, 5) });
+    }
+    for (const beast of G.beasts) {
+      if (beast.dead || beast.team === s.team) continue;
+      if (dist2(beast.x, beast.y, u.x, u.y) > (ABYSS_R + BEAST_R) ** 2) continue;
+      damageBeast(beast, dmg, s);
+      drained += dmg;
+    }
+    if (drained > 0 && s.hp < s.maxHp) {
+      s.hp = Math.min(s.maxHp, s.hp + drained * ABYSS_DRAIN);
+      addParticle(s.x, s.y, { kind: "heal", vx: 0, vy: -50, life: 520, size: 5 });
+    }
+    // 渦を巻く闇
+    for (let i = 0; i < 5; i++) {
+      const a = rand(0, Math.PI * 2), d = rand(ABYSS_R * 0.3, ABYSS_R);
+      addParticle(u.x + Math.cos(a) * d, u.y + Math.sin(a) * d, {
+        kind: "drawin", vx: -Math.sin(a) * 120, vy: Math.cos(a) * 120, life: rand(320, 560), size: rand(2, 5),
+      });
+    }
+  }
+
+  // ---- 竜炎の息吹 (竜騎士) ----
+  // 前方の扇を焼き続け、通った地面に炎を残す。
+  function tickBreath(s, u, dt, t) {
+    s.moving = false;
+    s.aimAngle = u.angle;
+    // 吹き出す炎
+    for (let i = 0; i < 3; i++) {
+      const a = u.angle + rand(-BREATH_ARC, BREATH_ARC);
+      const d = rand(30, BREATH_RANGE);
+      addParticle(s.x + Math.cos(a) * d, s.y + Math.sin(a) * d, {
+        kind: "spark", vx: Math.cos(a) * 240, vy: Math.sin(a) * 240, life: rand(220, 460), size: rand(3, 8),
+      });
+    }
+    if (s.id === G.localId) shake = Math.min(12, shake + 16 * dt);
+    if (t < u.nextTickAt) return;
+    u.nextTickAt = t + BREATH_TICK;
+    const dmg = BREATH_DAMAGE * s.dmgMul * (s.magicMul || 1);
+    const inCone = (x, y, radius) =>
+      dist2(s.x, s.y, x, y) < (BREATH_RANGE + radius) ** 2 && angleGap(u.angle, Math.atan2(y - s.y, x - s.x)) < BREATH_ARC;
+    for (const e of G.units) {
+      if (e.dead || e.vehicleId >= 0 || e.team === s.team) continue;
+      if (!inCone(e.x, e.y, unitR(e))) continue;
+      damageUnit(e, dmg, s, { x: s.x, y: s.y, type: "projectile", element: "fire" });
+    }
+    for (const beast of G.beasts) {
+      if (beast.dead || beast.team === s.team) continue;
+      if (inCone(beast.x, beast.y, BEAST_R)) damageBeast(beast, dmg, s);
+    }
+    // 焼けた地面に炎が残る
+    const a = u.angle + rand(-BREATH_ARC * 0.8, BREATH_ARC * 0.8);
+    const d = rand(70, BREATH_RANGE);
+    if (G.flames.length >= FLAME_MAX) G.flames.shift();
+    G.flames.push({
+      id: G.nextId++, x: s.x + Math.cos(a) * d, y: s.y + Math.sin(a) * d,
+      team: s.team, owner: s.id, bornAt: t, dieAt: t + 3200, seed: Math.random(),
+    });
+    Audio.shot("blast");
   }
 
   // ---- 震天の一撃 (魔神像) ----
@@ -2809,6 +3507,55 @@
     beast.angle = s.aimAngle;
   }
 
+  // ============================================================
+  //  魔力 (魔法使い・闇魔導士)
+  //  魔法を撃つと減り、放っておいても少しずつ戻る。
+  //  「魔力の秘薬」を飲んでいる間だけ、戻りが目に見えて速くなる。
+  // ============================================================
+  let lastManaWarnAt = -99999;
+  function spendMana(s, w) {
+    const cost = w.manaCost || 0;
+    if (!s.maxMana || !cost) return true;
+    if (s.mana < cost) {
+      if (s.id === G.localId && now() - lastManaWarnAt > 1200) {
+        lastManaWarnAt = now();
+        banner(s.manaPotions > 0 ? "魔力が足りない　Vキーで秘薬を飲む" : "魔力が足りない　少し待とう");
+      }
+      return false;
+    }
+    s.mana -= cost;
+    return true;
+  }
+
+  function updateMana(dt, t) {
+    for (const s of G.units) {
+      if (!s.maxMana || s.dead) continue;
+      const boosted = t < (s.manaBoostUntil || 0);
+      s.mana = Math.min(s.maxMana, s.mana + (boosted ? MANA_REGEN_POTION : MANA_REGEN) * dt);
+      if (boosted && Math.random() < dt * 8) {
+        addParticle(s.x + rand(-10, 10), s.y, { kind: "cast", life: 320, size: 7, a: 0 });
+      }
+    }
+  }
+
+  function useManaPotion(s, t) {
+    if (!s.maxMana || s.dead) return;
+    if ((s.manaPotions || 0) <= 0) {
+      if (s.id === G.localId) banner("魔力の秘薬を持っていない");
+      return;
+    }
+    if (t < (s.manaBoostUntil || 0)) return;   // 効いている間は飲み直さない
+    s.manaPotions--;
+    s.manaBoostUntil = t + MANA_POTION_MS;
+    Audio.heal();
+    for (let i = 0; i < 12; i++) {
+      addParticle(s.x + rand(-10, 10), s.y + rand(-8, 8), {
+        kind: "cast", vx: rand(-20, 20), vy: rand(-70, -25), life: rand(360, 620), size: rand(4, 8), a: 0,
+      });
+    }
+    if (s.id === G.localId) banner(`🧿 魔力の秘薬　${MANA_POTION_MS / 1000}秒間 魔力の戻りが速くなる（残り ${s.manaPotions}）`);
+  }
+
   function startReload(s, t) {
     if (s.reloading || s.shieldRaised || t < s.stunnedUntil) return;
     const w = WEAPONS[s.weapon];
@@ -2844,7 +3591,15 @@
   function damageUnit(target, dmg, attacker, hit) {
     if (target.dead) return;
     if (!hit) hit = attacker ? { x: attacker.x, y: attacker.y, type: "projectile" } : null;
-    if (hit && !hit.bypassEquipment) {
+    // 属性の相性。装備で減らす前に、通る量そのものを増減させる。
+    if (hit && hit.element) {
+      const mul = elementMul(hit.element, target);
+      dmg *= mul;
+      if (!hit.ratio && attacker && attacker.id === G.localId) noteElementHit(hit.element, mul);
+    }
+    // 破壊の杖のような割合ダメージは、鎧も盾も意味をなさない
+    if (hit && hit.ratio) dmg = target.maxHp * hit.ratio;
+    if (hit && !hit.bypassEquipment && !hit.ratio) {
       if (target.shieldRaised && target.shield > 0) {
         const incoming = Math.atan2(hit.y - target.y, hit.x - target.x);
         const gap = Math.abs(((incoming - target.aimAngle + Math.PI) % (Math.PI * 2)) - Math.PI);
@@ -2882,6 +3637,17 @@
     if (target.id === G.localId) { Audio.hurt(); shake = Math.min(12, shake + 3); }
     if (target.hp <= 0) killUnit(target, attacker);
     return "hit";
+  }
+
+  // 自分の攻撃の相性を知らせる。連射で埋め尽くさないよう間隔をあける。
+  let lastElementNoteAt = -99999;
+  function noteElementHit(element, mul) {
+    if (mul > RESIST_MUL && mul < WEAK_MUL) return;
+    const t = now();
+    if (t - lastElementNoteAt < 1600) return;
+    lastElementNoteAt = t;
+    const def = elementDef(element);
+    banner(mul <= RESIST_MUL ? `${def.icon} ${def.name}属性は効果がうすい…` : `${def.icon} ${def.name}属性が弱点！　効果ばつぐん`);
   }
 
   function damageGolem(target, dmg, attacker) {
@@ -3062,6 +3828,9 @@
     s.glyphs = s.maxGlyphs || 2;
     s.thorns = s.maxThorns || 0;
     s.snared = false;
+    s.mana = s.maxMana || 0;
+    s.manaBoostUntil = 0;
+    s.holdStart = 0; s.holdFired = false;
     // 必殺技は撃ち途中でも仕切り直し。復活直後は少しだけ待たせる。
     s.ult = null;
     s.wardedUntil = 0;
@@ -3173,9 +3942,20 @@
     const attacker = projectileAttacker(b);
     const radius = 118;
     for (const s of G.units) {
-      if (s.dead || s.vehicleId >= 0 || s.team === b.team) continue;
+      if (s.dead || s.vehicleId >= 0) continue;
+      // 味方に当たる弾 (破壊の杖) は、撃った本人以外なら味方も巻きこむ
+      if (s.team === b.team && !(b.friendly && s.id !== b.owner)) continue;
       const d = Math.sqrt(dist2(s.x, s.y, b.x, b.y));
-      if (d < radius) damageUnit(s, b.dmg * (1 - d / radius * 0.62), attacker, { x: b.x, y: b.y, type: "explosion" });
+      if (d < radius) damageUnit(s, b.dmg * (1 - d / radius * 0.62), attacker, { x: b.x, y: b.y, type: "explosion", element: b.element, ratio: b.ratio });
+    }
+    if (b.ratio) {
+      // 破滅弾は着弾点に瘴気を残す
+      for (let i = 0; i < 20; i++) {
+        const a = rand(0, Math.PI * 2), d = rand(0, radius);
+        addParticle(b.x + Math.cos(a) * d, b.y + Math.sin(a) * d, {
+          kind: "mist", vx: rand(-18, 18), vy: rand(-20, 8), life: rand(1400, 2600), size: rand(10, 22),
+        });
+      }
     }
     for (const beast of G.beasts) {
       if (beast.dead || beast.team === b.team) continue;
@@ -3212,7 +3992,7 @@
     for (const s of G.units) {
       if (s.dead || s.vehicleId >= 0 || s.team === g.team) continue;
       const d = Math.sqrt(dist2(s.x, s.y, g.x, g.y));
-      if (d < BOMB_RADIUS) damageUnit(s, 130 * (1 - d / BOMB_RADIUS * 0.72), attacker, { x: g.x, y: g.y, type: "explosion" });
+      if (d < BOMB_RADIUS) damageUnit(s, 130 * (1 - d / BOMB_RADIUS * 0.72), attacker, { x: g.x, y: g.y, type: "explosion", element: "fire" });
     }
     for (const beast of G.beasts) {
       if (beast.dead || beast.team === g.team) continue;
@@ -3274,6 +4054,19 @@
       }
       for (const s of G.units) {
         if (s.dead || s.vehicleId >= 0) continue;
+        // 魔力の秘薬は、魔力を持つ職業が空きを持っているときだけ拾える
+        if (kit.kind === "mana") {
+          if (!s.maxMana || (s.manaPotions || 0) >= MANA_POTION_MAX) continue;
+          if (dist2(s.x, s.y, kit.x, kit.y) > 28 ** 2) continue;
+          s.manaPotions++;
+          kit.active = false;
+          kit.respawnAt = t + 20000;
+          for (let i = 0; i < 8; i++) {
+            addParticle(kit.x + rand(-8, 8), kit.y, { kind: "cast", vx: rand(-16, 16), vy: rand(-60, -22), life: rand(400, 700), size: rand(4, 7), a: 0 });
+          }
+          if (s.id === G.localId) { Audio.heal(); banner(`🧿 魔力の秘薬を拾った（${s.manaPotions}/${MANA_POTION_MAX}）　Vキーで飲む`); }
+          break;
+        }
         const needed = kit.kind === "potion" ? s.maxHp - s.hp : kit.kind === "armor" ? s.maxArmor - s.armor : s.maxShield - s.shield;
         if (needed < 1) continue;
         if (dist2(s.x, s.y, kit.x, kit.y) > 28 ** 2) continue;
@@ -3749,6 +4542,7 @@
     inp.thornEdge = false;
     inp.parryEdge = false;
     inp.ultEdge = false;
+    inp.potionEdge = false;
     inp.weaponWanted = -1;
     s.x = golem.x; s.y = golem.y; s.aimAngle = golem.cannonAngle; s.moving = m > 0.05;
   }
@@ -4012,8 +4806,10 @@
     updateGlyphs(t);
     updateDrakeTrail(dt, t);
     updateFlames(dt, t);
+    updateDoomStaff(dt, t);
     updateThorns(dt, t);
     updateHealthRecovery(dt, t);
+    updateMana(dt, t);
     updatePickups(t);
     updateBases(dt, t);
     // バレル爆発処理
@@ -4043,6 +4839,7 @@
     inp.glyphEdge = false;
     inp.thornEdge = false;
     inp.ultEdge = false;
+    inp.potionEdge = false;
     inp.weaponWanted = -1;
   }
 
@@ -4095,8 +4892,43 @@
     if (inp.bombEdge) { tryThrowBomb(s, t); inp.bombEdge = false; }
     if (inp.glyphEdge) { tryPlaceGlyph(s, t); inp.glyphEdge = false; }
     if (inp.thornEdge) { tryPlaceThorn(s, t); inp.thornEdge = false; }
-    if (inp.shoot) tryShoot(s, t);
+    if (inp.potionEdge) { useManaPotion(s, t); inp.potionEdge = false; }
+    handleAttackInput(s, inp, t);
     applyMove(s, inp.mvx, inp.mvy, dtGlobal, inp.dash && !s.shieldRaised);
+  }
+
+  // 押しっぱなしの長さで技が変わる武器のための入力さばき。
+  //  ・長弓 (charge)      … 離した瞬間に、引き絞った長さぶんの矢を放つ
+  //  ・破壊の杖 (holdRanged) … 短く押せば薙ぎ払い、押し続ければ破滅弾
+  //  それ以外の武器はこれまでどおり、押している間そのまま撃つ。
+  function handleAttackInput(s, inp, t) {
+    const w = WEAPONS[s.weapon];
+    const held = s.holdStart ? t - s.holdStart : 0;
+    if (w.charge) {
+      if (inp.shoot) { if (!s.holdStart) s.holdStart = t; return; }
+      if (s.holdStart) { fireCharged(s, t, chargeLevel(held)); s.holdStart = 0; }
+      return;
+    }
+    if (w.holdRanged) {
+      const rangedIndex = WKEY[w.holdRanged];
+      if (inp.shoot) {
+        if (!s.holdStart) { s.holdStart = t; s.holdFired = false; return; }
+        if (!s.holdFired && held >= DOOM_HOLD_MS && rangedIndex != null) {
+          // 押し続けた ＝ 遠距離。撃つ瞬間だけ武器を差し替える。
+          s.holdFired = true;
+          const keep = s.weapon;
+          s.weapon = rangedIndex; s.ammo = WEAPONS[rangedIndex].mag;
+          tryShoot(s, t);
+          s.weapon = keep; s.ammo = WEAPONS[keep].mag;
+        }
+        return;
+      }
+      if (s.holdStart && !s.holdFired) tryShoot(s, t);   // 短く押した ＝ 近距離
+      s.holdStart = 0; s.holdFired = false;
+      return;
+    }
+    s.holdStart = 0; s.holdFired = false;
+    if (inp.shoot) tryShoot(s, t);
   }
 
   let dtGlobal = 0;
@@ -4189,15 +5021,17 @@
       if (!dead) {
         // 勇者と魔物
         for (const s of G.units) {
-          if (s.dead || s.vehicleId >= 0 || s.team === b.team || s.id === b.owner) continue;
+          if (s.dead || s.vehicleId >= 0 || s.id === b.owner) continue;
+          // 味方に当たる弾 (破壊の杖) は、撃った本人以外なら味方にも当たる
+          if (s.team === b.team && !b.friendly) continue;
           if (dist2(b.x, b.y, s.x, s.y) < (unitR(s) + 2) * (unitR(s) + 2)) {
             const attacker = projectileAttacker(b);
             if (b.kind === "shell") {
               explodeProjectile(b);
             } else {
-              // 聖属性はアンデッドによく効く
-              const dmg = b.holy && s.undead ? b.dmg * HOLY_VS_UNDEAD : b.dmg;
-              const result = damageUnit(s, dmg, attacker, { x: b.x - b.vx * 0.04, y: b.y - b.vy * 0.04, type: "projectile", slow: b.slow });
+              const result = damageUnit(s, b.dmg, attacker, {
+                x: b.x - b.vx * 0.04, y: b.y - b.vy * 0.04, type: "projectile", slow: b.slow, element: b.element,
+              });
               if (result === "parried") {
                 b.vx *= -1; b.vy *= -1; b.team = s.team; b.owner = s.id; b.golemOwner = null;
                 b.dmg *= 0.85; b.pierce = 0; b.traveled = 0; b.range = Math.min(b.range, 760);
@@ -4280,6 +5114,7 @@
     drawObstaclesBack();
     drawThorns();
     drawFlames();
+    drawDoomStaff();
     drawGlyphs();
     drawUltimateZones();
     drawPickups();
@@ -4533,6 +5368,22 @@
         ctx.lineTo(14, 9); ctx.lineTo(5, 13); ctx.lineTo(-5, 13); ctx.lineTo(-14, 9); ctx.closePath(); ctx.fill(); ctx.stroke();
         ctx.fillStyle = "#e0b73c"; ctx.fillRect(-2, -7, 4, 17);
         ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.fillRect(-10, -6, 4, 10);
+      } else if (kit.kind === "mana") {
+        // 魔力の秘薬。青く光る小瓶。
+        const glow = ctx.createRadialGradient(0, 2, 2, 0, 2, 18);
+        glow.addColorStop(0, "rgba(140,200,255,0.55)");
+        glow.addColorStop(1, "rgba(120,170,255,0)");
+        ctx.fillStyle = glow;
+        ctx.beginPath(); ctx.arc(0, 2, 18, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#8f7fc4"; ctx.fillRect(-3, -14, 6, 5);
+        ctx.fillStyle = "#dfe7f5"; ctx.strokeStyle = "#6d7ea0"; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-3, -9); ctx.lineTo(-8, 1); ctx.quadraticCurveTo(-8, 13, 0, 13);
+        ctx.quadraticCurveTo(8, 13, 8, 1); ctx.lineTo(3, -9); ctx.closePath();
+        ctx.fill(); ctx.stroke();
+        ctx.fillStyle = "#4aa8ff";
+        ctx.beginPath(); ctx.ellipse(0, 5, 6.2, 6, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.fillRect(-5, -3, 2.5, 7);
       } else {
         // 魔法の盾
         ctx.fillStyle = "#4a7fc4"; ctx.strokeStyle = "#cfe8ff"; ctx.lineWidth = 2;
@@ -4624,6 +5475,29 @@
       ctx.fillStyle = "rgba(0,0,0,0.24)"; ctx.fillRect(o.x, o.y + o.h - 5, o.w, 5);
       ctx.strokeStyle = "rgba(35,32,26,0.5)"; ctx.lineWidth = 1;
       ctx.strokeRect(o.x + 0.5, o.y + 0.5, o.w - 1, o.h - 1);
+    } else if (o.type === "tree" && o.withered) {
+      // 枯れ木: 葉を落とし、裸の枝だけが残っている
+      const cx = o.x + o.w / 2, cy = o.y + o.h / 2, r = o.w / 2;
+      ctx.fillStyle = "rgba(0,0,0,0.18)";
+      ctx.beginPath(); ctx.ellipse(cx + 4, cy + 6, r * 0.7, r * 0.5, 0, 0, 6.283); ctx.fill();
+      ctx.strokeStyle = "#6b5b46"; ctx.lineCap = "round";
+      // 幹
+      ctx.lineWidth = r * 0.34;
+      ctx.beginPath(); ctx.moveTo(cx, cy + r * 0.5); ctx.lineTo(cx - r * 0.1, cy - r * 0.35); ctx.stroke();
+      // ねじれた枝
+      ctx.lineWidth = r * 0.17;
+      const seed = (o.seed || 0) * 6.283;
+      for (let i = 0; i < 5; i++) {
+        const a = -Math.PI / 2 + Math.cos(seed + i * 1.9) * 1.25;
+        const bx = cx - r * 0.1, by = cy - r * 0.35;
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.quadraticCurveTo(bx + Math.cos(a) * r * 0.55, by + Math.sin(a) * r * 0.55,
+                             bx + Math.cos(a) * r * 1.05, by + Math.sin(a) * r * 1.0);
+        ctx.stroke();
+      }
+      ctx.fillStyle = "#5a4c3a";
+      ctx.beginPath(); ctx.arc(cx, cy + r * 0.5, r * 0.26, 0, 6.283); ctx.fill();
     } else if (o.type === "tree") {
       const cx = o.x + o.w / 2, cy = o.y + o.h / 2, r = o.w / 2;
       ctx.fillStyle = "rgba(0,0,0,0.2)";
@@ -4950,6 +5824,46 @@
 
   // 近接武器の見た目。原点は握り手、+X が刃先の向き。
   function drawMeleeWeapon(style) {
+    if (style === "scythe") {
+      // 魂喰らい: 黒い柄に、内側へ深く反った刃
+      ctx.fillStyle = "#241a2c"; ctx.fillRect(-12, -2.5, 52, 5);
+      ctx.fillStyle = "#6b4fa0"; ctx.fillRect(-14, -4, 5, 8);
+      ctx.strokeStyle = "#d8c8ee"; ctx.lineWidth = 5; ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(38, 0);
+      ctx.quadraticCurveTo(56, -6, 52, -26);
+      ctx.stroke();
+      ctx.strokeStyle = "#9b7fd0"; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(38, 2);
+      ctx.quadraticCurveTo(52, -4, 48, -22);
+      ctx.stroke();
+      return;
+    }
+    if (style === "boneStaff") {
+      // 破壊の杖: 節くれ立った柄の先に、緑に光る眼をもつ髑髏
+      ctx.fillStyle = "#5c503f"; ctx.fillRect(-12, -3, 48, 6);
+      ctx.fillStyle = "#4a4033";
+      for (let i = -8; i < 34; i += 11) ctx.fillRect(i, -4.5, 3, 9);
+      ctx.fillStyle = "#ded6c2";
+      ctx.beginPath(); ctx.ellipse(42, 0, 11, 9.5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "#a99f88"; ctx.lineWidth = 1.2; ctx.stroke();
+      // 顎
+      ctx.fillStyle = "#cfc6b0";
+      ctx.beginPath(); ctx.moveTo(46, 6); ctx.lineTo(52, 9); ctx.lineTo(40, 10); ctx.closePath(); ctx.fill();
+      // 緑に燃える眼窩
+      const pulse = 0.65 + Math.sin(now() * 0.008) * 0.3;
+      ctx.shadowColor = "#7bff4a"; ctx.shadowBlur = 14;
+      ctx.fillStyle = `rgba(140,255,90,${pulse})`;
+      ctx.beginPath(); ctx.arc(45, -3.5, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(45, 3.5, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+      // 角のように伸びた骨
+      ctx.strokeStyle = "#ded6c2"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(38, -7); ctx.lineTo(30, -18); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(38, 7); ctx.lineTo(30, 18); ctx.stroke();
+      return;
+    }
     if (style === "longsword") {
       ctx.fillStyle = "#3a2a1e"; ctx.fillRect(-5, -2.5, 13, 5);
       ctx.fillStyle = "#d8b64a"; ctx.fillRect(7, -8, 4, 16);       // 鍔
@@ -5303,6 +6217,7 @@
     const attacking = t - s.muzzle < 220;
     if (style === "drake") { drawDrake(s, look, r, attacking); return; }
     if (style === "fenrir") { drawFenrir(s, look, r, attacking); return; }
+    if (style === "demonlord") { drawDemonLord(s, look, r, attacking); return; }
 
     ctx.lineJoin = "round";
     const outline = "rgba(12,10,16,0.85)";
@@ -5334,6 +6249,100 @@
       const orb = 0.55 + Math.sin(t * 0.006) * 0.25 + (attacking ? 0.4 : 0);
       ctx.fillStyle = `rgba(190,110,255,${clamp(orb, 0, 1)})`;
       ctx.beginPath(); ctx.arc(r * 1.15, r * 0.5, 4.4, 0, Math.PI * 2); ctx.fill();
+      return;
+    }
+
+    if (style === "wraith") {
+      // 亡霊騎士: 錆びた鎧と、裾が霧のように溶けた下半身
+      const haze = ctx.createRadialGradient(0, 0, 3, 0, 0, r + 14);
+      haze.addColorStop(0, "rgba(110,160,200,0.4)");
+      haze.addColorStop(1, "rgba(110,160,200,0)");
+      ctx.fillStyle = haze;
+      ctx.beginPath(); ctx.arc(0, 0, r + 14, 0, Math.PI * 2); ctx.fill();
+      // 溶けた裾
+      ctx.fillStyle = look.cloth;
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.9, -r * 0.7);
+      ctx.quadraticCurveTo(-r * 1.6, 0, -r * 0.9, r * 0.7);
+      ctx.lineTo(r * 0.4, r * 0.6);
+      ctx.lineTo(r * 0.4, -r * 0.6);
+      ctx.closePath(); ctx.fill();
+      // 胸当てと肩
+      ctx.fillStyle = look.skin;
+      ctx.strokeStyle = outline; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(0, 0, r * 0.85, r * 0.7, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = look.cloth;
+      ctx.fillRect(-r * 0.2, -r * 1.05, r * 0.5, r * 0.4);
+      ctx.fillRect(-r * 0.2, r * 0.65, r * 0.5, r * 0.4);
+      // 兜の奥の空洞と、燃える眼
+      ctx.fillStyle = "rgba(10,14,22,0.95)";
+      ctx.beginPath(); ctx.ellipse(r * 0.42, 0, r * 0.46, r * 0.42, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = look.eye;
+      ctx.beginPath(); ctx.arc(r * 0.5, -r * 0.16, 2.4, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(r * 0.5, r * 0.16, 2.4, 0, Math.PI * 2); ctx.fill();
+      return;
+    }
+
+    if (style === "ifrit") {
+      // 業火の魔人: ぶ厚い胴から炎が噴き出す
+      const fire = ctx.createRadialGradient(0, 0, 4, 0, 0, r + 16);
+      fire.addColorStop(0, "rgba(255,150,50,0.5)");
+      fire.addColorStop(1, "rgba(255,90,20,0)");
+      ctx.fillStyle = fire;
+      ctx.beginPath(); ctx.arc(0, 0, r + 16, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = look.skin;
+      ctx.strokeStyle = outline; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(0, 0, r * 0.95, r * 0.85, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      // 背から立つ炎
+      ctx.fillStyle = `rgba(255,${(150 + Math.sin(t * 0.01) * 50) | 0},50,0.85)`;
+      for (let i = -1; i <= 1; i++) {
+        const fx = -r * 0.7, fy = i * r * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(fx, fy - 5);
+        ctx.quadraticCurveTo(fx - r * 0.9, fy, fx, fy + 5);
+        ctx.closePath(); ctx.fill();
+      }
+      // 腕
+      ctx.strokeStyle = look.skin; ctx.lineWidth = 6; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(r * 0.2, -r * 0.7); ctx.lineTo(r * 0.9, -r * 0.5); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(r * 0.2, r * 0.7); ctx.lineTo(r * 0.9, r * 0.5); ctx.stroke();
+      // 角と眼
+      ctx.fillStyle = look.cloth;
+      ctx.beginPath(); ctx.moveTo(r * 0.3, -r * 0.7); ctx.lineTo(r * 0.1, -r * 1.3); ctx.lineTo(r * 0.6, -r * 0.85); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(r * 0.3, r * 0.7); ctx.lineTo(r * 0.1, r * 1.3); ctx.lineTo(r * 0.6, r * 0.85); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = look.eye;
+      ctx.beginPath(); ctx.arc(r * 0.55, -r * 0.2, 2.6, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(r * 0.55, r * 0.2, 2.6, 0, Math.PI * 2); ctx.fill();
+      return;
+    }
+
+    if (style === "venomspider") {
+      // 瘴気蜘蛛: 8本脚と、背に膨らんだ毒袋
+      ctx.strokeStyle = look.cloth; ctx.lineWidth = 3; ctx.lineCap = "round";
+      for (let i = 0; i < 4; i++) {
+        const base = -0.9 + i * 0.6;
+        const swing = Math.sin(t * 0.012 + i) * 0.18;
+        for (const side of [-1, 1]) {
+          const a = (base + swing) * side;
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.quadraticCurveTo(Math.cos(a) * r * 1.1, Math.sin(a) * r * 1.1, Math.cos(a) * r * 1.7, Math.sin(a) * r * 1.9);
+          ctx.stroke();
+        }
+      }
+      // 毒袋
+      ctx.fillStyle = look.skin;
+      ctx.strokeStyle = outline; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(-r * 0.45, 0, r * 0.9, r * 0.78, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "rgba(160,220,70,0.55)";
+      ctx.beginPath(); ctx.ellipse(-r * 0.55, 0, r * 0.5, r * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+      // 頭
+      ctx.fillStyle = look.cloth;
+      ctx.beginPath(); ctx.ellipse(r * 0.62, 0, r * 0.5, r * 0.44, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = look.eye;
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath(); ctx.arc(r * 0.85, i * 4.5, 1.9, 0, Math.PI * 2); ctx.fill();
+      }
       return;
     }
 
@@ -5550,6 +6559,79 @@
   }
 
   // ボス: 魔狼王。大型の四足獣。たてがみと長い尾で狼だと分かるようにする。
+  // 魔王 ヴァルゼオス: 角と翼をもつ人型。玉座から降りてきた王。
+  function drawDemonLord(s, look, r, attacking) {
+    const t = now();
+    const outline = "rgba(10,6,14,0.9)";
+    // 背後の闇
+    const aura = ctx.createRadialGradient(0, 0, r * 0.4, 0, 0, r * 1.9);
+    aura.addColorStop(0, "rgba(120,40,190,0.4)");
+    aura.addColorStop(1, "rgba(60,10,90,0)");
+    ctx.fillStyle = aura;
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.9, 0, Math.PI * 2); ctx.fill();
+    // 翼
+    const flap = Math.sin(t * 0.0035) * 0.22;
+    ctx.fillStyle = look.wing;
+    ctx.strokeStyle = outline; ctx.lineWidth = 2.5;
+    for (const side of [-1, 1]) {
+      ctx.save();
+      ctx.rotate(side * (0.5 + flap));
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.2, 0);
+      ctx.quadraticCurveTo(-r * 1.5, side * r * 0.5, -r * 2.0, side * r * 1.5);
+      ctx.lineTo(-r * 1.15, side * r * 0.95);
+      ctx.quadraticCurveTo(-r * 1.3, side * r * 1.35, -r * 0.75, side * r * 0.7);
+      ctx.lineTo(-r * 0.25, side * r * 0.35);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+    // マント
+    ctx.fillStyle = "#1a0f22";
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.3, -r * 0.85);
+    ctx.quadraticCurveTo(-r * 1.35, 0, -r * 0.3, r * 0.85);
+    ctx.lineTo(r * 0.15, 0);
+    ctx.closePath(); ctx.fill();
+    // 胴
+    ctx.fillStyle = look.scale;
+    ctx.strokeStyle = outline; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.78, r * 0.66, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    // 胸の紋
+    ctx.fillStyle = look.belly;
+    ctx.beginPath();
+    ctx.moveTo(r * 0.35, 0); ctx.lineTo(0, -r * 0.34); ctx.lineTo(-r * 0.3, 0); ctx.lineTo(0, r * 0.34);
+    ctx.closePath(); ctx.fill();
+    // 剛剣を握る腕
+    ctx.strokeStyle = look.scale; ctx.lineWidth = 8; ctx.lineCap = "round";
+    const swing = attacking ? 0.7 : 0.15;
+    ctx.beginPath(); ctx.moveTo(r * 0.2, r * 0.55); ctx.lineTo(r * 1.0, r * (0.8 - swing)); ctx.stroke();
+    ctx.save();
+    ctx.translate(r * 1.0, r * (0.8 - swing));
+    ctx.rotate(-0.5 - swing);
+    ctx.fillStyle = "#6b6f7a";
+    ctx.beginPath(); ctx.moveTo(0, -6); ctx.lineTo(r * 1.5, -3); ctx.lineTo(r * 1.62, 0); ctx.lineTo(r * 1.5, 3); ctx.lineTo(0, 6); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#c07cff";
+    ctx.fillRect(0, -8, 5, 16);
+    ctx.restore();
+    // 頭と角
+    ctx.fillStyle = look.scale;
+    ctx.beginPath(); ctx.ellipse(r * 0.5, 0, r * 0.42, r * 0.38, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = "#efe4d2"; ctx.lineWidth = 5;
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(r * 0.45, side * r * 0.28);
+      ctx.quadraticCurveTo(r * 0.2, side * r * 0.95, r * 0.75, side * r * 1.05);
+      ctx.stroke();
+    }
+    // 眼
+    const glow = 0.7 + Math.sin(t * 0.007) * 0.25;
+    ctx.shadowColor = look.eye; ctx.shadowBlur = 12;
+    ctx.fillStyle = look.eye;
+    ctx.beginPath(); ctx.arc(r * 0.68, -r * 0.14, 3.4 * glow + 1, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(r * 0.68, r * 0.14, 3.4 * glow + 1, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
   function drawFenrir(s, look, r, attacking) {
     const t = now();
     const stride = s.moving ? Math.sin(t * 0.014) * 8 : 0;
@@ -5891,13 +6973,71 @@
     }
   }
 
+  // 破壊の杖。祭壇に祀られている姿と、持ち主のまわりのフィールド。
+  function drawDoomStaff() {
+    const staff = G.doomStaff;
+    if (!staff) return;
+    const t = now();
+    if (staff.onAltar) {
+      ctx.save();
+      ctx.translate(staff.x, staff.y);
+      // 祭壇の石畳
+      ctx.fillStyle = "rgba(60,58,46,0.85)";
+      ctx.beginPath(); ctx.arc(0, 0, 58, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "rgba(140,200,90,0.5)"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(0, 0, 58, 0, Math.PI * 2); ctx.stroke();
+      ctx.rotate(t * 0.0009);
+      ctx.setLineDash([8, 12]);
+      ctx.strokeStyle = "rgba(150,230,90,0.6)"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, 0, 40, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.rotate(-t * 0.0009);
+      // 立てかけられた杖 (浮かせて上下させる)
+      const bob = Math.sin(t * 0.003) * 4;
+      const glow = ctx.createRadialGradient(0, bob, 4, 0, bob, 46);
+      glow.addColorStop(0, "rgba(150,255,90,0.5)");
+      glow.addColorStop(1, "rgba(120,220,60,0)");
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(0, bob, 46, 0, Math.PI * 2); ctx.fill();
+      ctx.save();
+      ctx.translate(0, bob);
+      ctx.rotate(-Math.PI / 2);
+      ctx.scale(0.9, 0.9);
+      ctx.translate(-16, 0);
+      drawMeleeWeapon("boneStaff");
+      ctx.restore();
+      ctx.restore();
+      return;
+    }
+    // 持ち主のまわりのフィールド
+    const holder = G.units.find((s) => s.id === staff.holderId && !s.dead);
+    if (!holder) return;
+    ctx.save();
+    ctx.translate(holder.x, holder.y);
+    const pulse = 0.55 + Math.sin(t * 0.005) * 0.12;
+    const field = ctx.createRadialGradient(0, 0, DOOMFIELD_R * 0.55, 0, 0, DOOMFIELD_R);
+    field.addColorStop(0, "rgba(110,210,60,0)");
+    field.addColorStop(1, `rgba(130,235,70,${0.22 * pulse})`);
+    ctx.fillStyle = field;
+    ctx.beginPath(); ctx.arc(0, 0, DOOMFIELD_R, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = `rgba(160,255,100,${pulse})`; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(0, 0, DOOMFIELD_R, 0, Math.PI * 2); ctx.stroke();
+    ctx.rotate(t * 0.0016);
+    ctx.setLineDash([14, 20]);
+    ctx.strokeStyle = `rgba(200,255,150,${pulse * 0.7})`; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(0, 0, DOOMFIELD_R * 0.82, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
   // 炎竜が落としていった炎。燃え尽きるにつれて小さく暗くなる。
   function drawFlames() {
     const t = now();
     for (const flame of G.flames) {
-      const left = clamp((flame.dieAt - t) / FLAME_LIFE_MS, 0, 1);
+      const left = flame.lava ? 1 : clamp((flame.dieAt - t) / FLAME_LIFE_MS, 0, 1);
       const flick = 0.82 + Math.sin(t * 0.013 + flame.seed * 9) * 0.18;
-      const r = FLAME_R * (0.55 + left * 0.45) * flick;
+      const base = flame.r || FLAME_R;
+      const r = flame.lava ? base * (0.94 + (flick - 0.82) * 0.3) : base * (0.55 + left * 0.45) * flick;
       ctx.save();
       ctx.translate(flame.x, flame.y);
       const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, r);
@@ -5982,9 +7122,101 @@
         const r = 40 + (ROAR_R - 40) * p;
         ctx.strokeStyle = `rgba(255,190,110,${1 - p})`; ctx.lineWidth = 10 * (1 - p) + 2;
         ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = `rgba(255,236,190,${(1 - p) * 0.7})`; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(0, 0, r * 0.68, 0, Math.PI * 2); ctx.stroke();
+      } else if (u.key === "darkmage") {
+        // 闇の淵。渦を巻く黒い円。
+        ctx.fillStyle = `rgba(28,10,44,${0.5 * (1 - p * 0.3)})`;
+        ctx.beginPath(); ctx.arc(0, 0, ABYSS_R, 0, Math.PI * 2); ctx.fill();
+        ctx.rotate(-t * 0.0022);
+        ctx.strokeStyle = `rgba(190,110,255,${0.75 * (1 - p * 0.4)})`; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.arc(0, 0, ABYSS_R, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([10, 14]);
+        ctx.strokeStyle = `rgba(225,180,255,${0.5 * (1 - p * 0.4)})`; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(0, 0, ABYSS_R * 0.62, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = `rgba(10,4,18,${0.72 * (1 - p * 0.3)})`;
+        ctx.beginPath(); ctx.arc(0, 0, ABYSS_R * 0.3, 0, Math.PI * 2); ctx.fill();
+      } else if (u.key === "dragoon") {
+        // 息を吐く扇
+        const half = BREATH_ARC;
+        ctx.rotate(u.angle || 0);
+        const cone = ctx.createRadialGradient(0, 0, 20, 0, 0, BREATH_RANGE);
+        cone.addColorStop(0, "rgba(255,230,150,0.5)");
+        cone.addColorStop(0.5, "rgba(255,140,50,0.34)");
+        cone.addColorStop(1, "rgba(190,40,10,0)");
+        ctx.fillStyle = cone;
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, BREATH_RANGE, -half, half); ctx.closePath(); ctx.fill();
+      } else if (u.key === "adventurer" && p < 0.28) {
+        // 剣を突き立てる溜め。足元に龍の紋が浮かぶ。
+        const charge = clamp(p / 0.28, 0, 1);
+        ctx.rotate(t * 0.003);
+        ctx.strokeStyle = `rgba(120,215,255,${0.35 + charge * 0.5})`; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(0, 0, 34 + charge * 26, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([7, 11]);
+        ctx.strokeStyle = `rgba(190,240,255,${0.3 + charge * 0.4})`; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(0, 0, 74 - charge * 22, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([]);
       }
       ctx.restore();
     }
+  }
+
+  // 龍波斬の波動。龍の頭と、うねる胴が走り抜ける。
+  function drawDragonWave(u, t) {
+    const angle = u.angle || 0;
+    ctx.save();
+    ctx.translate(u.x, u.y);
+    ctx.rotate(angle);
+    // body: 後方へ細くなる帯
+    const len = 150;
+    const glow = ctx.createRadialGradient(0, 0, 6, 0, 0, DRAGON_R + 26);
+    glow.addColorStop(0, "rgba(150,235,255,0.55)");
+    glow.addColorStop(1, "rgba(90,170,255,0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(0, 0, DRAGON_R + 26, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "rgba(150,235,255,0.9)";
+    ctx.lineCap = "round";
+    for (let side = -1; side <= 1; side += 2) {
+      ctx.beginPath();
+      for (let i = 0; i <= 12; i++) {
+        const k = i / 12;
+        const x = -len * k;
+        const wave = Math.sin(k * 7 - t * 0.02) * 16 * k;
+        const y = wave + side * (1 - k) * 13;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.lineWidth = 5;
+      ctx.stroke();
+    }
+    // 胴のうろこ
+    ctx.fillStyle = "rgba(210,250,255,0.7)";
+    for (let i = 1; i <= 6; i++) {
+      const k = i / 7;
+      const x = -len * k;
+      const y = Math.sin(k * 7 - t * 0.02) * 16 * k;
+      ctx.beginPath(); ctx.arc(x, y, 7 * (1 - k * 0.7), 0, Math.PI * 2); ctx.fill();
+    }
+    // 頭
+    ctx.fillStyle = "rgba(190,245,255,0.95)";
+    ctx.beginPath();
+    ctx.moveTo(46, 0);
+    ctx.lineTo(6, -22);
+    ctx.lineTo(-16, -9);
+    ctx.lineTo(-16, 9);
+    ctx.lineTo(6, 22);
+    ctx.closePath(); ctx.fill();
+    // 角
+    ctx.strokeStyle = "rgba(120,205,255,0.95)"; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(0, -16); ctx.lineTo(-24, -32); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, 16); ctx.lineTo(-24, 32); ctx.stroke();
+    // 開いた顎と眼
+    ctx.fillStyle = "rgba(20,60,95,0.85)";
+    ctx.beginPath(); ctx.moveTo(44, 0); ctx.lineTo(14, -8); ctx.lineTo(14, 8); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#fff6c8";
+    ctx.beginPath(); ctx.arc(8, -9, 3.4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(8, 9, 3.4, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
   }
 
   // ユニットより上に出す部分。詠唱の核と、術者から爆心へ伸びる魔力の線。
@@ -5992,7 +7224,12 @@
     const t = now();
     for (const s of G.units) {
       const u = s.ult;
-      if (!u || s.dead || u.key !== "mage") continue;
+      if (!u || s.dead) continue;
+      if (u.key === "adventurer") {
+        if ((u.p || 0) >= 0.28) drawDragonWave(u, t);
+        continue;
+      }
+      if (u.key !== "mage") continue;
       const p = clamp(u.p || 0, 0, 1);
       ctx.save();
       ctx.strokeStyle = `rgba(255,150,90,${0.35 + p * 0.45})`;
@@ -6128,6 +7365,10 @@
         ctx.fillStyle = `rgba(255,255,220,${lr})`;
         for (let i = -1; i <= 1; i++) ctx.fillRect(8 + (1 - lr) * 18, i * 10 - 2, 10, 4);
         ctx.restore();
+      } else if (p.kind === "mist") {
+        // 破壊の杖が残す緑の瘴気
+        ctx.fillStyle = `rgba(120,200,70,${lr * 0.34})`;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (1.5 - lr * 0.5), 0, Math.PI * 2); ctx.fill();
       } else if (p.kind === "leaf") {
         // 薙ぎ倒された木や茂みから散る葉
         ctx.fillStyle = `rgba(${(86 + p.size * 6) | 0},${(130 + p.size * 5) | 0},60,${lr})`;
@@ -6140,6 +7381,49 @@
         // 降り注ぐ矢
         ctx.strokeStyle = `rgba(235,222,175,${clamp(lr * 2, 0, 1)})`; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - 3, p.y - p.size); ctx.stroke();
+      } else if (p.kind === "ring") {
+        // 広がる輪。a で色を選ぶ (0=炎 1=聖 2=土 3=蒼)
+        const col = p.a >= 4 ? "140,230,80" : p.a >= 3 ? "120,200,255" : p.a >= 2 ? "205,175,120" : p.a >= 1 ? "255,240,175" : "255,150,70";
+        ctx.strokeStyle = `rgba(${col},${lr})`;
+        ctx.lineWidth = 9 * lr + 1.5;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (1.15 - lr), 0, Math.PI * 2); ctx.stroke();
+      } else if (p.kind === "pillar") {
+        // 立ちのぼる光の柱
+        const col = p.a >= 1 ? "255,244,190" : "255,150,80";
+        const h = p.size * (2.2 - lr * 0.9);
+        const grad = ctx.createLinearGradient(p.x, p.y, p.x, p.y - h);
+        grad.addColorStop(0, `rgba(${col},${lr * 0.85})`);
+        grad.addColorStop(1, `rgba(${col},0)`);
+        ctx.fillStyle = grad;
+        ctx.fillRect(p.x - p.size * 0.28, p.y - h, p.size * 0.56, h);
+      } else if (p.kind === "crack") {
+        // 地面に走る裂け目。地面の傷に見える程度に抑える。
+        ctx.strokeStyle = `rgba(48,36,26,${lr * 0.4})`;
+        ctx.lineWidth = 2.4 * lr + 0.6;
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(p.size * 0.4, -p.size * 0.12);
+        ctx.lineTo(p.size * 0.72, p.size * 0.1);
+        ctx.lineTo(p.size, -p.size * 0.05);
+        ctx.stroke();
+        ctx.restore();
+      } else if (p.kind === "ghost") {
+        // 踏み込みの残像
+        ctx.fillStyle = `rgba(190,225,255,${lr * 0.32})`;
+        ctx.beginPath(); ctx.ellipse(p.x, p.y, p.size * 0.7, p.size, 0, 0, Math.PI * 2); ctx.fill();
+      } else if (p.kind === "rock") {
+        // 砕けて飛ぶ岩片
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a + (1 - lr) * 7);
+        ctx.fillStyle = `rgba(122,110,94,${lr})`;
+        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.8);
+        ctx.restore();
+      } else if (p.kind === "feather") {
+        // 聖域に舞う羽根
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(Math.sin((1 - lr) * 6) * 0.7);
+        ctx.fillStyle = `rgba(255,250,215,${lr * 0.9})`;
+        ctx.beginPath(); ctx.ellipse(0, 0, p.size * 0.4, p.size, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
       } else if (p.kind === "shockring") {
         ctx.strokeStyle = `rgba(255,${(190 - (1 - lr) * 90) | 0},120,${lr})`;
         ctx.lineWidth = 14 * lr + 2;
@@ -6497,11 +7781,18 @@
         const w = WEAPONS[me.weapon];
         const slot = me.loadout ? me.loadout.indexOf(me.weapon) : -1;
         // 持ちかえる先が無い職業(魔神像)では番号を出さない
-        el.wName.textContent = slot >= 0 && me.loadout.length > 1 ? `${slot + 1}. ${w.name}` : w.name;
+        const wEl = elementDef(w.element);
+        const elTag = wEl.icon ? `${wEl.icon} ` : "";
+        el.wName.textContent = elTag + (slot >= 0 && me.loadout.length > 1 ? `${slot + 1}. ${w.name}` : w.name);
         // 魔法はマナ、弓は矢、近接は無限。
         if (w.melee && w.heal <= 0) el.ammo.textContent = "近接 / ∞";
         else el.ammo.textContent = (me.reloading ? reloadLabel(w) : me.ammo) + " / " + w.mag;
         el.ammo.classList.toggle("low", !(w.melee && w.heal <= 0) && !me.reloading && me.ammo <= Math.ceil(w.mag * 0.25));
+        if (me.doomStaff && me.weapon === WKEY.doomstaffSwing) {
+          el.wName.textContent = "💀 破壊の杖";
+          el.ammo.textContent = "∞";
+          el.ammo.classList.remove("low");
+        }
         const hasThorns = (me.maxThorns || 0) > 0;
         const thornText = hasThorns ? `　🌿 ${me.thorns == null ? 0 : me.thorns}` : "";
         const label = ammoLabel(w);
@@ -6509,6 +7800,31 @@
         el.bomb.textContent = `${ammoNote}🔥 ${me.bombs == null ? 0 : me.bombs}　🔮 ${me.glyphs == null ? 0 : me.glyphs}${thornText}`;
         // 茨ボタンは茨を持つ職業のときだけ出す
         thornBtn.classList.toggle("hidden", !hasThorns);
+      }
+
+      // 魔力。持たない職業では行ごと隠す。
+      const hasMana = (me.maxMana || 0) > 0 && !golem && !ballista;
+      el.manaRow.classList.toggle("hidden", !hasMana);
+      el.manaNote.classList.toggle("hidden", !hasMana);
+      if (hasMana) {
+        const ratio = clamp(me.mana / me.maxMana, 0, 1);
+        el.manaFill.style.transform = `scaleX(${ratio})`;
+        el.manaText.textContent = Math.floor(me.mana);
+        const boosted = now() < (me.manaBoostUntil || 0);
+        el.manaNote.textContent = boosted
+          ? `🧿 秘薬が効いている（あと ${((me.manaBoostUntil - now()) / 1000).toFixed(1)}秒）`
+          : `🧿 秘薬 ${me.manaPotions || 0}　${isTouch ? "「🧿 秘薬」で飲む" : "Vで飲む"}`;
+        el.manaNote.classList.toggle("boosted", boosted);
+      }
+      potionBtn.classList.toggle("hidden", !hasMana);
+
+      // 引き絞りの目盛り。長弓のときだけ出す。
+      const heldW = WEAPONS[me.weapon];
+      const charging = !!(heldW && heldW.charge && me.holdStart);
+      el.chargeNote.classList.toggle("hidden", !charging);
+      if (charging) {
+        const lv = chargeLevel(now() - me.holdStart);
+        el.chargeNote.textContent = `引き絞り　${"▮".repeat(lv)}${"▯".repeat(3 - lv)}　矢 ${lv} 本`;
       }
 
       // 必殺技の状態。ゴーレム・砲台に乗っている間は撃てないので隠す。
@@ -6822,7 +8138,7 @@
         if (inputAcc >= 1 / INPUT_HZ) {
           inputAcc = 0;
           Net.sendInput(localInput);
-          localInput.reloadEdge = false; localInput.bombEdge = false; localInput.interactEdge = false; localInput.parryEdge = false; localInput.glyphEdge = false; localInput.thornEdge = false; localInput.ultEdge = false;
+          localInput.reloadEdge = false; localInput.bombEdge = false; localInput.interactEdge = false; localInput.parryEdge = false; localInput.glyphEdge = false; localInput.thornEdge = false; localInput.ultEdge = false; localInput.potionEdge = false;
           localInput.weaponWanted = -1;
         }
         interpClient(dt);
@@ -6885,6 +8201,8 @@
     spawnGolems();
     spawnBallistas();
     spawnCreature();
+    spawnLava();
+    spawnDoomStaff();
     spawnPickups();
     el.scoreGoal.textContent = objectiveText();
     resize();
@@ -6902,6 +8220,15 @@
     return boss ? `魔界の門を破壊 → ${boss.name} を討伐` : "魔界の門を破壊し、魔物を一掃";
   }
 
+  // 結果画面の「次の章へ進む」。選んだ章のまま、すぐ次の戦いを始める。
+  function startNextChapter(key) {
+    if (!STAGE_BY_KEY[key]) return;
+    playerStage = key;
+    localStorage.setItem("mr-stage", playerStage);
+    Net.shutdown();
+    startSoloMatch();
+  }
+
   function endMatch(winnerTeam) {
     if (G.over) return;
     G.over = true;
@@ -6913,20 +8240,37 @@
   function showMatchResult(winnerTeam) {
     const me = localUnit();
     const win = !!me && winnerTeam === me.team;
+    const stage = stageDef();
     let reward = 0;
+    let newlyCleared = false;
     if (!G.rewardClaimed) {
       G.rewardClaimed = true;
       if (win) {
         reward = WIN_REWARD;
         money += reward;
+        // 章を踏破すると次の章が解放される
+        if (stage.chapter && stage.chapter > clearedChapter) {
+          clearedChapter = stage.chapter;
+          newlyCleared = true;
+        }
         saveProgress();
       }
     }
+    const next = win ? nextChapterStage(stage) : null;
     const boss = bossDef();
-    el.resultTitle.textContent = win ? "魔境を制覇！ 🏆" : "全滅…";
+    el.resultTitle.textContent = win ? (stage.chapter ? `${stage.name} 踏破！ 🏆` : "魔境を制覇！ 🏆") : "全滅…";
     el.resultTitle.style.color = win ? "#8cf06a" : "#ff7a6a";
-    el.rewardSummary.textContent = win ? `勝利報酬 +${reward || WIN_REWARD} G` : `勝利すると ${WIN_REWARD} G 獲得できます`;
+    const unlockNote = newlyCleared && next ? `　▶ ${next.name} が解放されました` : "";
+    el.rewardSummary.textContent = win ? `勝利報酬 +${reward || WIN_REWARD} G${unlockNote}` : `勝利すると ${WIN_REWARD} G 獲得できます`;
     el.rewardSummary.classList.toggle("win", win);
+    // 次の章がある勝利では、そのまま続けて挑めるようにする
+    if (next) {
+      el.nextStage.textContent = `▶ ${next.name} へ進む`;
+      el.nextStage.classList.remove("hidden");
+      el.nextStage.dataset.stage = next.key;
+    } else {
+      el.nextStage.classList.add("hidden");
+    }
 
     const gate = G.bases[TEAM_FOE];
     const bossKilled = G.bossSummoned && !G.units.some((s) => s.boss && !s.dead);
@@ -7004,7 +8348,7 @@
     document.querySelectorAll(".stick .knob").forEach((knob) => { knob.style.transform = "translate(0,0)"; });
     releaseTouchShield();
     localInput.mvx = 0; localInput.mvy = 0; localInput.shoot = false; localInput.dash = false;
-    localInput.reloadEdge = false; localInput.bombEdge = false; localInput.interactEdge = false; localInput.parryEdge = false; localInput.glyphEdge = false; localInput.thornEdge = false; localInput.ultEdge = false;
+    localInput.reloadEdge = false; localInput.bombEdge = false; localInput.interactEdge = false; localInput.parryEdge = false; localInput.glyphEdge = false; localInput.thornEdge = false; localInput.ultEdge = false; localInput.potionEdge = false;
     localInput.weaponWanted = -1; localInput.shield = false;
   }
 
@@ -7019,7 +8363,7 @@
     };
 
     for (const s of G.units) {
-      shift(s, ["respawnAt", "lastDamagedAt", "parryUntil", "parryCooldownUntil", "stunnedUntil", "reloadUntil", "lastShot", "lastBomb", "lastGlyph", "lastBaseSupplyAt", "lastFootstepAt", "heardUntil", "muzzle", "chilledUntil", "lastThorn", "ultReadyAt", "wardedUntil", "lastFlameAt"]);
+      shift(s, ["respawnAt", "lastDamagedAt", "parryUntil", "parryCooldownUntil", "stunnedUntil", "reloadUntil", "lastShot", "lastBomb", "lastGlyph", "lastBaseSupplyAt", "lastFootstepAt", "heardUntil", "muzzle", "chilledUntil", "lastThorn", "ultReadyAt", "wardedUntil", "lastFlameAt", "manaBoostUntil", "holdStart"]);
       shift(s.ai, ["think", "strafeUntil", "lastSeen", "lostAt", "fireUntil", "stuckCheckAt", "detourUntil", "ballistaTry"]);
       shift(s.ult, ["startAt", "endAt", "lockUntil", "nextTickAt"]);
     }
@@ -7177,6 +8521,8 @@
       spawnGolems();
       spawnBallistas();
       spawnCreature();
+      spawnLava();
+      spawnDoomStaff();
       spawnPickups();
       el.scoreGoal.textContent = objectiveText();
       resize();
@@ -7254,7 +8600,7 @@
       applyShopUpgrades(slot, req.upgrades);
       clientInputs[req.conn.peer] = {
         mvx: 0, mvy: 0, aimAngle: 0, shoot: false, dash: false,
-        weaponWanted: -1, reloadEdge: false, bombEdge: false, interactEdge: false, parryEdge: false, glyphEdge: false, thornEdge: false, ultEdge: false, shield: false,
+        weaponWanted: -1, reloadEdge: false, bombEdge: false, interactEdge: false, parryEdge: false, glyphEdge: false, thornEdge: false, ultEdge: false, potionEdge: false, shield: false,
       };
       // パーティ名がまだ既定のままなら、最初に入った人のパーティ名を採用する。
       if (req.party && G.partyNames[TEAM_HERO] === TEAM_DEFS[TEAM_HERO].name) {
@@ -7542,6 +8888,7 @@
         s.glyphs = ns.mn == null ? 0 : ns.mn; s.maxGlyphs = ns.mm || 2;
         s.thorns = ns.wi || 0; s.maxThorns = ns.mw || 0;
         s.classKey = ns.cl || null;
+        s.element = ns.em || "none";
         s.foeKey = ns.fk || null;
         s.bossKey = ns.bk || null;
         s.boss = !!ns.bk;
@@ -7551,9 +8898,14 @@
         s.seesEnemyGlyphs = s.classKey ? classDef(s.classKey).seesEnemyGlyphs : false;
         // 必殺技は描画にしか使わない。中心と進み具合だけ受け取る。
         s.ultKey = s.classKey && ULTIMATES[s.classKey] ? s.classKey : null;
-        s.ult = ns.uk ? { key: ns.uk, x: ns.ux, y: ns.uy, p: ns.up || 0 } : null;
+        s.ult = ns.uk ? { key: ns.uk, x: ns.ux, y: ns.uy, p: ns.up || 0, angle: ns.ua || 0 } : null;
         s.ultReadyAt = now() + (ns.uc || 0);
         s.wardedUntil = now() + (ns.wd || 0);
+        s.mana = ns.mn2 || 0; s.maxMana = ns.mm2 || 0;
+        s.manaPotions = ns.mp || 0;
+        s.manaBoostUntil = now() + (ns.mb || 0);
+        s.doomStaff = !!ns.ds;
+        s.holdStart = ns.hs ? now() - ns.hs : 0;
         s.armor = ns.ar; s.maxArmor = ns.ma; s.shield = ns.sh; s.maxShield = ns.ms; s.shieldRaised = !!ns.sr;
         s.parryUntil = now() + (ns.pr || 0); s.parryCooldownUntil = now() + (ns.pc || 0); s.stunnedUntil = now() + (ns.st || 0);
         s.lastDamagedAt = now() - (AUTO_HEAL_DELAY_MS - (ns.rh || 0));
@@ -7638,9 +8990,11 @@
       G.thorns = (d.wr || []).map((thorn) => ({
         id: thorn.id, team: thorn.tm, x: thorn.x, y: thorn.y, owner: -1, seed: thorn.sd || 0,
       }));
+      G.doomStaff = d.ds ? { x: d.ds.x, y: d.ds.y, onAltar: !!d.ds.al, holderId: d.ds.hd, returnAt: 0 } : null;
       G.flames = (d.fm || []).map((flame) => ({
         id: flame.id, team: flame.tm, x: flame.x, y: flame.y, owner: -1,
         dieAt: nt + (flame.rem || 0), seed: flame.sd || 0,
+        lava: !!flame.lv, r: flame.r || FLAME_R,
       }));
       G.pickups = (d.p || []).map((p) => ({
         id: p.id, kind: p.k || "potion", x: p.x, y: p.y, active: !!p.ac,
@@ -7666,7 +9020,7 @@
         x: Math.round(o.x), y: Math.round(o.y), a: +o.aimAngle.toFixed(2),
         hp: Math.round(o.hp), mh: o.maxHp, d: o.dead ? 1 : 0, w: o.weapon,
         xp: o.xp, am: o.ammo, rl: o.reloading ? 1 : 0, gr: o.bombs, mg: o.maxBombs || 3, v: o.vehicleId, tr: o.ballistaId,
-        mn: o.glyphs, mm: o.maxGlyphs || 2, wi: o.thorns || 0, mw: o.maxThorns || 0, cl: o.classKey,
+        mn: o.glyphs, mm: o.maxGlyphs || 2, wi: o.thorns || 0, mw: o.maxThorns || 0, cl: o.classKey, em: o.element || "none",
         fk: o.foeKey || null, bk: o.bossKey || null, rr: o.r || 0, ud: o.undead ? 1 : 0,
         ch: Math.max(0, (o.chilledUntil || 0) - stamp),
         ar: Math.round(o.armor), ma: o.maxArmor, sh: Math.round(o.shield), ms: o.maxShield, sr: o.shieldRaised ? 1 : 0,
@@ -7676,7 +9030,11 @@
         uk: o.ult ? o.ult.key : null,
         ux: o.ult ? Math.round(o.ult.x) : 0, uy: o.ult ? Math.round(o.ult.y) : 0,
         up: o.ult ? +clamp(o.ult.p || 0, 0, 1).toFixed(2) : 0,
+        ua: o.ult ? +(o.ult.angle || 0).toFixed(2) : 0,
         uc: Math.max(0, (o.ultReadyAt || 0) - stamp), wd: Math.max(0, (o.wardedUntil || 0) - stamp),
+        mn2: Math.round(o.mana || 0), mm2: o.maxMana || 0, mp: o.manaPotions || 0,
+        mb: Math.max(0, (o.manaBoostUntil || 0) - stamp),
+        ds: o.doomStaff ? 1 : 0, hs: o.holdStart ? Math.max(0, stamp - o.holdStart) : 0,
         fl: (stamp - o.muzzle < (WEAPONS[o.weapon].melee ? 190 : 60)) ? 1 : 0,
       }));
       const dg = G.beasts.map((beast) => ({
@@ -7718,15 +9076,20 @@
       } : null;
       const fm = G.flames.map((flame) => ({
         id: flame.id, tm: flame.team, x: Math.round(flame.x), y: Math.round(flame.y),
-        rem: Math.max(0, flame.dieAt - stamp), sd: +(flame.seed || 0).toFixed(2),
+        rem: flame.lava ? 0 : Math.max(0, flame.dieAt - stamp), sd: +(flame.seed || 0).toFixed(2),
+        lv: flame.lava ? 1 : 0, r: Math.round(flame.r || FLAME_R),
       }));
       const wr = G.thorns.map((thorn) => ({
         id: thorn.id, tm: thorn.team, x: Math.round(thorn.x), y: Math.round(thorn.y), sd: +(thorn.seed || 0).toFixed(2),
       }));
+      const ds = G.doomStaff ? {
+        x: Math.round(G.doomStaff.x), y: Math.round(G.doomStaff.y),
+        al: G.doomStaff.onAltar ? 1 : 0, hd: G.doomStaff.holderId,
+      } : null;
       const bs = G.bases.map((base) => ({ tm: base.team, hp: Math.round(base.hp), mh: base.maxHp, hf: +base.hitFlash.toFixed(2) }));
       const payload = { t: "snap", sc: G.score, an: G.partyNames, ck: Math.round(G.clock),
         fs: G.foesSlain, bsm: G.bossSummoned ? 1 : 0, bid: G.boss == null ? -1 : G.boss,
-        bs, s, dg, tn, tu, b, g, p, mn, wr, fm, cre, kf: G.killfeed };
+        bs, s, dg, tn, tu, b, g, p, mn, wr, fm, ds, cre, kf: G.killfeed };
       for (const c of conns) { try { c.send(payload); } catch (e) {} }
     }
 
@@ -7762,7 +9125,7 @@
             mvx: inp.mvx, mvy: inp.mvy, aimAngle: inp.aimAngle, shoot: inp.shoot, dash: inp.dash,
             weaponWanted: inp.weaponWanted, reloadEdge: inp.reloadEdge,
             bombEdge: inp.bombEdge, interactEdge: inp.interactEdge, glyphEdge: inp.glyphEdge, thornEdge: inp.thornEdge,
-            parryEdge: inp.parryEdge, ultEdge: inp.ultEdge, shield: inp.shield,
+            parryEdge: inp.parryEdge, ultEdge: inp.ultEdge, potionEdge: inp.potionEdge, shield: inp.shield,
           },
         });
       } catch (e) {}
@@ -7835,10 +9198,21 @@
     // ステージ
     const savedStage = localStorage.getItem("mr-stage");
     playerStage = STAGE_BY_KEY[savedStage] ? savedStage : "ruins";
-    el.stageSeg.innerHTML = STAGES.map((st) =>
-      `<button data-stage="${st.key}"><span class="class-head">${st.icon} ${esc(st.name)}</span>` +
-      `<span class="class-desc">${esc(st.desc)}</span></button>`).join("");
+    function renderStageButtons() {
+      el.stageSeg.innerHTML = STAGES.map((st) => {
+        const open = chapterUnlocked(st);
+        const lock = open ? "" : `<span class="stage-lock">🔒 前の章をクリアすると挑めます</span>`;
+        const done = st.chapter && st.chapter <= clearedChapter ? `<span class="stage-clear">踏破済み</span>` : "";
+        return `<button data-stage="${st.key}"${open ? "" : " disabled"}>` +
+          `<span class="class-head">${st.icon} ${esc(st.name)}${done}</span>` +
+          `<span class="class-desc">${esc(st.desc)}</span>${lock}</button>`;
+      }).join("");
+    }
+    renderStageButtons();
     function syncStageButtons() {
+      // 未解放の章を選んだままにしない
+      const cur = STAGE_BY_KEY[playerStage];
+      if (cur && !chapterUnlocked(cur)) playerStage = "ruins";
       el.stageSeg.querySelectorAll("button").forEach((b) => {
         b.classList.toggle("on", b.dataset.stage === playerStage);
       });
@@ -7869,7 +9243,22 @@
       `<span class="class-desc">${esc(c.desc)}</span>` +
       (ultDef(c.key) ? `<span class="class-ult">⚡ 必殺技　${esc(ultDef(c.key).icon)} ${esc(ultDef(c.key).name)}</span>` : "") +
       `</button>`).join("");
+    function renderClassButtons() {
+      el.classSeg.innerHTML = CLASSES.map((c) => {
+        const open = classUnlocked(c);
+        const lock = open ? "" : `<span class="stage-lock">🔒 第${c.unlockChapter - 1}章をクリアすると選べます</span>`;
+        const elm = elementDef(c.element);
+        const tag = elm.icon ? `<span class="class-element">${elm.icon} ${esc(elm.name)}属性</span>` : "";
+        return `<button data-class="${c.key}"${open ? "" : " disabled"}>` +
+          `<span class="class-head">${c.icon} ${esc(c.name)}${tag}</span>` +
+          `<span class="class-desc">${esc(c.desc)}</span>` +
+          (ultDef(c.key) ? `<span class="class-ult">⚡ 必殺技　${esc(ultDef(c.key).icon)} ${esc(ultDef(c.key).name)}</span>` : "") +
+          lock + `</button>`;
+      }).join("");
+    }
+    renderClassButtons();
     function syncClassButtons() {
+      if (!classUnlocked(classDef(playerClass))) playerClass = "swordsman";
       el.classSeg.querySelectorAll("button").forEach((b) => {
         b.classList.toggle("on", b.dataset.class === playerClass);
       });
@@ -7882,6 +9271,13 @@
       syncClassButtons();
     });
     syncClassButtons();
+    refreshMenuUnlocks = () => {
+      renderStageButtons();
+      renderClassButtons();
+      syncStageButtons();
+      syncClassButtons();
+      syncOnlineAvailability();
+    };
 
     const savedParty = localStorage.getItem("mr-party");
     if (savedParty) el.partyInput.value = savedParty;
@@ -7940,6 +9336,10 @@
       setMatchPaused(false);
       openMenu();
     });
+    el.nextStage.addEventListener("click", () => {
+      Audio.unlock();
+      startNextChapter(el.nextStage.dataset.stage);
+    });
     document.getElementById("btn-again").addEventListener("click", () => {
       if (mode === "client") { openMenu(); return; }
       Net.shutdown();
@@ -7975,7 +9375,11 @@
       : "PC: WASDで移動・マウスで攻撃・Gで火炎瓶・Fで呪印・Eでゴーレム";
   }
 
+  // 章の解放状況をメニューに反映する。openMenu() から呼ばれる。
+  let refreshMenuUnlocks = () => {};
+
   function openMenu() {
+    refreshMenuUnlocks();
     if (G) { G.running = false; }
     Audio.stopBgm();
     matchPaused = false;
