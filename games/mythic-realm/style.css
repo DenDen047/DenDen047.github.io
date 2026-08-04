@@ -160,6 +160,10 @@ html, body {
 .equip-row.shield .equip-bar > span { background: linear-gradient(90deg,#43c3c9,#9ef6ec); }
 .shield-state { display: block; margin-top: 2px; color: #9cece8; font-size: 9px; font-weight: 700; }
 .shield-state.raised { color: #fff2a0; }
+/* 必殺技の状態。使えるようになると金色に光る。 */
+.ult-state { display: block; margin-top: 3px; color: #c3b6d8; font-size: 10px; font-weight: 800; }
+.ult-state.ready { color: #ffd23f; text-shadow: 0 0 8px rgba(255, 210, 63, 0.65); }
+.ult-state.hidden { display: none; }
 
 .vehicle-hint {
   position: absolute;
@@ -351,6 +355,8 @@ body.touch-ui .vehicle-hint { bottom: 226px; }
 }
 .tbtn.hidden { display: none; }
 .tbtn.action { background: rgba(86, 62, 128, 0.78); border: 1px solid rgba(226, 196, 255, 0.26); }
+.tbtn.ult-btn { background: rgba(96, 52, 30, 0.82); border: 1px solid rgba(255, 190, 110, 0.32); color: #e8cfae; }
+.tbtn.ult-btn.armed { color: #2a1c06; background: #ffd23f; border-color: #fff0b0; }
 .tbtn.shield-btn { background: rgba(43, 88, 138, 0.8); border: 1px solid rgba(160, 210, 255, 0.32); }
 .tbtn.shield-btn.active { color: #202511; background: #a9efe5; }
 .tbtn:active { background: rgba(255, 255, 255, 0.25); }
@@ -497,6 +503,35 @@ body.touch-ui .vehicle-hint { bottom: 226px; }
 .room-lobby .big-btn.hidden { display: none; }
 .room-lobby .big-btn:disabled { background: rgba(255, 255, 255, 0.07); border-color: rgba(255, 255, 255, 0.14); color: #9a9d8c; cursor: default; }
 
+/* ギルドへの参加申請。ホストだけに出て、承認するまでパーティには入らない。 */
+.lobby-requests { display: flex; flex-direction: column; gap: 6px; margin: 12px 0 0; text-align: left; }
+.lobby-requests.hidden { display: none; }
+.request-title { color: #ffd23f; font-size: 11px; font-weight: 900; letter-spacing: 0.06em; }
+.request-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid rgba(255, 210, 63, 0.4);
+  border-radius: 9px;
+  background: rgba(255, 210, 63, 0.1);
+}
+.request-row > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #eef0e2; font-size: 12px; font-weight: 700; }
+.request-row button {
+  flex: none;
+  padding: 6px 11px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: #eef0e2;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.request-row button.accept { border-color: rgba(140, 240, 106, 0.55); background: rgba(70, 211, 106, 0.22); color: #d6ffcb; }
+.request-row button.deny { border-color: rgba(255, 122, 106, 0.5); color: #ffcfc8; }
+.request-row button:hover { filter: brightness(1.18); }
+
 .lobby-roster { display: flex; flex-direction: column; gap: 3px; margin: 10px 0 0; text-align: left; }
 .roster-row { display: grid; grid-template-columns: 10px minmax(0, auto) minmax(0, 1fr); align-items: center; gap: 7px; font-size: 11px; }
 .roster-row.empty { opacity: 0.45; }
@@ -531,6 +566,8 @@ body.touch-ui .vehicle-hint { bottom: 226px; }
 .class-seg button.on { background: rgba(255, 210, 63, 0.12); border-color: var(--you); }
 .class-seg button.on .class-head { color: var(--you); }
 .class-seg button.on .class-desc { opacity: 0.85; }
+.class-ult { display: block; margin-top: 3px; font-size: 10px; font-weight: 800; color: #ffd23f; opacity: 0.8; }
+.class-seg button.on .class-ult { opacity: 1; }
 .net-status { font-size: 12px; min-height: 18px; margin: 10px 0 0; color: #b8a4dd; white-space: pre-line; }
 .net-status.err { color: var(--enemy); }
 .net-status.ok { color: #8cf06a; }

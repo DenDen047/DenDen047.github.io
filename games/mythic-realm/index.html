@@ -39,6 +39,7 @@
             <div class="equip-row armor"><span class="equip-label">鎧</span><span class="equip-bar"><span id="armor-fill"></span></span><b id="armor-text">100</b></div>
             <div class="equip-row shield"><span class="equip-label">盾</span><span class="equip-bar"><span id="shield-fill"></span></span><b id="shield-text">160</b></div>
             <span id="shield-state" class="shield-state">Qを攻撃直前に押してパリィ</span>
+            <span id="ult-text" class="ult-state">⚡ 必殺技</span>
           </div>
         </div>
       </div>
@@ -76,6 +77,7 @@
           <button id="t-bomb" class="tbtn action">🔥 火炎</button>
           <button id="t-glyph" class="tbtn action">🔮 呪印</button>
           <button id="t-thorn" class="tbtn action hidden">🌿 茨</button>
+          <button id="t-ult" class="tbtn ult-btn">⚡ 必殺</button>
           <button id="t-golem" class="tbtn action">ゴーレム</button>
           <button id="t-shield" class="tbtn shield-btn">🛡 盾</button>
           <button id="t-reload" class="tbtn">整える</button>
@@ -113,7 +115,7 @@
         <div id="menu-main">
           <p class="menu-wallet">所持金 <b id="menu-money">0</b> G</p>
           <button id="btn-solo" class="big-btn primary">ひとりで挑む（CPUの仲間と）</button>
-          <button id="btn-online" class="big-btn">オンライン協力プレイ</button>
+          <button id="btn-online" class="big-btn">🏰 ギルド（みんなで挑む）</button>
           <div class="diff-row">
             <span>難易度</span>
             <div class="seg" id="diff-seg">
@@ -125,22 +127,23 @@
           <button id="btn-controls" class="big-btn">🎮 操作方法</button>
         </div>
 
-        <!-- オンラインのサブパネル -->
+        <!-- ギルド（オンライン協力）のサブパネル -->
         <div id="menu-online" class="hidden">
-          <p class="lead small">同じルームコードを共有すると、ブラウザ同士で一緒に遊べます（P2P / サーバー不要）。参加者は全員おなじ勇者パーティの仲間になります。</p>
+          <p class="lead small">ギルドを作ると<b>ギルド番号</b>が発行されます。番号を伝えた仲間がそれを入力すると、ギルドに入れます。入ってきた人をパーティに加えるかどうかは、<b>ギルドを作った人（ホスト）が決めます</b>（P2P / サーバー不要）。</p>
           <div id="online-actions">
-            <button id="btn-host" class="big-btn primary">ルームを作成（ホスト）</button>
+            <button id="btn-host" class="big-btn primary">ギルドを作る</button>
             <div class="join-row">
-              <input id="join-code" type="text" maxlength="8" placeholder="ルームコード" autocapitalize="characters">
-              <button id="btn-join" class="big-btn">参加</button>
+              <input id="join-code" type="text" maxlength="8" placeholder="ギルド番号" autocapitalize="characters">
+              <button id="btn-join" class="big-btn">ギルドに入る</button>
             </div>
           </div>
           <div id="room-lobby" class="room-lobby hidden" aria-live="polite">
-            <span class="room-lobby-label">ルームコード</span>
+            <span class="room-lobby-label">ギルド番号</span>
             <strong id="room-code">----</strong>
-            <p id="lobby-status">参加者を待っています…</p>
+            <p id="lobby-status">仲間を待っています…</p>
+            <div id="lobby-requests" class="lobby-requests hidden"></div>
             <div id="lobby-roster" class="lobby-roster"></div>
-            <button id="btn-lobby-start" class="big-btn primary hidden">参加者を待っています…</button>
+            <button id="btn-lobby-start" class="big-btn primary hidden">仲間を待っています…</button>
           </div>
           <div id="net-status" class="net-status"></div>
           <button id="btn-back" class="link-btn">← もどる</button>
@@ -190,6 +193,7 @@
               <li><b>C</b> … 茨の呪縛を張る（狩人・獣使いのみ）</li>
               <li><b>E</b> … ゴーレム・魔導砲台に乗る / 降りる</li>
               <li><b>Q</b> … 攻撃直前に押してパリィ / 長押しで防御</li>
+              <li><b>X</b> … 必殺技（職業ごとに1つ）</li>
               <li><b>1〜3</b> / ホイール … 武器切替（持てる武器は職業ごとに固定）</li>
               <li><b>Shift</b> … ダッシュ</li>
             </ul>
@@ -204,6 +208,7 @@
               <li><b>🔮 呪印</b> … 足元に描く</li>
               <li><b>🌿 茨</b> … 茨の呪縛を張る</li>
               <li><b>ゴーレム</b> … 近くのゴーレム・魔導砲台に乗る / 降りる</li>
+              <li><b>⚡ 必殺</b> … 必殺技（待ち時間の残り秒数がボタンに出ます）</li>
               <li><b>🛡 盾</b> … 攻撃直前に押してパリィ / 長押しで防御</li>
               <li><b>整える / 武器</b> … 右下ボタン</li>
             </ul>
@@ -213,7 +218,28 @@
         <h3 style="margin-top:6px">戦い方</h3>
         <p class="help-rpg"><b>勇者パーティ vs 魔物の軍勢</b>です。プレイヤー同士は戦いません。マップの反対側にある<b>魔界の門</b>から魔物が次々と湧いてくるので、門を攻撃して壊しましょう。門が砕けると増援は止まり、代わりに奥から<b>そのステージのボス</b>が現れます。ボスと残った魔物をすべて倒せば勝ちです。</p>
         <p class="help-rpg">自分たちの拠点は<b>勇者の祭壇</b>です。倒れてもここから復活できますが、祭壇を壊されると<b>それ以降いっさい復活できません</b>。生き残りが全員倒れたら負けです。祭壇の円の中に入ると体力・鎧・盾が回復し、マナ・矢・火炎瓶・呪印も補給できます。</p>
-        <p class="help-rpg">門の体力が減るほど、<b>湧いてくる魔物が強くなります</b>。最初はゴブリンだけですが、やがてオーク・骸骨の射手・闇術師・石のガーゴイルが混ざってきます。オンラインでは参加者全員が同じパーティの仲間になります。</p>
+        <p class="help-rpg">門の体力が減るほど、<b>湧いてくる魔物が強くなります</b>。最初はゴブリンだけですが、やがてオーク・骸骨の射手・闇術師・石のガーゴイルが混ざってきます。ギルドで一緒に挑むときは、参加者全員が同じパーティの仲間になります。</p>
+
+        <h3 style="margin-top:6px">ギルド（みんなで挑む）</h3>
+        <p class="help-rpg">メニューの<b>🏰 ギルド</b>から、友達と同じ戦場へ入れます。サーバーは要りません（ブラウザ同士のP2P）。</p>
+        <ul class="help-classes">
+          <li><b>ギルドを作る</b> … 押すとあなたがホストになり、<b>ギルド番号</b>（4文字）が発行されます。この番号を仲間に伝えてください。</li>
+          <li><b>ギルドに入る</b> … 教わった番号を入力欄に入れて押すと、ホストへ参加を申し込みます。</li>
+          <li><b>入れるかどうかはホストが決めます</b> … 申し込みがあると、ホストの画面に名前と職業が出て「入れる / 断る」を選べます。入れた人だけがパーティの席に着きます。</li>
+          <li><b>出発</b> … ホストが「ギルドがそろった → 出発」を押すと、3秒のカウントダウンのあと全員で戦場へ出ます。空いた席はCPUの仲間が務めます。</li>
+        </ul>
+
+        <h3 style="margin-top:6px">必殺技</h3>
+        <p class="help-rpg">職業ごとに<b>必殺技が1つ</b>あります。<b>X キー</b>（スマホは「⚡ 必殺」ボタン）で撃つと、十数秒の待ち時間に入ります。待ち時間の残りは画面右下と、スマホではボタンの数字に出ます。ゴーレムや魔導砲台に乗っている間は撃てません。</p>
+        <ul class="help-classes">
+          <li><b>🌪 烈風斬</b>（剣士）… 前へ踏み込みながら三連の斬撃。通り道の敵をまとめて斬り払います。</li>
+          <li><b>💥 エクスプロージョン</b>（魔法使い）… 前方に魔力を集めて詠唱します。詠唱の間、<b>まわりの敵をすべて爆心へ引きずり寄せ</b>、そのうえで起爆します。当たった<b>障害物も跡形なく吹き飛びます</b>。詠唱中は動けず、撃ったあとは力尽きて少しのあいだ動けません。</li>
+          <li><b>🏹 千矢の雨</b>（狩人）… 狙った一帯へ約2秒間、矢を降らせ続けます。逃げ遅れた敵を止まらず削ります。</li>
+          <li><b>🕊 聖域</b>（僧侶）… 自分を中心に光の輪を6秒張ります。中の味方は回復し受けるダメージも減り、中の敵は聖なる光に焼かれます（アンデッドには特に効きます）。輪は僧侶についてきます。</li>
+          <li><b>🔥 火炎乱舞</b>（冒険者）… 火炎瓶を5本まとめて扇状にばらまきます。手持ちの火炎瓶は減りません。</li>
+          <li><b>🐺 獣王の咆哮</b>（獣使い）… 倒れた狼を呼び戻して立ち上がらせ、9秒間だけ荒ぶらせます（速く走り、強く噛みます）。近くの敵はすくみ上がって動けなくなります。</li>
+          <li><b>🗿 震天の一撃</b>（魔神像）… 地面を叩き割ります。広がる衝撃波が敵を吹き飛ばし、しばらく起き上がれなくします。</li>
+        </ul>
 
         <h3 style="margin-top:6px">職業</h3>
         <p class="help-rpg">職業ごとに<b>見た目と持てる武器が決まっています</b>。数字キーの1〜3は、その職業の武器の1番目〜3番目に対応します。</p>
@@ -224,6 +250,7 @@
           <li><b>✨ 僧侶</b> … 聖光 / 癒しの光 / 聖なる槌。<b>癒しの光で味方の傷をふさげる唯一の職業</b>です。聖属性は骸骨や闇術師などのアンデッドに1.8倍のダメージを与えます。</li>
           <li><b>🗡️ 冒険者</b> … 片手剣 / 速射弓 / 投げ斧。近接も遠距離もそこそこ扱える万能型。火炎瓶4個・呪印3枚と道具が豊富で、どんな場面でも仕事があります。</li>
           <li><b>🐺 獣使い</b> … 槍 / 獣の鞭 / 投げ斧。<b>狼を2匹つれて戦います</b>。狼は勝手に敵へ噛みつき、倒されてもしばらくすると戻ってきます。槍はリーチが長く、鞭はさらに長く広く払えます。</li>
+          <li><b>🗿 魔神像</b> … 岩の拳のみ。<b>武器をいっさい持てません</b>ので、剣も弓も魔法も使えず、数字キーでの持ちかえもありません。その代わり体力は剣士の1.5倍以上あり、一撃が重く正面を広く払えます。ただし<b>拳は連打が効かず</b>、足も全職業でいちばん遅い。<b>体が大きいぶん敵の矢や魔法にも当たりやすい</b>うえ、狭い場所は通り抜けられません。</li>
         </ul>
 
         <h3 style="margin-top:6px">魔物とボス</h3>
@@ -235,7 +262,8 @@
           <li><b>石のガーゴイル</b> … 門が半分削れたころに現れる精鋭。岩を投げ、近づけば爪で殴ります。</li>
           <li><b>魔狼</b> … 主を持たない野良の狼。まっすぐ祭壇を目指して走ってきます。</li>
         </ul>
-        <p class="help-rpg">ボスは門を壊した瞬間に現れます。古代遺跡には<b>炎竜 イグニス</b>（爆発する竜炎と巨爪）、常闇の樹海には<b>魔狼王 フェンリル</b>（とにかく速く、噛みつきが重い）。どちらも体力が桁違いなので、パーティで囲んで削りましょう。</p>
+        <p class="help-rpg">ボスは門を壊した瞬間に現れます。古代遺跡には<b>炎竜 イグニス</b>、常闇の樹海には<b>魔狼王 フェンリル</b>（とにかく速く、噛みつきが重い）。どちらも体力が桁違いなので、パーティで囲んで削りましょう。</p>
+        <p class="help-rpg"><b>炎竜 イグニス</b>は間合いで攻撃を変えます。離れていれば爆発する<b>竜炎</b>を吐き、近づかれると<b>巨爪</b>で薙ぎ払います。巨体で<b>ぶつかった木や柱を薙ぎ倒しながら</b>進むので、隠れていた遮蔽が突然なくなります。さらに<b>歩いた跡に炎が残り</b>、踏んでいる間ずっと焼かれます（炎は数秒で燃え尽きます）。竜の正面と通り道の両方を避けて戦いましょう。</p>
 
         <h3 style="margin-top:6px">ステージ「訓練の間」</h3>
         <p class="help-rpg">はじめての人のための訓練施設です。<b>魔物はいません</b>。マップの中央に木人が並んでいて、攻撃しても反撃されません。壊した木人は数秒で立て直るので、何度でも練習できます。</p>

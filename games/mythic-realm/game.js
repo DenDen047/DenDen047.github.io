@@ -43,6 +43,13 @@
   const GLYPH_DAMAGE = 155;
   const GLYPH_SPOT_R = 95;        // 敵がこの距離まで近づくと見える
   const GLYPH_PLACE_COOLDOWN = 600;
+  // 炎竜が歩いた跡に残る炎。踏んでいる間じわじわ焼かれ、やがて燃え尽きる。
+  const FLAME_R = 36;             // 炎の効果半径
+  const FLAME_DPS = 26;           // 中にいる敵への毎秒ダメージ
+  const FLAME_LIFE_MS = 5000;     // 燃え尽きるまで
+  const FLAME_DROP_MS = 210;      // 歩きながら炎を落とす間隔
+  const FLAME_MAX = 90;           // 同時に存在できる炎の上限
+  const DRAKE_CRUSH_PAD = 6;      // 体のまわりこのぶんまで薙ぎ倒す
   const THORN_R = 52;             // 茨の呪縛の効果半径
   const THORN_DPS = 14;           // 中にいる敵への毎秒ダメージ
   const THORN_SLOW = 0.42;        // 中にいる敵の移動速度倍率
@@ -116,6 +123,8 @@
     speed: 0, range: 90, len: 18, kick: 3, pierce: 0,
     melee: false, arc: 0.9, style: "sword", proj: "arrow", snd: "melee",
     bow: false, magic: false, blast: false, holy: false, heal: 0, slow: 0,
+    // 刃物が描く白い斬撃線。素手のように刃の無い武器では出さない。
+    slashFx: true,
   };
   const WEAPONS = [
     // ---- 近接 ----
@@ -127,6 +136,8 @@
     { key: "whip",       name: "獣の鞭",       dmg: 40,  interval: 300, range: 160, arc: 1.15, kick: 2.0, style: "whip",       melee: true },
     { key: "mace",       name: "聖なる槌",     dmg: 86,  interval: 660, range: 92,  arc: 1.15, kick: 4.6, style: "mace",       melee: true, holy: true },
     { key: "huntknife",  name: "狩猟ナイフ",   dmg: 52,  interval: 300, range: 74,  arc: 0.85, kick: 2.2, style: "dagger",     melee: true },
+    // 素手。武器を持てない魔神像の唯一の攻撃手段。連打はできないが一撃が重い。
+    { key: "stonefist",  name: "岩の拳",       dmg: 118, interval: 900, range: 118, arc: 1.25, kick: 5.2, style: "fist",       melee: true, slashFx: false },
     // ---- 弓・投擲 ----
     { key: "longbow",  name: "長弓",   dmg: 66, interval: 900, mag: 6,  reload: 1500, spread: 0.012, speed: 1700, range: 1100, len: 26, kick: 4.2, pierce: 1, proj: "arrow", bow: true, snd: "bowheavy" },
     { key: "shortbow", name: "速射弓", dmg: 24, interval: 150, mag: 14, reload: 1150, spread: 0.075, speed: 1250, range: 640,  len: 20, kick: 1.4, auto: true, proj: "arrow", bow: true, snd: "bow" },
@@ -144,8 +155,8 @@
     { key: "darkbolt",  name: "闇弾",     dmg: 26, interval: 780,  mag: 6, reload: 1700, spread: 0.05, speed: 780,  range: 620, len: 18, kick: 1.8, proj: "dark", magic: true, snd: "cast" },
     { key: "rockthrow", name: "岩投げ",   dmg: 48, interval: 1500, mag: 3, reload: 2100, spread: 0.05, speed: 640,  range: 620, len: 16, kick: 3.4, proj: "rock", bow: true, snd: "bow" },
     // ---- ボスの武器 ----
-    { key: "bossflame", name: "竜炎",     dmg: 120, interval: 1900, mag: 3, reload: 2400, spread: 0.05, speed: 560, range: 900, len: 26, kick: 5.0, blast: true, proj: "fire", magic: true, snd: "blast" },
-    { key: "bossclaw",  name: "巨爪",     dmg: 78,  interval: 780,  range: 128, arc: 1.25, kick: 6.0, style: "claw", melee: true },
+    { key: "bossflame", name: "竜炎",     dmg: 120, interval: 1250, mag: 4, reload: 2000, spread: 0.05, speed: 560, range: 900, len: 26, kick: 5.0, blast: true, proj: "fire", magic: true, snd: "blast" },
+    { key: "bossclaw",  name: "巨爪",     dmg: 78,  interval: 560,  range: 128, arc: 1.25, kick: 6.0, style: "claw", melee: true },
   ].map((w) => Object.assign({}, WEAPON_DEFAULTS, w));
   const WKEY = {}; WEAPONS.forEach((w, i) => (WKEY[w.key] = i));
 
@@ -167,6 +178,8 @@
     bombs: 2, glyphs: 1, thorns: 0, pets: 0,
     parryWindowMul: 1, parryCooldownMul: 1,
     glyphArmMul: 1, glyphBlastMul: 1, glyphStealthMul: 1, seesEnemyGlyphs: false,
+    // 体の半径。0 なら標準の UNIT_R。大きいほど当たり判定も見た目も大きくなる。
+    bodyR: 0,
   };
   const CLASSES = [
     {
@@ -217,10 +230,82 @@
       weapons: ["spear", "whip", "throwaxe"],
       look: { robe: "#6d5230", trim: "#c8b06a", skin: "#dfa877", hair: "#241a12", head: "fur", cape: "#7a6440" },
     },
+    {
+      key: "colossus", name: "魔神像", icon: "🗿",
+      desc: "岩の拳のみ。武器はいっさい持てない代わりに、体力が飛び抜けて高く一撃が重い石の巨体。連打は効かず足も最も遅い。体が大きいぶん敵の矢や魔法にも当たりやすい。",
+      hpBonus: 120, speedMul: 0.76, meleeMul: 1.3, rangedMul: 1, magicMul: 1,
+      parryWindowMul: 0.7, parryCooldownMul: 1.4,
+      bodyR: 22,
+      weapons: ["stonefist"],
+      look: { robe: "#6f6c63", trim: "#d08a3a", skin: "#8b887e", hair: "#4b4841", head: "stone", cape: "#514e47" },
+    },
   ].map((c) => Object.assign({}, CLASS_DEFAULTS, c));
   const CLASS_BY_KEY = {};
   CLASSES.forEach((c) => (CLASS_BY_KEY[c.key] = c));
   const classDef = (key) => CLASS_BY_KEY[key] || CLASSES[0];
+
+  // ============================================================
+  //  必殺技
+  //  職業ごとに1つだけ。X キー(スマホは「⚡必殺」ボタン)で撃つ。
+  //  撃つと cooldown ミリ秒の再使用待ちに入る。魔物とボスは持たない。
+  //  aiRange = CPU の仲間が「この距離まで敵が近づいたら撃つ」目安。
+  // ============================================================
+  const ULT_RESPAWN_DELAY = 4000;      // 復活してから撃てるようになるまで
+
+  // ---- エクスプロージョン (魔法使い) ----
+  const EXPLOSION_CHARGE_MS = 1500;    // 詠唱を始めてから爆発するまで
+  const EXPLOSION_FOCUS_D = 300;       // 魔力を集める位置(自分の前方)
+  const EXPLOSION_PULL_R = 470;        // ここまで近づいた敵を爆心へ引き寄せる
+  const EXPLOSION_PULL_SPEED = 340;    // 引き寄せる速さ (px/秒)
+  const EXPLOSION_BLAST_R = 265;
+  const EXPLOSION_DAMAGE = 470;
+  const EXPLOSION_EXHAUST_MS = 800;    // 撃ったあと動けない時間
+  // ---- 烈風斬 (剣士) ----
+  const GALE_MS = 460, GALE_SPEED = 660, GALE_RANGE = 120, GALE_ARC = 1.35, GALE_DAMAGE = 265;
+  // ---- 千矢の雨 (狩人) ----
+  const RAIN_MS = 1900, RAIN_FOCUS_D = 340, RAIN_R = 195, RAIN_TICK = 130, RAIN_DAMAGE = 46;
+  // ---- 聖域 (僧侶) ----
+  const SANCT_MS = 6000, SANCT_R = 205, SANCT_TICK = 250, SANCT_HEAL = 13, SANCT_DAMAGE = 15;
+  const SANCT_WARD = 0.62;             // 聖域の中で受けるダメージの倍率
+  // ---- 火炎乱舞 (冒険者) ----
+  const FIREDANCE_COUNT = 5;
+  // ---- 獣王の咆哮 (獣使い) ----
+  const ROAR_MS = 620, ROAR_R = 330, ROAR_RAGE_MS = 9000, ROAR_STUN_MS = 900;
+  const ROAR_RAGE_SPEED = 1.35, ROAR_RAGE_DAMAGE = 1.7;
+  // ---- 震天の一撃 (魔神像) ----
+  const QUAKE_MS = 640, QUAKE_R = 340, QUAKE_DAMAGE = 235, QUAKE_STUN_MS = 900;
+
+  const ULTIMATES = {
+    swordsman: {
+      name: "烈風斬", icon: "🌪", cooldown: 18000, aiRange: 210,
+      desc: "前へ踏み込みながら三連の斬撃。通り道の敵をまとめて斬り払う。",
+    },
+    mage: {
+      name: "エクスプロージョン", icon: "💥", cooldown: 26000, aiRange: 700,
+      desc: "前方に魔力を集めて詠唱。近くの敵をすべて爆心へ引きずり寄せてから起爆する。撃ったあとは力尽きて少し動けない。",
+    },
+    hunter: {
+      name: "千矢の雨", icon: "🏹", cooldown: 20000, aiRange: 620,
+      desc: "狙った一帯へ矢を降らせ続ける。範囲の中にいる敵を止まらず削る。",
+    },
+    priest: {
+      name: "聖域", icon: "🕊", cooldown: 22000, aiRange: 430,
+      desc: "自分を中心に光の輪を張る。中の味方は回復して受けるダメージも減り、中の敵は聖なる光に焼かれる。",
+    },
+    adventurer: {
+      name: "火炎乱舞", icon: "🔥", cooldown: 18000, aiRange: 430,
+      desc: "火炎瓶を5本まとめて扇状にばらまく。手持ちは減らない。",
+    },
+    beastmaster: {
+      name: "獣王の咆哮", icon: "🐺", cooldown: 20000, aiRange: 310,
+      desc: "咆哮で狼を呼び戻して立ち上がらせ、9秒間だけ荒ぶらせる。近くの敵はすくみ上がって動けなくなる。",
+    },
+    colossus: {
+      name: "震天の一撃", icon: "🗿", cooldown: 16000, aiRange: 270,
+      desc: "地面を叩き割る。広がる衝撃波が敵を吹き飛ばし、しばらく起き上がれなくする。",
+    },
+  };
+  const ultDef = (key) => ULTIMATES[key] || null;
 
   // ============================================================
   //  魔物
@@ -408,6 +493,7 @@
     shieldFill: document.getElementById("shield-fill"),
     shieldText: document.getElementById("shield-text"),
     shieldState: document.getElementById("shield-state"),
+    ult: document.getElementById("ult-text"),
     vehicleHint: document.getElementById("vehicle-hint"),
     trainingPanel: document.getElementById("training-panel"),
     tpProgress: document.getElementById("tp-progress"),
@@ -439,6 +525,7 @@
     roomLobby: document.getElementById("room-lobby"),
     roomCode: document.getElementById("room-code"),
     lobbyStatus: document.getElementById("lobby-status"),
+    lobbyRequests: document.getElementById("lobby-requests"),
     lobbyRoster: document.getElementById("lobby-roster"),
     lobbyStart: document.getElementById("btn-lobby-start"),
     classSeg: document.getElementById("class-seg"),
@@ -728,6 +815,7 @@
     if (!e.repeat && (e.key === "f" || e.key === "F")) localInput.glyphEdge = true;
     if (!e.repeat && (e.key === "c" || e.key === "C")) localInput.thornEdge = true;
     if (!e.repeat && (e.key === "q" || e.key === "Q")) localInput.parryEdge = true;
+    if (!e.repeat && (e.key === "x" || e.key === "X")) localInput.ultEdge = true;
     // 数字キーは「所持している武器の何番目か」。全武器の通し番号ではない。
     if (e.key >= "1" && e.key <= "9") {
       const me = localUnit();
@@ -796,6 +884,8 @@
   document.getElementById("t-glyph").addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.glyphEdge = true; });
   const thornBtn = document.getElementById("t-thorn");
   thornBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.thornEdge = true; });
+  const ultBtn = document.getElementById("t-ult");
+  ultBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.ultEdge = true; });
   document.getElementById("t-golem").addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.interactEdge = true; });
   const touchShieldBtn = document.getElementById("t-shield");
   touchShieldBtn.addEventListener("pointerdown", (e) => {
@@ -817,7 +907,7 @@
   const localInput = {
     mvx: 0, mvy: 0, aimx: 1, aimy: 0, shoot: false, dash: false,
     reloadEdge: false, bombEdge: false, interactEdge: false, parryEdge: false, glyphEdge: false, thornEdge: false,
-    weaponWanted: -1, aimAngle: 0, shield: false,
+    ultEdge: false, weaponWanted: -1, aimAngle: 0, shield: false,
   };
 
   function gatherLocalInput() {
@@ -915,6 +1005,7 @@
       bombs: [],
       glyphs: [],
       thorns: [],
+      flames: [],
       golems: [],
       ballistas: [],
       particles: [],
@@ -1099,6 +1190,8 @@
     bush:     { solid: false, opaque: true,  stopsProjectiles: false },
     manajar:   { solid: true,  opaque: false, stopsProjectiles: true },
   };
+  // 木と茂みは砕けるのではなく散る。飛び散る破片の見た目をこれで選ぶ。
+  const LEAFY = { tree: true, bush: true };
   const isSolid = (o) => OBSTACLE_KINDS[o.type] ? OBSTACLE_KINDS[o.type].solid : true;
   const isOpaque = (o) => OBSTACLE_KINDS[o.type] ? OBSTACLE_KINDS[o.type].opaque : true;
   const stopsProjectiles = (o) => OBSTACLE_KINDS[o.type] ? OBSTACLE_KINDS[o.type].stopsProjectiles : true;
@@ -1106,9 +1199,10 @@
   // ---- マップ生成 ----
   function genMap() {
     const key = stageDef().key;
-    if (key === "darkforest") return genForestMap();
-    if (key === "training") return genTrainingMap();
-    return genRuinsMap();
+    const obs = key === "darkforest" ? genForestMap() : key === "training" ? genTrainingMap() : genRuinsMap();
+    // 壊れた障害物をオンラインの仲間へ伝えるための通し番号
+    obs.forEach((o, i) => (o.id = i));
+    return obs;
   }
 
   // ---- 訓練の間のレイアウト ----
@@ -1134,10 +1228,10 @@
   function genTrainingMap() {
     const obs = [];
     const wt = 26;
-    obs.push({ x: 0, y: 0, w: WORLD_W, h: wt, type: "wall", hp: Infinity });
-    obs.push({ x: 0, y: WORLD_H - wt, w: WORLD_W, h: wt, type: "wall", hp: Infinity });
-    obs.push({ x: 0, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity });
-    obs.push({ x: WORLD_W - wt, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity });
+    obs.push({ x: 0, y: 0, w: WORLD_W, h: wt, type: "wall", hp: Infinity, border: true });
+    obs.push({ x: 0, y: WORLD_H - wt, w: WORLD_W, h: wt, type: "wall", hp: Infinity, border: true });
+    obs.push({ x: 0, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity, border: true });
+    obs.push({ x: WORLD_W - wt, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity, border: true });
 
     // 射手の位置の石積み。どの方向から来ても正面に遮蔽がある。間は通り抜けられる。
     for (let i = 0; i < 8; i++) {
@@ -1176,10 +1270,10 @@
   function genForestMap() {
     const obs = [];
     const wt = 26;
-    obs.push({ x: 0, y: 0, w: WORLD_W, h: wt, type: "wall", hp: Infinity });
-    obs.push({ x: 0, y: WORLD_H - wt, w: WORLD_W, h: wt, type: "wall", hp: Infinity });
-    obs.push({ x: 0, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity });
-    obs.push({ x: WORLD_W - wt, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity });
+    obs.push({ x: 0, y: 0, w: WORLD_W, h: wt, type: "wall", hp: Infinity, border: true });
+    obs.push({ x: 0, y: WORLD_H - wt, w: WORLD_W, h: wt, type: "wall", hp: Infinity, border: true });
+    obs.push({ x: 0, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity, border: true });
+    obs.push({ x: WORLD_W - wt, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity, border: true });
 
     // 廃墟(数は少なめ)
     for (let i = 0; i < 7; i++) {
@@ -1229,10 +1323,10 @@
     const obs = [];
     // 外周の壁
     const wt = 26;
-    obs.push({ x: 0, y: 0, w: WORLD_W, h: wt, type: "wall", hp: Infinity });
-    obs.push({ x: 0, y: WORLD_H - wt, w: WORLD_W, h: wt, type: "wall", hp: Infinity });
-    obs.push({ x: 0, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity });
-    obs.push({ x: WORLD_W - wt, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity });
+    obs.push({ x: 0, y: 0, w: WORLD_W, h: wt, type: "wall", hp: Infinity, border: true });
+    obs.push({ x: 0, y: WORLD_H - wt, w: WORLD_W, h: wt, type: "wall", hp: Infinity, border: true });
+    obs.push({ x: 0, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity, border: true });
+    obs.push({ x: WORLD_W - wt, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity, border: true });
 
     // 神殿の外壁ブロック
     const blocks = 13;
@@ -1330,6 +1424,12 @@
     s.glyphBlastMul = c.glyphBlastMul;
     s.glyphStealthMul = c.glyphStealthMul;
     s.seesEnemyGlyphs = c.seesEnemyGlyphs;
+    // 0 のときは unitR() が標準の UNIT_R に落とす
+    s.r = c.bodyR;
+    // 必殺技は職業ごとに1つ。最初から撃てる。
+    s.ultKey = ULTIMATES[c.key] ? c.key : null;
+    s.ult = null;
+    s.ultReadyAt = 0;
     // 職業ごとに持てる武器は限定。数字キーはこの並び順に対応する。
     s.loadout = c.weapons.map((key) => WKEY[key]).filter((i) => i != null);
     s.weapon = s.loadout[0];
@@ -1352,6 +1452,7 @@
     s.dmgMul = f.dmgMul * D.dmgMul;
     s.armor = 0; s.maxArmor = 0; s.shield = 0; s.maxShield = 0;
     s.bombs = 0; s.maxBombs = 0; s.glyphs = 0; s.maxGlyphs = 0; s.thorns = 0; s.maxThorns = 0;
+    s.ultKey = null; s.ult = null;
     s.loadout = f.weapons.map((k) => WKEY[k]).filter((i) => i != null);
     s.weapon = s.loadout[0];
     s.ammo = WEAPONS[s.weapon].mag;
@@ -1372,6 +1473,7 @@
     s.dmgMul = def.dmgMul * D.dmgMul;
     s.armor = 0; s.maxArmor = 0; s.shield = 0; s.maxShield = 0;
     s.bombs = 0; s.maxBombs = 0; s.glyphs = 0; s.maxGlyphs = 0; s.thorns = 0; s.maxThorns = 0;
+    s.ultKey = null; s.ult = null;
     s.loadout = def.weapons.map((k) => WKEY[k]).filter((i) => i != null);
     s.weapon = s.loadout[0];
     s.ammo = WEAPONS[s.weapon].mag;
@@ -1398,6 +1500,7 @@
       parryWindowMul: 1, parryCooldownMul: 1,
       glyphArmMul: 1, glyphBlastMul: 1, glyphStealthMul: 1, seesEnemyGlyphs: false,
       thorns: 0, maxThorns: 0, lastThorn: -99999,
+      ultKey: null, ult: null, ultReadyAt: 0, wardedUntil: 0,
       isHuman: !!opt.isHuman,
       controller: opt.controller || "cpu", // 'cpu' | 'local' | peerId
       x: sp.x, y: sp.y, vx: 0, vy: 0,
@@ -1852,27 +1955,36 @@
   }
 
   function resolveMovement(s, nx, ny) {
+    // 体の大きい職業(魔神像)は障害物にも大きく引っかかる。
+    // 魔物とボスは狭い通路を抜けられなくなると詰むので、従来どおり UNIT_R のまま。
+    const r = s.classKey ? unitR(s) : UNIT_R;
+    // ゴーレムに重なった状態で湧く / 降りることがある。そのとき全方向を塞ぐと
+    // 二度と動けなくなるので、めり込みが浅くなる向きだけは必ず通す。
+    const golemBlocks = (fx, fy, cx, cy) => {
+      for (const golem of G.golems) {
+        if (golem.dead || golem.id === s.vehicleId) continue;
+        const d = dist2(fx, fy, golem.x, golem.y);
+        if (d < (GOLEM_R + r) ** 2 && d <= dist2(cx, cy, golem.x, golem.y)) return true;
+      }
+      return false;
+    };
     // 軸分離で押し戻し
     let x = s.x, y = s.y;
     // X
     let tx = nx;
     for (const o of G.obstacles) {
-      if (isSolid(o) && circleRect(tx, y, UNIT_R, o.x, o.y, o.w, o.h)) { tx = x; break; }
+      if (isSolid(o) && circleRect(tx, y, r, o.x, o.y, o.w, o.h)) { tx = x; break; }
     }
-    for (const golem of G.golems) {
-      if (!golem.dead && golem.id !== s.vehicleId && dist2(tx, y, golem.x, golem.y) < (GOLEM_R + UNIT_R) ** 2) { tx = x; break; }
-    }
+    if (golemBlocks(tx, y, x, y)) tx = x;
     x = tx;
     let ty = ny;
     for (const o of G.obstacles) {
-      if (isSolid(o) && circleRect(x, ty, UNIT_R, o.x, o.y, o.w, o.h)) { ty = y; break; }
+      if (isSolid(o) && circleRect(x, ty, r, o.x, o.y, o.w, o.h)) { ty = y; break; }
     }
-    for (const golem of G.golems) {
-      if (!golem.dead && golem.id !== s.vehicleId && dist2(x, ty, golem.x, golem.y) < (GOLEM_R + UNIT_R) ** 2) { ty = y; break; }
-    }
+    if (golemBlocks(x, ty, x, y)) ty = y;
     y = ty;
-    s.x = clamp(x, UNIT_R, WORLD_W - UNIT_R);
-    s.y = clamp(y, UNIT_R, WORLD_H - UNIT_R);
+    s.x = clamp(x, r, WORLD_W - r);
+    s.y = clamp(y, r, WORLD_H - r);
   }
 
   function resolveGolemMovement(golem, nx, ny) {
@@ -1929,7 +2041,7 @@
   //  攻撃 / ダメージ
   // ============================================================
   function tryShoot(s, t) {
-    if (s.dead || s.reloading || s.shieldRaised || t < s.stunnedUntil) return;
+    if (s.dead || s.reloading || s.shieldRaised || t < s.stunnedUntil || ultLocked(s, t)) return;
     const w = WEAPONS[s.weapon];
     if (t - s.lastShot < w.interval) return;
     if (w.melee) { tryMelee(s, t, w); return; }
@@ -2055,7 +2167,18 @@
       if (gap < arc) { target = enemyBase; best = d2v; }
     }
     const sx = s.x + Math.cos(s.aimAngle) * 28, sy = s.y + Math.sin(s.aimAngle) * 28;
-    addParticle(sx, sy, { kind: "slash", life: 150, size: w.range * 0.44, a: s.aimAngle, arc });
+    if (w.slashFx) {
+      addParticle(sx, sy, { kind: "slash", life: 150, size: w.range * 0.44, a: s.aimAngle, arc });
+    } else {
+      // 素手は斬撃線の代わりに、拳の届いた先で土煙を上げる
+      for (let i = 0; i < 6; i++) {
+        const a = s.aimAngle + rand(-arc * 0.45, arc * 0.45);
+        const d = rand(w.range * 0.55, w.range * 0.9);
+        addParticle(s.x + Math.cos(a) * d, s.y + Math.sin(a) * d, {
+          kind: "dust", vx: rand(-70, 70), vy: rand(-70, 70), life: rand(220, 420), size: rand(2.5, 5),
+        });
+      }
+    }
     if (target) {
       if (target.kind === "base") {
         damageBase(target, dmg * 0.75, s, s.team);
@@ -2175,6 +2298,68 @@
     if (s.id === G.localId) banner(`茨の呪縛を張った（残り ${s.thorns}）`);
   }
 
+  // ============================================================
+  //  炎竜の通り道
+  //  巨体でぶつかった障害物を薙ぎ倒し、歩いた跡に炎を落としていく。
+  // ============================================================
+  function updateDrakeTrail(dt, t) {
+    for (const s of G.units) {
+      if (s.dead || s.bossKey !== "drake") continue;
+      // ぶつかった障害物を薙ぎ倒す
+      const crushR = unitR(s) + DRAKE_CRUSH_PAD;
+      let crushed = false;
+      for (let i = G.obstacles.length - 1; i >= 0; i--) {
+        const o = G.obstacles[i];
+        if (o.border || !circleRect(s.x, s.y, crushR, o.x, o.y, o.w, o.h)) continue;
+        if (o.type === "manajar") { o.hp = 0; continue; }
+        removeObstacleAt(i);
+        crushed = true;
+      }
+      // 何本まとめて薙ぎ倒しても音は1回だけ
+      if (crushed) Audio.melee();
+      // 歩いた跡に炎を落とす
+      if (!s.moving || t - (s.lastFlameAt || 0) < FLAME_DROP_MS) continue;
+      s.lastFlameAt = t;
+      if (G.flames.length >= FLAME_MAX) G.flames.shift();
+      G.flames.push({
+        id: G.nextId++, x: s.x + rand(-10, 10), y: s.y + rand(-10, 10),
+        team: s.team, owner: s.id, bornAt: t, dieAt: t + FLAME_LIFE_MS, seed: Math.random(),
+      });
+    }
+  }
+
+  function updateFlames(dt, t) {
+    for (let i = G.flames.length - 1; i >= 0; i--) {
+      if (t >= G.flames[i].dieAt) G.flames.splice(i, 1);
+    }
+    for (const s of G.units) {
+      if (s.dead || s.vehicleId >= 0) continue;
+      for (const flame of G.flames) {
+        if (flame.team === s.team) continue;
+        if (dist2(s.x, s.y, flame.x, flame.y) > FLAME_R ** 2) continue;
+        const attacker = G.units.find((o) => o.id === flame.owner) || null;
+        damageUnit(s, FLAME_DPS * dt, attacker, { x: flame.x, y: flame.y, type: "explosion", bypassEquipment: true });
+        break;
+      }
+    }
+    for (const beast of G.beasts) {
+      if (beast.dead) continue;
+      for (const flame of G.flames) {
+        if (flame.team === beast.team) continue;
+        if (dist2(beast.x, beast.y, flame.x, flame.y) > FLAME_R ** 2) continue;
+        damageBeast(beast, FLAME_DPS * dt, null);
+        break;
+      }
+    }
+    // 揺らめく火の粉
+    for (const flame of G.flames) {
+      if (Math.random() > dt * 6) continue;
+      addParticle(flame.x + rand(-14, 14), flame.y + rand(-12, 12), {
+        kind: "spark", vx: rand(-16, 16), vy: rand(-70, -26), life: rand(260, 520), size: rand(2, 4),
+      });
+    }
+  }
+
   function updateThorns(dt, t) {
     for (const s of G.units) {
       s.snared = false;
@@ -2216,6 +2401,412 @@
         G.glyphs.splice(i, 1);
       }
     }
+  }
+
+  // ============================================================
+  //  必殺技の処理
+  //  進行中の必殺技は s.ult に入れて、毎フレーム updateUltimates() で進める。
+  //  s.ult は描画にも使うので、中心(x, y)と進み具合(p = 0〜1)を必ず更新すること。
+  //  クライアントは受信した x / y / p だけを見て描くので、それ以外の項目に
+  //  描画を依存させないこと。
+  // ============================================================
+
+  // 必殺技のモーションが体を縛っている間は、移動も攻撃もできない。
+  function ultLocked(s, t) {
+    return !!(s && s.ult && (t == null ? now() : t) < (s.ult.lockUntil || 0));
+  }
+
+  // 爆風の共通処理。中心から離れるほど弱くなるダメージを、敵と敵拠点にまとめて与える。
+  function applyBlast(x, y, radius, damage, attacker, team, falloff) {
+    const drop = falloff == null ? 0.6 : falloff;
+    const scale = (d, extra) => 1 - clamp(d / (radius + (extra || 0)), 0, 1) * drop;
+    for (const s of G.units) {
+      if (s.dead || s.vehicleId >= 0 || s.team === team) continue;
+      const d = Math.sqrt(dist2(s.x, s.y, x, y));
+      if (d < radius + unitR(s)) damageUnit(s, damage * scale(d), attacker, { x, y, type: "explosion" });
+    }
+    for (const beast of G.beasts) {
+      if (beast.dead || beast.team === team) continue;
+      const d = Math.sqrt(dist2(beast.x, beast.y, x, y));
+      if (d < radius + BEAST_R) damageBeast(beast, damage * scale(d), attacker);
+    }
+    for (const golem of G.golems) {
+      if (golem.dead || golem.team === team) continue;
+      const d = Math.sqrt(dist2(golem.x, golem.y, x, y));
+      if (d < radius + GOLEM_R) damageGolem(golem, damage * 0.8 * scale(d, GOLEM_R), attacker);
+    }
+    for (const ballista of G.ballistas) {
+      if (ballista.dead || (ballista.team >= 0 && ballista.team === team)) continue;
+      const d = Math.sqrt(dist2(ballista.x, ballista.y, x, y));
+      if (d < radius + BALLISTA_R) damageBallista(ballista, damage * 0.7 * scale(d, BALLISTA_R), attacker);
+    }
+    for (const base of G.bases) {
+      if (base.team === team || base.hp <= 0) continue;
+      const d = Math.sqrt(dist2(base.x, base.y, x, y));
+      if (d < radius + BASE_CORE_R) damageBase(base, damage * 0.85 * scale(d, BASE_CORE_R), attacker, team);
+    }
+    for (const o of G.obstacles) {
+      if (o.type === "manajar" && dist2(o.x + o.w / 2, o.y + o.h / 2, x, y) < radius * radius) o.hp = 0;
+    }
+  }
+
+  function tryUltimate(s, t) {
+    const def = ultDef(s.ultKey);
+    if (!def || s.dead || s.ult) return;
+    if (s.vehicleId >= 0 || s.ballistaId >= 0 || t < s.stunnedUntil) return;
+    if (t < s.ultReadyAt) {
+      if (s.id === G.localId) banner(`${def.icon} ${def.name}　あと ${((s.ultReadyAt - t) / 1000).toFixed(1)}秒`);
+      return;
+    }
+    s.ultReadyAt = t + def.cooldown;
+    s.shieldRaised = false;
+    s.parryUntil = 0;
+    s.reloading = false;
+    startUltimate(s, t);
+    if (s.id === G.localId) {
+      banner(`${def.icon} ${def.name}！`);
+      shake = Math.min(20, shake + 7);
+    }
+  }
+
+  function startUltimate(s, t) {
+    const aim = s.aimAngle;
+    const base = { key: s.ultKey, x: s.x, y: s.y, p: 0, angle: aim, startAt: t, lockUntil: 0, hit: [] };
+    switch (s.ultKey) {
+      // ---- 剣士: 前へ踏み込みながら三連斬 ----
+      case "swordsman": {
+        s.ult = Object.assign(base, { endAt: t + GALE_MS, lockUntil: t + GALE_MS, nextTickAt: t });
+        Audio.melee();
+        break;
+      }
+      // ---- 魔法使い: エクスプロージョン ----
+      case "mage": {
+        s.ult = Object.assign(base, {
+          endAt: t + EXPLOSION_CHARGE_MS, lockUntil: t + EXPLOSION_CHARGE_MS,
+          x: clamp(s.x + Math.cos(aim) * EXPLOSION_FOCUS_D, 70, WORLD_W - 70),
+          y: clamp(s.y + Math.sin(aim) * EXPLOSION_FOCUS_D, 70, WORLD_H - 70),
+        });
+        Audio.shot("cast");
+        break;
+      }
+      // ---- 狩人: 狙った一帯に矢を降らせる ----
+      case "hunter": {
+        s.ult = Object.assign(base, {
+          endAt: t + RAIN_MS, nextTickAt: t + 150, ticks: 0,
+          x: clamp(s.x + Math.cos(aim) * RAIN_FOCUS_D, 70, WORLD_W - 70),
+          y: clamp(s.y + Math.sin(aim) * RAIN_FOCUS_D, 70, WORLD_H - 70),
+        });
+        Audio.shot("bowheavy");
+        break;
+      }
+      // ---- 僧侶: 自分を中心にした聖域 ----
+      case "priest": {
+        s.ult = Object.assign(base, { endAt: t + SANCT_MS, nextTickAt: t });
+        Audio.heal();
+        break;
+      }
+      // ---- 冒険者: 火炎瓶を扇状にばらまく(手持ちは減らない) ----
+      case "adventurer": {
+        s.ult = Object.assign(base, { endAt: t + 420 });
+        for (let i = 0; i < FIREDANCE_COUNT; i++) {
+          const spread = (i / (FIREDANCE_COUNT - 1) - 0.5) * 1.0;
+          const a = aim + spread;
+          const speed = 520 - Math.abs(spread) * 280;
+          G.bombs.push({
+            x: s.x + Math.cos(a) * 22, y: s.y + Math.sin(a) * 22,
+            vx: Math.cos(a) * speed, vy: Math.sin(a) * speed,
+            team: s.team, owner: s.id, fuseAt: t + 900 + i * 70, bornAt: t, rotation: 0,
+          });
+        }
+        Audio.melee();
+        break;
+      }
+      // ---- 獣使い: 狼を呼び戻し、敵をすくませる咆哮 ----
+      case "beastmaster": {
+        s.ult = Object.assign(base, { endAt: t + ROAR_MS });
+        Audio.roar();
+        shake = Math.min(20, shake + 9);
+        for (const beast of G.beasts) {
+          // 自分の狼だけ。主のいない野良は呼べない。
+          if (beast.team !== s.team || beast.handlerId !== s.id) continue;
+          if (beast.dead) reviveBeastNear(beast, s);
+          beast.hp = beast.maxHp;
+          beast.stunnedUntil = 0;
+          beast.ragedUntil = t + ROAR_RAGE_MS;
+          for (let i = 0; i < 6; i++) {
+            addParticle(beast.x, beast.y, { kind: "spark", vx: rand(-90, 90), vy: rand(-120, -30), life: rand(300, 600), size: rand(2, 4) });
+          }
+        }
+        for (const e of G.units) {
+          if (e.dead || e.vehicleId >= 0 || e.team === s.team) continue;
+          if (dist2(e.x, e.y, s.x, s.y) > ROAR_R ** 2) continue;
+          e.stunnedUntil = Math.max(e.stunnedUntil, t + ROAR_STUN_MS);
+          e.chilledUntil = Math.max(e.chilledUntil || 0, t + ROAR_STUN_MS + 700);
+          addParticle(e.x, e.y - 18, { kind: "stun", life: ROAR_STUN_MS, size: 12 });
+        }
+        for (const beast of G.beasts) {
+          if (beast.dead || beast.team === s.team) continue;
+          if (dist2(beast.x, beast.y, s.x, s.y) > ROAR_R ** 2) continue;
+          beast.stunnedUntil = Math.max(beast.stunnedUntil, t + ROAR_STUN_MS);
+        }
+        break;
+      }
+      // ---- 魔神像: 地面を叩き割る衝撃波 ----
+      case "colossus": {
+        s.ult = Object.assign(base, { endAt: t + QUAKE_MS, lockUntil: t + 260, r: 40 });
+        Audio.boom();
+        shake = Math.min(26, shake + 18);
+        for (let i = 0; i < 18; i++) {
+          const a = rand(0, Math.PI * 2), sp = rand(80, 260);
+          addParticle(s.x, s.y, { kind: "dust", vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(350, 700), size: rand(4, 9) });
+        }
+        break;
+      }
+      default: s.ult = null;
+    }
+  }
+
+  function updateUltimates(dt, t) {
+    for (const s of G.units) {
+      const u = s.ult;
+      if (!u) continue;
+      if (s.dead) { s.ult = null; continue; }
+      u.p = clamp((t - u.startAt) / Math.max(1, u.endAt - u.startAt), 0, 1);
+      switch (u.key) {
+        case "swordsman": tickGale(s, u, dt, t); break;
+        case "mage": tickExplosion(s, u, dt, t); break;
+        case "hunter": tickArrowRain(s, u, dt, t); break;
+        case "priest": tickSanctuary(s, u, dt, t); break;
+        case "colossus": tickQuake(s, u, dt, t); break;
+        // 火炎乱舞と獣王の咆哮は撃った瞬間に効果が出ている。残りは見た目の余韻だけ。
+      }
+      if (s.ult && t >= s.ult.endAt) s.ult = null;
+    }
+  }
+
+  // 同じ相手に二重に当てないための覚え書き。種類ごとに id が別枠なので接頭辞を付ける。
+  function ultMarkHit(u, tag) {
+    if (u.hit.indexOf(tag) >= 0) return false;
+    u.hit.push(tag);
+    return true;
+  }
+
+  // ---- 烈風斬 (剣士) ----
+  function tickGale(s, u, dt, t) {
+    s.aimAngle = u.angle;
+    s.moving = true;
+    s.noiseRadius = 680;
+    resolveMovement(s, s.x + Math.cos(u.angle) * GALE_SPEED * dt, s.y + Math.sin(u.angle) * GALE_SPEED * dt);
+    s.legPhase += dt * 20;
+    u.x = s.x; u.y = s.y;
+    if (t < u.nextTickAt) return;
+    u.nextTickAt = t + GALE_MS / 3;
+    const sx = s.x + Math.cos(u.angle) * 30, sy = s.y + Math.sin(u.angle) * 30;
+    addParticle(sx, sy, { kind: "slash", life: 240, size: GALE_RANGE * 0.62, a: u.angle, arc: GALE_ARC });
+    Audio.melee();
+    const dmg = GALE_DAMAGE * s.dmgMul * (s.meleeMul || 1);
+    const inArc = (x, y, radius) =>
+      dist2(s.x, s.y, x, y) < (GALE_RANGE + radius) ** 2 && angleGap(u.angle, Math.atan2(y - s.y, x - s.x)) < GALE_ARC;
+    for (const e of G.units) {
+      if (e.dead || e.vehicleId >= 0 || e.team === s.team) continue;
+      if (!inArc(e.x, e.y, unitR(e)) || !ultMarkHit(u, "u" + e.id)) continue;
+      damageUnit(e, dmg, s, { x: s.x, y: s.y, type: "melee" });
+      for (let i = 0; i < 8; i++) {
+        addParticle(e.x, e.y, { kind: "blood", vx: rand(-140, 140), vy: rand(-140, 140), life: rand(240, 460), size: rand(2, 4) });
+      }
+    }
+    for (const beast of G.beasts) {
+      if (beast.dead || beast.team === s.team) continue;
+      if (!inArc(beast.x, beast.y, BEAST_R) || !ultMarkHit(u, "b" + beast.id)) continue;
+      damageBeast(beast, dmg, s);
+    }
+    for (const golem of G.golems) {
+      if (golem.dead || golem.team === s.team) continue;
+      if (!inArc(golem.x, golem.y, GOLEM_R) || !ultMarkHit(u, "g" + golem.id)) continue;
+      damageGolem(golem, dmg * 0.35, s);
+    }
+    for (const base of G.bases) {
+      if (base.team === s.team || base.hp <= 0) continue;
+      if (!inArc(base.x, base.y, BASE_CORE_R) || !ultMarkHit(u, "s" + base.team)) continue;
+      damageBase(base, dmg * 0.6, s, s.team);
+    }
+  }
+
+  // ---- エクスプロージョン (魔法使い) ----
+  // 詠唱している間、爆心のまわりにいる敵をずるずる引きずり寄せてから起爆する。
+  function tickExplosion(s, u, dt, t) {
+    s.moving = false;
+    s.noiseRadius = 0;
+    s.aimAngle = angLerp(s.aimAngle, Math.atan2(u.y - s.y, u.x - s.x), clamp(dt * 8, 0, 1));
+    if (t < u.endAt) {
+      const step = EXPLOSION_PULL_SPEED * (0.45 + u.p * 0.85) * dt;
+      for (const e of G.units) {
+        if (e.dead || e.vehicleId >= 0 || e.team === s.team) continue;
+        pullTowardBlast(e, u.x, u.y, step, false);
+      }
+      for (const beast of G.beasts) {
+        if (beast.dead || beast.team === s.team) continue;
+        pullTowardBlast(beast, u.x, u.y, step, true);
+      }
+      // 吸い込まれていく魔力の粒
+      const a = rand(0, Math.PI * 2), d = rand(EXPLOSION_BLAST_R * 0.75, EXPLOSION_PULL_R);
+      addParticle(u.x + Math.cos(a) * d, u.y + Math.sin(a) * d, {
+        kind: "drawin", vx: -Math.cos(a) * d * 1.7, vy: -Math.sin(a) * d * 1.7, life: 400, size: rand(2.5, 5),
+      });
+      if (s.id === G.localId) shake = Math.min(10, shake + 13 * dt * (0.3 + u.p));
+      return;
+    }
+    // 詠唱完了 → 起爆
+    applyBlast(u.x, u.y, EXPLOSION_BLAST_R, EXPLOSION_DAMAGE * s.dmgMul * (s.magicMul || 1), s, s.team, 0.5);
+    // 巻き込まれた障害物は跡形もなく吹き飛ぶ
+    shatterObstacles(u.x, u.y, EXPLOSION_BLAST_R);
+    Audio.boom();
+    createExplosionFx(u.x, u.y, 70);
+    for (let i = 0; i < 26; i++) {
+      const a = Math.random() * Math.PI * 2, sp = rand(180, 620);
+      addParticle(u.x, u.y, { kind: "spark", vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(400, 900), size: rand(3, 8) });
+    }
+    addParticle(u.x, u.y, { kind: "shockring", life: 560, size: EXPLOSION_BLAST_R });
+    shake = Math.min(30, shake + 26);
+    s.ult = null;
+    // 撃ち切った反動でその場に崩れ落ちる
+    s.stunnedUntil = Math.max(s.stunnedUntil, t + EXPLOSION_EXHAUST_MS);
+    if (s.id === G.localId) banner("💥 エクスプロージョン！　…力を使い果たした");
+  }
+
+  function pullTowardBlast(e, x, y, step, isBeast) {
+    const dx = x - e.x, dy = y - e.y;
+    const d = Math.hypot(dx, dy);
+    if (d > EXPLOSION_PULL_R || d < 10) return;
+    const move = Math.min(step, d - 8);
+    if (move <= 0) return;
+    const nx = e.x + (dx / d) * move, ny = e.y + (dy / d) * move;
+    if (isBeast) resolveBeastMovement(e, nx, ny);
+    else resolveMovement(e, nx, ny);
+    if (Math.random() < 0.2) {
+      addParticle(e.x, e.y, { kind: "drawin", vx: (dx / d) * 110, vy: (dy / d) * 110, life: 260, size: 3 });
+    }
+  }
+
+  // ---- 千矢の雨 (狩人) ----
+  function tickArrowRain(s, u, dt, t) {
+    if (t < u.nextTickAt) return;
+    u.nextTickAt = t + RAIN_TICK;
+    u.ticks++;
+    const dmg = RAIN_DAMAGE * s.dmgMul * (s.rangedMul || 1);
+    for (const e of G.units) {
+      if (e.dead || e.vehicleId >= 0 || e.team === s.team) continue;
+      if (dist2(e.x, e.y, u.x, u.y) < (RAIN_R + unitR(e)) ** 2) {
+        damageUnit(e, dmg, s, { x: e.x, y: e.y - 300, type: "projectile" });
+      }
+    }
+    for (const beast of G.beasts) {
+      if (beast.dead || beast.team === s.team) continue;
+      if (dist2(beast.x, beast.y, u.x, u.y) < (RAIN_R + BEAST_R) ** 2) damageBeast(beast, dmg, s);
+    }
+    for (const golem of G.golems) {
+      if (golem.dead || golem.team === s.team) continue;
+      if (dist2(golem.x, golem.y, u.x, u.y) < (RAIN_R + GOLEM_R) ** 2) damageGolem(golem, dmg * 0.5, s);
+    }
+    for (const base of G.bases) {
+      if (base.team === s.team || base.hp <= 0) continue;
+      if (dist2(base.x, base.y, u.x, u.y) < (RAIN_R + BASE_CORE_R) ** 2) damageBase(base, dmg * 0.5, s, s.team);
+    }
+    for (let i = 0; i < 4; i++) {
+      const a = rand(0, Math.PI * 2), d = Math.sqrt(Math.random()) * RAIN_R;
+      addParticle(u.x + Math.cos(a) * d, u.y + Math.sin(a) * d - 70, {
+        kind: "rainarrow", vx: 40, vy: 700, life: 200, size: 15,
+      });
+    }
+    if (u.ticks % 2 === 1) Audio.shot("bow");
+  }
+
+  // ---- 聖域 (僧侶) ----
+  function tickSanctuary(s, u, dt, t) {
+    // 聖域は僧侶についてくる
+    u.x = s.x; u.y = s.y;
+    if (t < u.nextTickAt) return;
+    u.nextTickAt = t + SANCT_TICK;
+    const heal = SANCT_HEAL * (s.healMul || 1);
+    const dmg = SANCT_DAMAGE * s.dmgMul * (s.magicMul || 1);
+    for (const e of G.units) {
+      if (e.dead || e.vehicleId >= 0) continue;
+      if (dist2(e.x, e.y, s.x, s.y) > SANCT_R ** 2) continue;
+      if (e.team === s.team) {
+        // 加護は次の判定まで少しだけ長めに効かせて、途切れを見せない
+        e.wardedUntil = t + SANCT_TICK + 140;
+        if (e.hp < e.maxHp) {
+          e.hp = Math.min(e.maxHp, e.hp + heal);
+          addParticle(e.x + rand(-8, 8), e.y, { kind: "heal", vx: rand(-12, 12), vy: rand(-55, -22), life: 520, size: 5 });
+        }
+      } else {
+        damageUnit(e, e.undead ? dmg * HOLY_VS_UNDEAD : dmg, s, { x: s.x, y: s.y, type: "projectile", bypassEquipment: true });
+      }
+    }
+    for (const beast of G.beasts) {
+      if (beast.dead || dist2(beast.x, beast.y, s.x, s.y) > SANCT_R ** 2) continue;
+      if (beast.team === s.team) {
+        if (beast.hp < beast.maxHp) beast.hp = Math.min(beast.maxHp, beast.hp + heal);
+      } else damageBeast(beast, dmg, s);
+    }
+    for (let i = 0; i < 3; i++) {
+      const a = rand(0, Math.PI * 2), d = rand(SANCT_R * 0.5, SANCT_R);
+      addParticle(s.x + Math.cos(a) * d, s.y + Math.sin(a) * d, {
+        kind: "heal", vx: 0, vy: rand(-70, -30), life: rand(500, 800), size: rand(3, 5),
+      });
+    }
+  }
+
+  // ---- 震天の一撃 (魔神像) ----
+  function tickQuake(s, u, dt, t) {
+    const r = 40 + (QUAKE_R - 40) * u.p;
+    u.r = r;
+    const dmg = QUAKE_DAMAGE * s.dmgMul * (s.meleeMul || 1);
+    for (const e of G.units) {
+      if (e.dead || e.vehicleId >= 0 || e.team === s.team) continue;
+      if (dist2(e.x, e.y, u.x, u.y) > r * r || !ultMarkHit(u, "u" + e.id)) continue;
+      damageUnit(e, dmg, s, { x: u.x, y: u.y, type: "explosion" });
+      // 衝撃で外へ吹き飛ばして転ばせる
+      const a = Math.atan2(e.y - u.y, e.x - u.x);
+      resolveMovement(e, e.x + Math.cos(a) * 95, e.y + Math.sin(a) * 95);
+      e.stunnedUntil = Math.max(e.stunnedUntil, t + QUAKE_STUN_MS);
+      addParticle(e.x, e.y - 18, { kind: "stun", life: QUAKE_STUN_MS, size: 12 });
+    }
+    for (const beast of G.beasts) {
+      if (beast.dead || beast.team === s.team) continue;
+      if (dist2(beast.x, beast.y, u.x, u.y) > r * r || !ultMarkHit(u, "b" + beast.id)) continue;
+      damageBeast(beast, dmg, s);
+      const a = Math.atan2(beast.y - u.y, beast.x - u.x);
+      resolveBeastMovement(beast, beast.x + Math.cos(a) * 80, beast.y + Math.sin(a) * 80);
+      beast.stunnedUntil = Math.max(beast.stunnedUntil, t + QUAKE_STUN_MS);
+    }
+    for (const golem of G.golems) {
+      if (golem.dead || golem.team === s.team) continue;
+      if (dist2(golem.x, golem.y, u.x, u.y) > (r + GOLEM_R) ** 2 || !ultMarkHit(u, "g" + golem.id)) continue;
+      damageGolem(golem, dmg * 0.6, s);
+    }
+    for (const base of G.bases) {
+      if (base.team === s.team || base.hp <= 0) continue;
+      if (dist2(base.x, base.y, u.x, u.y) > (r + BASE_CORE_R) ** 2 || !ultMarkHit(u, "s" + base.team)) continue;
+      damageBase(base, dmg * 0.8, s, s.team);
+    }
+    for (let i = 0; i < 3; i++) {
+      const a = rand(0, Math.PI * 2);
+      addParticle(u.x + Math.cos(a) * r, u.y + Math.sin(a) * r, {
+        kind: "dust", vx: Math.cos(a) * 120, vy: Math.sin(a) * 120, life: rand(260, 480), size: rand(3, 7),
+      });
+    }
+  }
+
+  // 咆哮で呼び戻した狼は、拠点ではなく主のそばに立ち上がる。
+  function reviveBeastNear(beast, s) {
+    beast.x = clamp(s.x + rand(-45, 45), BEAST_R, WORLD_W - BEAST_R);
+    beast.y = clamp(s.y + rand(-45, 45), BEAST_R, WORLD_H - BEAST_R);
+    beast.rx = beast.x; beast.ry = beast.y;
+    beast.dead = false;
+    beast.hitFlash = 0;
+    beast.lastAttack = -99999;
+    beast.angle = s.aimAngle;
   }
 
   function startReload(s, t) {
@@ -2278,6 +2869,8 @@
         if (absorbed > 0) addParticle(target.x, target.y, { kind: "armorHit", life: 160, size: 15, a: 0 });
       }
     }
+    // 聖域の加護。輪の中にいるあいだは受けるダメージが軽い。
+    if (now() < (target.wardedUntil || 0)) dmg *= SANCT_WARD;
     // 砲台の石垣に守られている射手は被弾が軽い
     if (target.ballistaId >= 0) dmg *= BALLISTA_DAMAGE_TAKEN;
     if (dmg <= 0.01) { target.hitFlash = Math.max(target.hitFlash, 0.25); return "blocked"; }
@@ -2469,6 +3062,10 @@
     s.glyphs = s.maxGlyphs || 2;
     s.thorns = s.maxThorns || 0;
     s.snared = false;
+    // 必殺技は撃ち途中でも仕切り直し。復活直後は少しだけ待たせる。
+    s.ult = null;
+    s.wardedUntil = 0;
+    if (s.ultKey) s.ultReadyAt = Math.max(s.ultReadyAt, now() + ULT_RESPAWN_DELAY);
     s.ai.targetId = -1; s.ai.think = 0;
   }
 
@@ -2491,6 +3088,43 @@
   function addKillfeed(killer, victim) {
     G.killfeed.push({ killer: killer ? killer.name : null, killerTeam: killer ? killer.team : -1, victim: victim.name, victimTeam: victim.team, t: now() });
     if (G.killfeed.length > 6) G.killfeed.shift();
+  }
+
+  // ============================================================
+  //  障害物の破壊
+  //  外周の壁だけは壊れない(マップの外へ出られてしまうため)。
+  //  ホストが壊した障害物は id でクライアントへ伝える。
+  // ============================================================
+  function obstacleDebris(o) {
+    const cx = o.x + o.w / 2, cy = o.y + o.h / 2;
+    const bits = clamp(Math.round((o.w + o.h) / 20), 5, 20);
+    for (let i = 0; i < bits; i++) {
+      const a = rand(0, Math.PI * 2), sp = rand(60, 300);
+      addParticle(cx + rand(-o.w / 2, o.w / 2), cy + rand(-o.h / 2, o.h / 2), {
+        kind: LEAFY[o.type] ? "leaf" : "dust",
+        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+        life: rand(340, 780), size: rand(3, 8),
+      });
+    }
+  }
+
+  function removeObstacleAt(index) {
+    const o = G.obstacles[index];
+    if (!o) return;
+    G.obstacles.splice(index, 1);
+    obstacleDebris(o);
+    if (mode === "host") Net.broadcastBreak(o.id);
+  }
+
+  // 半径 radius の中にある障害物をまとめて吹き飛ばす。
+  function shatterObstacles(x, y, radius) {
+    for (let i = G.obstacles.length - 1; i >= 0; i--) {
+      const o = G.obstacles[i];
+      if (o.border || !circleRect(x, y, radius, o.x, o.y, o.w, o.h)) continue;
+      // 魔力の壺はここでは消さず、爆発させて連鎖させる
+      if (o.type === "manajar") { o.hp = 0; continue; }
+      removeObstacleAt(i);
+    }
   }
 
   function explodeManaJar(o) {
@@ -2731,6 +3365,9 @@
     const a = s.ai;
     const D = DIFF[difficulty];
 
+    // 必殺技の最中は自分では動かない。処理は updateUltimates() が続きを見る。
+    if (ultLocked(s, t)) return;
+
     // 砲台に取り付いている間は撃つだけ。敵を見失って少し経ったら離れる。
     if (s.ballistaId >= 0) {
       const ballista = G.ballistas.find((x) => x.id === s.ballistaId && !x.dead);
@@ -2789,11 +3426,13 @@
     // 僧侶は手負いの仲間を最優先で癒やす。癒し終わったら攻撃用の武器に戻す。
     if (healAllyIfNeeded(s, t, dt)) return;
 
-    const w = WEAPONS[s.weapon];
     const unitTarget = a.targetId >= 0 ? G.units.find((x) => x.id === a.targetId) : null;
     const baseTarget = nearestEnemyBase(s.x, s.y, s.team);
     const target = unitTarget && !unitTarget.dead ? unitTarget : baseTarget;
     const targetIsBase = !!target && target.kind === "base";
+    // 魔物とボスは間合いで武器を持ちかえる(炎竜なら遠くは竜炎、近ければ巨爪)
+    if (target) pickFoeWeapon(s, Math.hypot(target.x - s.x, target.y - s.y));
+    const w = WEAPONS[s.weapon];
     let mvx = 0, mvy = 0;
     let desiredAim = s.aimAngle;
 
@@ -2828,6 +3467,13 @@
       }
       if (vis && d > 130 && d < 430 + (targetIsBase ? BASE_CORE_R : 0) && s.bombs > 0 && t - s.lastBomb > 6500 && Math.random() < 0.008) {
         tryThrowBomb(s, t, desiredAim);
+      }
+      // 必殺技。狙える相手が間合いに入っていれば撃つ。
+      const ult = ultDef(s.ultKey);
+      if (ult && !s.ult && vis && t >= s.ultReadyAt && t >= s.stunnedUntil && d < ult.aiRange && Math.random() < 0.03) {
+        s.aimAngle = desiredAim;
+        tryUltimate(s, t);
+        if (s.ult) return;
       }
       if (s.ammo <= 0) startReload(s, t);
       // 近くに空いている砲台があれば取り付いて撃つ
@@ -2894,6 +3540,25 @@
 
     s.aimAngle = angLerp(s.aimAngle, desiredAim, clamp(dt * 9, 0, 1));
     applyMove(s, mvx, mvy, dt, false);
+  }
+
+  // 魔物とボスは職業を持たないので、自分の間合いで武器を選ぶ。
+  // 近づかれたら近接、離れられたら遠距離。境目に幅を持たせて持ちかえの往復を防ぐ。
+  function pickFoeWeapon(s, d) {
+    if (s.classKey || !s.loadout || s.loadout.length < 2) return;
+    let melee = -1, ranged = -1;
+    for (const i of s.loadout) {
+      if (WEAPONS[i].melee) { if (melee < 0) melee = i; }
+      else if (ranged < 0) ranged = i;
+    }
+    if (melee < 0 || ranged < 0) return;
+    const reach = WEAPONS[melee].range;
+    const want = d < reach * 0.95 ? melee : d > reach * 1.3 ? ranged : s.weapon;
+    if (want === s.weapon) return;
+    s.weapon = want;
+    // 持ちかえた武器はいつでも撃てる状態にする(魔物は補給の概念を持たない)
+    s.ammo = WEAPONS[want].mag;
+    s.reloading = false;
   }
 
   // 癒しの光を持つ仲間(CPU の僧侶)の振る舞い。
@@ -3036,12 +3701,14 @@
         golem.driverId = -1;
         const candidates = [Math.PI / 2, -Math.PI / 2, Math.PI, 0];
         let placed = false;
+        // 体の大きい職業がゴーレムにめり込んだまま降りて動けなくなるのを防ぐ
+        const rider = unitR(s);
         for (const offset of candidates) {
           const a = golem.angle + offset;
-          const x = golem.x + Math.cos(a) * (GOLEM_R + UNIT_R + 8);
-          const y = golem.y + Math.sin(a) * (GOLEM_R + UNIT_R + 8);
-          const blocked = G.obstacles.some((o) => isSolid(o) && circleRect(x, y, UNIT_R, o.x, o.y, o.w, o.h)) ||
-            G.golems.some((o) => o !== golem && !o.dead && dist2(x, y, o.x, o.y) < (GOLEM_R + UNIT_R) ** 2);
+          const x = golem.x + Math.cos(a) * (GOLEM_R + rider + 8);
+          const y = golem.y + Math.sin(a) * (GOLEM_R + rider + 8);
+          const blocked = G.obstacles.some((o) => isSolid(o) && circleRect(x, y, rider, o.x, o.y, o.w, o.h)) ||
+            G.golems.some((o) => o !== golem && !o.dead && dist2(x, y, o.x, o.y) < (GOLEM_R + rider) ** 2);
           if (!blocked) { s.x = x; s.y = y; placed = true; break; }
         }
         if (!placed) { s.x = golem.x; s.y = golem.y; }
@@ -3081,6 +3748,7 @@
     inp.glyphEdge = false;
     inp.thornEdge = false;
     inp.parryEdge = false;
+    inp.ultEdge = false;
     inp.weaponWanted = -1;
     s.x = golem.x; s.y = golem.y; s.aimAngle = golem.cannonAngle; s.moving = m > 0.05;
   }
@@ -3145,6 +3813,10 @@
       }
       if (beast.hitFlash > 0) beast.hitFlash = Math.max(0, beast.hitFlash - dt * 5);
       if (t < beast.stunnedUntil) { beast.moving = false; continue; }
+      // 獣王の咆哮を浴びている間だけ、速く走り強く噛む
+      const raged = t < (beast.ragedUntil || 0);
+      const bite = beast.damage * (raged ? ROAR_RAGE_DAMAGE : 1);
+      const runSpeed = beast.speed * (raged ? ROAR_RAGE_SPEED : 1);
       // 野良の魔狼に主はいない。勇者側の狼は獣使いに付き従う。
       let handler = beast.wild ? null : G.units.find((s) => s.id === beast.handlerId && !s.dead);
       if (!handler && !beast.wild) {
@@ -3193,13 +3865,13 @@
           if (t - beast.lastAttack >= 650) {
             beast.lastAttack = t; beast.biteAt = t;
             if (target.kind === "base") {
-              damageBase(target, beast.damage * 0.55, beast, beast.team);
+              damageBase(target, bite * 0.55, beast, beast.team);
               addParticle(target.x + rand(-35, 35), target.y + rand(-30, 30), { kind: "spark", life: 170, size: 3, a: desired });
             } else if (target.kind === "beast") {
-              damageBeast(target, beast.damage, beast);
+              damageBeast(target, bite, beast);
               addParticle(target.x, target.y, { kind: "bite", life: 170, size: 18, a: desired });
             } else {
-              const result = damageUnit(target, beast.damage, beast, { x: beast.x, y: beast.y, type: "melee" });
+              const result = damageUnit(target, bite, beast, { x: beast.x, y: beast.y, type: "melee" });
               if (result !== "parried") addParticle(target.x, target.y, { kind: "bite", life: 170, size: 18, a: desired });
             }
           }
@@ -3215,9 +3887,9 @@
       beast.moving = Math.hypot(dx, dy) > 0.05;
       if (beast.moving) {
         const ox = beast.x, oy = beast.y;
-        resolveBeastMovement(beast, beast.x + dx * beast.speed * dt, beast.y + dy * beast.speed * dt);
+        resolveBeastMovement(beast, beast.x + dx * runSpeed * dt, beast.y + dy * runSpeed * dt);
         if (beast.x === ox && beast.y === oy) {
-          resolveBeastMovement(beast, beast.x - dy * beast.speed * dt, beast.y + dx * beast.speed * dt);
+          resolveBeastMovement(beast, beast.x - dy * runSpeed * dt, beast.y + dx * runSpeed * dt);
         }
       }
     }
@@ -3310,6 +3982,7 @@
       const human = s.controller === "local" || (s.controller && s.controller !== "cpu");
       if (!human) updateAI(s, t, dt);
     }
+    updateUltimates(dt, t);
     updateGolems(dt, t);
     updateBallistas(dt, t);
     updateCreature(dt, t);
@@ -3337,6 +4010,8 @@
     updateProjectiles(dt);
     updateBombs(dt, t);
     updateGlyphs(t);
+    updateDrakeTrail(dt, t);
+    updateFlames(dt, t);
     updateThorns(dt, t);
     updateHealthRecovery(dt, t);
     updatePickups(t);
@@ -3346,7 +4021,7 @@
       const o = G.obstacles[i];
       if (o.type === "manajar" && o.hp <= 0) {
         explodeManaJar(o);
-        G.obstacles.splice(i, 1);
+        removeObstacleAt(i);
       }
     }
     updateParticles(dt);
@@ -3367,6 +4042,7 @@
     inp.parryEdge = false;
     inp.glyphEdge = false;
     inp.thornEdge = false;
+    inp.ultEdge = false;
     inp.weaponWanted = -1;
   }
 
@@ -3381,6 +4057,14 @@
       const golem = G.golems.find((x) => x.id === s.vehicleId && !x.dead);
       if (golem) { applyGolemInput(golem, s, inp, t); return; }
       s.vehicleId = -1;
+    }
+    if (inp.ultEdge) { tryUltimate(s, t); inp.ultEdge = false; }
+    // 必殺技のモーション中は、ほかの操作をいっさい受け付けない(移動も必殺技側が決める)
+    if (ultLocked(s, t)) {
+      inp.reloadEdge = false; inp.bombEdge = false; inp.glyphEdge = false;
+      inp.thornEdge = false; inp.parryEdge = false; inp.weaponWanted = -1;
+      s.shieldRaised = false;
+      return;
     }
     if (inp.parryEdge) {
       if (s.shield > 0 && t >= s.parryCooldownUntil && t >= s.stunnedUntil) {
@@ -3595,7 +4279,9 @@
     drawStains();
     drawObstaclesBack();
     drawThorns();
+    drawFlames();
     drawGlyphs();
+    drawUltimateZones();
     drawPickups();
     for (const ballista of G.ballistas) if (!ballista.dead && isEntityVisible(ballista)) drawBallistaShadow(ballista);
     for (const golem of G.golems) if (!golem.dead && isEntityVisible(golem)) drawGolemShadow(golem);
@@ -3608,6 +4294,7 @@
     for (const s of G.units) if (!s.dead && s.vehicleId < 0 && isEntityVisible(s)) (s.dummy ? drawDummy(s) : drawUnit(s));
     if (G.creature && creatureVisible()) drawCreature(G.creature);
     drawObstaclesOver();
+    drawUltimateOverlay();
     drawBombs();
     drawProjectiles();
     drawParticlesOver();
@@ -4055,6 +4742,14 @@
       ctx.fillStyle = aura;
       ctx.beginPath(); ctx.arc(0, 0, 26, 0, Math.PI * 2); ctx.fill();
     }
+    // 獣王の咆哮で荒ぶっている間は、赤い熱をまとう
+    if (now() < (beast.ragedUntil || 0)) {
+      const rage = ctx.createRadialGradient(0, 0, 4, 0, 0, 30);
+      rage.addColorStop(0, "rgba(255,96,54,0.42)");
+      rage.addColorStop(1, "rgba(255,96,54,0)");
+      ctx.fillStyle = rage;
+      ctx.beginPath(); ctx.arc(0, 0, 30, 0, Math.PI * 2); ctx.fill();
+    }
     // 尾と脚
     ctx.strokeStyle = fur; ctx.lineWidth = 5; ctx.lineCap = "round";
     ctx.beginPath(); ctx.moveTo(-14, 0); ctx.quadraticCurveTo(-25, -9, -29, -3); ctx.stroke();
@@ -4398,8 +5093,93 @@
     }
   }
 
+  // 魔神像。武器を持たないので、体そのものと両腕の岩の拳でシルエットを作る。
+  // 原点が体の中心、+X が正面。継ぎ目から魔力が漏れて光る。
+  function drawColossus(s, c) {
+    const look = classDef(s.classKey).look;
+    const r = unitR(s);
+    const t = now();
+    const accent = s.id === G.localId ? YOU_ACCENT : c.a;
+    const stone = s.id === G.localId ? c.u : look.robe;
+    const recoilBack = s.recoil * 0.6;
+    // 背中の岩板
+    ctx.fillStyle = look.cape;
+    ctx.beginPath();
+    ctx.moveTo(-4 - recoilBack, -r);
+    ctx.lineTo(-r - 6 - recoilBack, -r * 0.5);
+    ctx.lineTo(-r - 6 - recoilBack, r * 0.5);
+    ctx.lineTo(-4 - recoilBack, r);
+    ctx.closePath(); ctx.fill();
+    // 胴体。角ばった岩の塊。
+    ctx.fillStyle = stone;
+    ctx.strokeStyle = "rgba(16,14,12,0.85)"; ctx.lineWidth = 2; ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(r * 0.75 - recoilBack, -r * 0.72);
+    ctx.lineTo(r * 0.95 - recoilBack, 0);
+    ctx.lineTo(r * 0.75 - recoilBack, r * 0.72);
+    ctx.lineTo(-r * 0.7 - recoilBack, r * 0.9);
+    ctx.lineTo(-r * 0.9 - recoilBack, 0);
+    ctx.lineTo(-r * 0.7 - recoilBack, -r * 0.9);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    // 継ぎ目の光
+    ctx.strokeStyle = accent; ctx.lineWidth = 2; ctx.globalAlpha = 0.75;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.55 - recoilBack, -r * 0.45);
+    ctx.lineTo(r * 0.1 - recoilBack, -r * 0.1);
+    ctx.lineTo(-r * 0.35 - recoilBack, r * 0.5);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    // 鎧のプレート(岩に打ち込んだ聖銀の板)。継ぎ目の光を隠さないよう背中側に寄せる。
+    if (s.armor > 0) {
+      const ar = clamp(s.armor / s.maxArmor, 0, 1);
+      ctx.fillStyle = `rgba(196,214,232,${0.3 + ar * 0.4})`;
+      ctx.fillRect(-r * 0.62 - recoilBack, -r * 0.66, r * 0.44, r * 0.34);
+      ctx.fillRect(-r * 0.62 - recoilBack, r * 0.32, r * 0.44, r * 0.34);
+    }
+    // 両腕。頭を隠さないよう、拳は体の幅より外側に置く。
+    // 殴った直後だけ利き腕が前に伸びる。
+    const guarding = s.shieldRaised && s.shield > 0;
+    if (!guarding) {
+      const punch = clamp(1 - (t - s.muzzle) / 190, 0, 1);
+      for (const side of [-1, 1]) {
+        const reach = side > 0 ? punch * r * 0.9 : 0;
+        const fx = r * 0.3 + reach - recoilBack;
+        const fy = side * r * 0.85;
+        ctx.strokeStyle = look.hair; ctx.lineWidth = r * 0.3; ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(-r * 0.3 - recoilBack, side * r * 0.62);
+        ctx.lineTo(fx, fy);
+        ctx.stroke();
+        ctx.fillStyle = look.skin;
+        ctx.strokeStyle = "rgba(16,14,12,0.85)"; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(fx, fy, r * 0.33, 0, 6.283); ctx.fill(); ctx.stroke();
+      }
+    }
+    // 頭。体の前へ突き出し、目が2つ光る。
+    ctx.fillStyle = look.hair;
+    ctx.strokeStyle = "rgba(16,14,12,0.85)"; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(r * 0.55 - recoilBack, -r * 0.38);
+    ctx.lineTo(r * 1.12 - recoilBack, -r * 0.26);
+    ctx.lineTo(r * 1.12 - recoilBack, r * 0.26);
+    ctx.lineTo(r * 0.55 - recoilBack, r * 0.38);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = accent;
+    ctx.beginPath(); ctx.arc(r * 0.97 - recoilBack, -r * 0.13, r * 0.11, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.arc(r * 0.97 - recoilBack, r * 0.13, r * 0.11, 0, 6.283); ctx.fill();
+    // 盾がわりの岩板。頭ごと隠すので最後に描く。
+    if (guarding) {
+      const parrying = s.parryUntil > 0 && t <= s.parryUntil;
+      ctx.fillStyle = parrying ? "#fff8bd" : look.trim;
+      ctx.strokeStyle = parrying ? "#fff8bd" : "rgba(16,14,12,0.85)"; ctx.lineWidth = parrying ? 5 : 2;
+      ctx.fillRect(r * 0.6 - recoilBack, -r, r * 0.52, r * 2);
+      ctx.strokeRect(r * 0.6 - recoilBack, -r, r * 0.52, r * 2);
+    }
+  }
+
   // 勇者(職業持ち)の描画。服・マント・かぶりものが職業ごとに変わる。
   function drawHero(s, c) {
+    if (s.classKey === "colossus") { drawColossus(s, c); return; }
     const look = classDef(s.classKey).look;
     const w = WEAPONS[s.weapon];
     const recoilBack = s.recoil * 0.6;
@@ -4871,13 +5651,14 @@
       }
       drawFoeBody(s);
     } else {
-      // 脚 (歩行)
+      // 脚 (歩行)。体の大きい職業は脚も同じ比率で大きくする。
       const legSwing = s.moving ? Math.sin(s.legPhase) * 5 : 0;
+      const k = r / UNIT_R;
       ctx.save();
       ctx.rotate(a);
       ctx.fillStyle = "#2a2a22";
-      ctx.fillRect(-4, -10 - legSwing * 0.3, 9, 6);
-      ctx.fillRect(-4, 4 + legSwing * 0.3, 9, 6);
+      ctx.fillRect(-4 * k, (-10 - legSwing * 0.3) * k, 9 * k, 6 * k);
+      ctx.fillRect(-4 * k, (4 + legSwing * 0.3) * k, 9 * k, 6 * k);
       ctx.restore();
       ctx.rotate(a);
       drawHero(s, c);
@@ -5110,6 +5891,135 @@
     }
   }
 
+  // 炎竜が落としていった炎。燃え尽きるにつれて小さく暗くなる。
+  function drawFlames() {
+    const t = now();
+    for (const flame of G.flames) {
+      const left = clamp((flame.dieAt - t) / FLAME_LIFE_MS, 0, 1);
+      const flick = 0.82 + Math.sin(t * 0.013 + flame.seed * 9) * 0.18;
+      const r = FLAME_R * (0.55 + left * 0.45) * flick;
+      ctx.save();
+      ctx.translate(flame.x, flame.y);
+      const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, r);
+      glow.addColorStop(0, `rgba(255,236,150,${0.75 * left})`);
+      glow.addColorStop(0.45, `rgba(255,140,40,${0.55 * left})`);
+      glow.addColorStop(1, "rgba(160,40,10,0)");
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+      // 立ちのぼる舌
+      ctx.fillStyle = `rgba(255,${(170 + left * 60) | 0},60,${0.5 * left})`;
+      for (let i = 0; i < 3; i++) {
+        const a = flame.seed * 6.28 + i * 2.1 + t * 0.004;
+        const fx = Math.cos(a) * r * 0.35, fy = Math.sin(a) * r * 0.3;
+        const h = r * (0.6 + Math.sin(t * 0.012 + i + flame.seed * 5) * 0.2);
+        ctx.beginPath();
+        ctx.moveTo(fx - 4, fy);
+        ctx.quadraticCurveTo(fx, fy - h, fx + 4, fy);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
+  // ============================================================
+  //  必殺技の見た目
+  //  クライアントは受信した key / x / y / p しか持たないので、
+  //  この2つの関数はその4つだけを見て描くこと。
+  // ============================================================
+
+  // 地面に描く輪。ユニットより下のレイヤー。
+  function drawUltimateZones() {
+    const t = now();
+    for (const s of G.units) {
+      const u = s.ult;
+      if (!u || s.dead) continue;
+      const p = clamp(u.p || 0, 0, 1);
+      ctx.save();
+      ctx.translate(u.x, u.y);
+      if (u.key === "mage") {
+        // 爆心に集まっていく魔力。二重の円が縮みながら濃くなる。
+        ctx.fillStyle = `rgba(120,20,60,${0.1 + p * 0.28})`;
+        ctx.beginPath(); ctx.arc(0, 0, EXPLOSION_BLAST_R, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = `rgba(255,120,60,${0.35 + p * 0.5})`; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(0, 0, EXPLOSION_BLAST_R, 0, Math.PI * 2); ctx.stroke();
+        // 引き寄せの届く範囲
+        ctx.strokeStyle = `rgba(210,120,255,${0.18 + p * 0.22})`; ctx.lineWidth = 2; ctx.setLineDash([9, 12]);
+        ctx.rotate(t * 0.0011);
+        ctx.beginPath(); ctx.arc(0, 0, EXPLOSION_PULL_R, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([]);
+        // 詠唱が進むほど内側へ閉じる輪
+        ctx.rotate(-t * 0.0026);
+        ctx.strokeStyle = `rgba(255,220,150,${0.4 + p * 0.6})`; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.arc(0, 0, EXPLOSION_BLAST_R * (1.05 - p * 0.75), 0, Math.PI * 2); ctx.stroke();
+      } else if (u.key === "hunter") {
+        ctx.strokeStyle = `rgba(230,215,150,${0.55 - p * 0.2})`; ctx.lineWidth = 3; ctx.setLineDash([10, 8]);
+        ctx.rotate(t * 0.0014);
+        ctx.beginPath(); ctx.arc(0, 0, RAIN_R, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = "rgba(190,170,110,0.12)";
+        ctx.beginPath(); ctx.arc(0, 0, RAIN_R, 0, Math.PI * 2); ctx.fill();
+      } else if (u.key === "priest") {
+        // 聖域。淡い金の輪が脈打つ。
+        const pulse = 0.72 + Math.sin(t * 0.006) * 0.06;
+        ctx.fillStyle = "rgba(255,240,180,0.10)";
+        ctx.beginPath(); ctx.arc(0, 0, SANCT_R, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = `rgba(255,235,150,${pulse * (1 - p * 0.45)})`; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.arc(0, 0, SANCT_R, 0, Math.PI * 2); ctx.stroke();
+        ctx.rotate(t * 0.0008);
+        ctx.strokeStyle = `rgba(255,255,220,${0.35 * (1 - p * 0.5)})`; ctx.lineWidth = 2; ctx.setLineDash([6, 14]);
+        ctx.beginPath(); ctx.arc(0, 0, SANCT_R * 0.78, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([]);
+      } else if (u.key === "colossus") {
+        // 広がる衝撃波
+        const r = 40 + (QUAKE_R - 40) * p;
+        ctx.strokeStyle = `rgba(210,175,120,${1 - p})`; ctx.lineWidth = 16 * (1 - p) + 3;
+        ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = `rgba(255,240,210,${0.7 * (1 - p)})`; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(0, 0, r * 0.82, 0, Math.PI * 2); ctx.stroke();
+      } else if (u.key === "beastmaster") {
+        // 咆哮の輪
+        const r = 40 + (ROAR_R - 40) * p;
+        ctx.strokeStyle = `rgba(255,190,110,${1 - p})`; ctx.lineWidth = 10 * (1 - p) + 2;
+        ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  // ユニットより上に出す部分。詠唱の核と、術者から爆心へ伸びる魔力の線。
+  function drawUltimateOverlay() {
+    const t = now();
+    for (const s of G.units) {
+      const u = s.ult;
+      if (!u || s.dead || u.key !== "mage") continue;
+      const p = clamp(u.p || 0, 0, 1);
+      ctx.save();
+      ctx.strokeStyle = `rgba(255,150,90,${0.35 + p * 0.45})`;
+      ctx.lineWidth = 2 + p * 3;
+      ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(u.x, u.y); ctx.stroke();
+      ctx.translate(u.x, u.y);
+      // 核。詠唱が進むほど膨らんで白熱する。
+      const core = 8 + p * 34;
+      ctx.fillStyle = `rgba(255,${(90 + p * 140) | 0},50,0.9)`;
+      ctx.beginPath(); ctx.arc(0, 0, core, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = `rgba(255,255,${(180 + p * 70) | 0},${0.5 + p * 0.5})`;
+      ctx.beginPath(); ctx.arc(0, 0, core * 0.55, 0, Math.PI * 2); ctx.fill();
+      // 四方から差し込む光条
+      ctx.strokeStyle = `rgba(255,225,170,${0.5 + p * 0.5})`; ctx.lineWidth = 2;
+      ctx.rotate(t * 0.004);
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const far = core + 60 * (1 - p) + 24;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * far, Math.sin(a) * far);
+        ctx.lineTo(Math.cos(a) * (core + 4), Math.sin(a) * (core + 4));
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
   // 火炎瓶。導火の炎が点滅しながら弧を描いて飛ぶ。
   function drawBombs() {
     const t = now();
@@ -5218,6 +6128,22 @@
         ctx.fillStyle = `rgba(255,255,220,${lr})`;
         for (let i = -1; i <= 1; i++) ctx.fillRect(8 + (1 - lr) * 18, i * 10 - 2, 10, 4);
         ctx.restore();
+      } else if (p.kind === "leaf") {
+        // 薙ぎ倒された木や茂みから散る葉
+        ctx.fillStyle = `rgba(${(86 + p.size * 6) | 0},${(130 + p.size * 5) | 0},60,${lr})`;
+        ctx.fillRect(p.x - p.size / 2, p.y - p.size / 3, p.size, p.size * 0.66);
+      } else if (p.kind === "drawin") {
+        // エクスプロージョンの詠唱に吸い込まれていく魔力
+        ctx.fillStyle = `rgba(${(255 - lr * 60) | 0},${(140 + lr * 80) | 0},255,${lr})`;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size * lr, 0, Math.PI * 2); ctx.fill();
+      } else if (p.kind === "rainarrow") {
+        // 降り注ぐ矢
+        ctx.strokeStyle = `rgba(235,222,175,${clamp(lr * 2, 0, 1)})`; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - 3, p.y - p.size); ctx.stroke();
+      } else if (p.kind === "shockring") {
+        ctx.strokeStyle = `rgba(255,${(190 - (1 - lr) * 90) | 0},120,${lr})`;
+        ctx.lineWidth = 14 * lr + 2;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (1.25 - lr), 0, Math.PI * 2); ctx.stroke();
       } else if (p.kind === "stun") {
         ctx.fillStyle = `rgba(255,225,90,${lr})`;
         for (let i = 0; i < 3; i++) {
@@ -5570,7 +6496,8 @@
       } else {
         const w = WEAPONS[me.weapon];
         const slot = me.loadout ? me.loadout.indexOf(me.weapon) : -1;
-        el.wName.textContent = slot >= 0 ? `${slot + 1}. ${w.name}` : w.name;
+        // 持ちかえる先が無い職業(魔神像)では番号を出さない
+        el.wName.textContent = slot >= 0 && me.loadout.length > 1 ? `${slot + 1}. ${w.name}` : w.name;
         // 魔法はマナ、弓は矢、近接は無限。
         if (w.melee && w.heal <= 0) el.ammo.textContent = "近接 / ∞";
         else el.ammo.textContent = (me.reloading ? reloadLabel(w) : me.ammo) + " / " + w.mag;
@@ -5582,6 +6509,24 @@
         el.bomb.textContent = `${ammoNote}🔥 ${me.bombs == null ? 0 : me.bombs}　🔮 ${me.glyphs == null ? 0 : me.glyphs}${thornText}`;
         // 茨ボタンは茨を持つ職業のときだけ出す
         thornBtn.classList.toggle("hidden", !hasThorns);
+      }
+
+      // 必殺技の状態。ゴーレム・砲台に乗っている間は撃てないので隠す。
+      const ult = ultDef(me.ultKey);
+      const ultUsable = !!ult && !golem && !ballista && !me.dead;
+      el.ult.classList.toggle("hidden", !ultUsable);
+      ultBtn.classList.toggle("hidden", !ultUsable);
+      if (ultUsable) {
+        const left = me.ultReadyAt - now();
+        const ready = left <= 0 && !me.ult;
+        el.ult.textContent = me.ult
+          ? `${ult.icon} ${ult.name} 発動中！`
+          : ready
+            ? `${ult.icon} ${ult.name}　${isTouch ? "「⚡必殺」" : "X"}`
+            : `${ult.icon} ${ult.name}　${(left / 1000).toFixed(1)}秒`;
+        el.ult.classList.toggle("ready", ready || !!me.ult);
+        ultBtn.classList.toggle("armed", ready);
+        ultBtn.textContent = `⚡ ${ready ? "必殺" : Math.ceil(left / 1000)}`;
       }
 
       let hint = "";
@@ -5716,6 +6661,14 @@
       done: (c) => c.placedThorn,
     },
     {
+      key: "ult", label: "必殺技を撃つ",
+      hint: "X キーで、職業ごとの必殺技を撃ちます。撃つと十数秒の待ち時間に入ります。",
+      hintTouch: "「⚡ 必殺」ボタンで撃ちます。撃つと十数秒の待ち時間に入ります。",
+      applies: (me) => !!ultDef(me.ultKey),
+      reset: (c) => { c.usedUlt = false; },
+      done: (c) => c.usedUlt,
+    },
+    {
       key: "shield", label: "盾を構える",
       hint: "Q を押すとパリィ、押しっぱなしで防御します。",
       hintTouch: "「🛡 盾」を押すとパリィ、押しっぱなしで防御します。",
@@ -5748,7 +6701,7 @@
       idx: 0, armed: false, done: false, skip: false,
       movedFor: 0, turned: 0, dashedFor: 0, killsAtStart: 0,
       attacked: false, hitTarget: false, reloaded: false, swapped: false,
-      threwBomb: false, placedGlyph: false, placedThorn: false, usedShield: false,
+      threwBomb: false, placedGlyph: false, placedThorn: false, usedShield: false, usedUlt: false,
       lastAim: null, lastShot: null, lastWeapon: null,
       lastBombs: null, lastGlyphs: null, lastThorns: null, dummyHp: null,
     } : null;
@@ -5780,6 +6733,7 @@
     if (c.lastThorns != null && me.thorns < c.lastThorns) c.placedThorn = true;
     c.lastThorns = me.thorns;
     if (me.shieldRaised || (me.parryUntil > 0 && t <= me.parryUntil)) c.usedShield = true;
+    if (me.ult) c.usedUlt = true;
     // 的の合計体力が減っていたら、どれかに当たったということ
     let hp = 0;
     for (const s of G.units) if (s.dummy && !s.dead) hp += s.hp;
@@ -5868,7 +6822,7 @@
         if (inputAcc >= 1 / INPUT_HZ) {
           inputAcc = 0;
           Net.sendInput(localInput);
-          localInput.reloadEdge = false; localInput.bombEdge = false; localInput.interactEdge = false; localInput.parryEdge = false; localInput.glyphEdge = false; localInput.thornEdge = false;
+          localInput.reloadEdge = false; localInput.bombEdge = false; localInput.interactEdge = false; localInput.parryEdge = false; localInput.glyphEdge = false; localInput.thornEdge = false; localInput.ultEdge = false;
           localInput.weaponWanted = -1;
         }
         interpClient(dt);
@@ -6050,7 +7004,7 @@
     document.querySelectorAll(".stick .knob").forEach((knob) => { knob.style.transform = "translate(0,0)"; });
     releaseTouchShield();
     localInput.mvx = 0; localInput.mvy = 0; localInput.shoot = false; localInput.dash = false;
-    localInput.reloadEdge = false; localInput.bombEdge = false; localInput.interactEdge = false; localInput.parryEdge = false; localInput.glyphEdge = false; localInput.thornEdge = false;
+    localInput.reloadEdge = false; localInput.bombEdge = false; localInput.interactEdge = false; localInput.parryEdge = false; localInput.glyphEdge = false; localInput.thornEdge = false; localInput.ultEdge = false;
     localInput.weaponWanted = -1; localInput.shield = false;
   }
 
@@ -6065,10 +7019,11 @@
     };
 
     for (const s of G.units) {
-      shift(s, ["respawnAt", "lastDamagedAt", "parryUntil", "parryCooldownUntil", "stunnedUntil", "reloadUntil", "lastShot", "lastBomb", "lastGlyph", "lastBaseSupplyAt", "lastFootstepAt", "heardUntil", "muzzle", "chilledUntil", "lastThorn"]);
+      shift(s, ["respawnAt", "lastDamagedAt", "parryUntil", "parryCooldownUntil", "stunnedUntil", "reloadUntil", "lastShot", "lastBomb", "lastGlyph", "lastBaseSupplyAt", "lastFootstepAt", "heardUntil", "muzzle", "chilledUntil", "lastThorn", "ultReadyAt", "wardedUntil", "lastFlameAt"]);
       shift(s.ai, ["think", "strafeUntil", "lastSeen", "lostAt", "fireUntil", "stuckCheckAt", "detourUntil", "ballistaTry"]);
+      shift(s.ult, ["startAt", "endAt", "lockUntil", "nextTickAt"]);
     }
-    for (const beast of G.beasts) shift(beast, ["respawnAt", "lastAttack", "biteAt", "stunnedUntil"]);
+    for (const beast of G.beasts) shift(beast, ["respawnAt", "lastAttack", "biteAt", "stunnedUntil", "ragedUntil"]);
     if (G.creature) shift(G.creature, ["lastHeardAt", "roamUntil", "lastRoarAt", "lungeAt"]);
     for (const ballista of G.ballistas) shift(ballista, ["respawnAt", "lastShot", "muzzle"]);
     for (const golem of G.golems) {
@@ -6077,6 +7032,7 @@
     }
     for (const bomb of G.bombs) shift(bomb, ["fuseAt", "bornAt"]);
     for (const m of G.glyphs) shift(m, ["armAt", "placedAt"]);
+    for (const flame of G.flames) shift(flame, ["bornAt", "dieAt"]);
     for (const pickup of G.pickups) shift(pickup, ["respawnAt"]);
     for (const base of G.bases) shift(base, ["lastWarningAt"]);
     for (const item of G.killfeed) shift(item, ["t"]);
@@ -6171,7 +7127,9 @@
   //  ネットコード (PeerJS, ホスト権威)
   // ============================================================
   const Net = (() => {
+    // conns = ホストが承認済みのギルド員だけ。承認前の申請は requests に置く。
     let peer = null, conns = [], hostConn = null;
+    let requests = [];
     const clientInputs = {}; // peerId -> input
     let roomCode = "";
     let pauseOwner = null;
@@ -6224,8 +7182,14 @@
       resize();
       G.running = false; G.over = false;
       lobbyOpen = true;
-      showLobby(roomCode, `${G.partyNames[TEAM_HERO]} を結成しました。コードを共有して仲間を集めよう。`);
+      requests = [];
+      showLobby(roomCode, hostLobbyStatus());
+      renderRequests();
       broadcastLobby();
+    }
+
+    function hostLobbyStatus() {
+      return `${G.partyNames[TEAM_HERO]} のギルドを作りました。番号を仲間に伝えよう。`;
     }
 
     function showLobby(code, status, counting = false) {
@@ -6242,11 +7206,84 @@
       el.roomLobby.classList.add("hidden");
       el.roomLobby.classList.remove("counting");
       el.roomCode.textContent = "----";
-      el.lobbyStatus.textContent = "参加者を待っています…";
+      el.lobbyStatus.textContent = "仲間を待っています…";
+      el.lobbyRequests.innerHTML = "";
+      el.lobbyRequests.classList.add("hidden");
       el.lobbyRoster.innerHTML = "";
       el.lobbyStart.classList.add("hidden");
       el.lobbyStart.disabled = false;
     }
+
+    // 参加申請の一覧。ホストにだけ出す。承認するまでパーティ枠は渡さない。
+    function renderRequests() {
+      if (mode !== "host" || requests.length === 0) {
+        el.lobbyRequests.innerHTML = "";
+        el.lobbyRequests.classList.add("hidden");
+        return;
+      }
+      el.lobbyRequests.classList.remove("hidden");
+      el.lobbyRequests.innerHTML =
+        `<div class="request-title">ギルドに入りたい人（${requests.length}人）</div>` +
+        requests.map((r) => {
+          const cls = classDef(r.cls);
+          return `<div class="request-row">` +
+            `<span>${cls.icon} ${esc(r.name)}<small>（${esc(cls.name)}）</small></span>` +
+            `<button class="accept" data-accept="${esc(r.id)}">入れる</button>` +
+            `<button class="deny" data-deny="${esc(r.id)}">断る</button></div>`;
+        }).join("");
+    }
+
+    function acceptRequest(id) {
+      const req = requests.find((r) => r.id === id);
+      if (!req) return;
+      requests = requests.filter((r) => r !== req);
+      const slot = pickSlotForClient();
+      if (!slot) {
+        denyConn(req.conn, "このパーティは満員です");
+        showLobby(roomCode, "パーティが満員のため入れられませんでした");
+        renderRequests();
+        return;
+      }
+      conns.push(req.conn);
+      slot.controller = req.conn.peer;
+      slot.isHuman = true;
+      slot.name = req.name;
+      // 参加者が選んだキャラクターを反映してから強化を乗せる
+      applyClass(slot, req.cls);
+      slot.shopApplied = false;
+      applyShopUpgrades(slot, req.upgrades);
+      clientInputs[req.conn.peer] = {
+        mvx: 0, mvy: 0, aimAngle: 0, shoot: false, dash: false,
+        weaponWanted: -1, reloadEdge: false, bombEdge: false, interactEdge: false, parryEdge: false, glyphEdge: false, thornEdge: false, ultEdge: false, shield: false,
+      };
+      // パーティ名がまだ既定のままなら、最初に入った人のパーティ名を採用する。
+      if (req.party && G.partyNames[TEAM_HERO] === TEAM_DEFS[TEAM_HERO].name) {
+        G.partyNames[TEAM_HERO] = req.party;
+      }
+      try { req.conn.send({ t: "slot", team: slot.team, name: G.partyNames[slot.team] }); } catch (e) {}
+      renderRequests();
+      broadcastLobby();
+    }
+
+    function denyRequest(id) {
+      const req = requests.find((r) => r.id === id);
+      if (!req) return;
+      requests = requests.filter((r) => r !== req);
+      denyConn(req.conn, "ホストが参加を断りました");
+      renderRequests();
+    }
+
+    function denyConn(conn, reason) {
+      try { conn.send({ t: "reject", reason }); } catch (e) {}
+      setTimeout(() => { try { conn.close(); } catch (e) {} }, 250);
+    }
+
+    el.lobbyRequests.addEventListener("click", (e) => {
+      const btn = e.target.closest && e.target.closest("[data-accept],[data-deny]");
+      if (!btn) return;
+      if (btn.dataset.accept) acceptRequest(btn.dataset.accept);
+      else denyRequest(btn.dataset.deny);
+    });
 
     // ロビーの参加者一覧(チーム別)。ホストが作り、そのままクライアントへ送る。
     function buildRoster() {
@@ -6276,7 +7313,7 @@
       const ready = conns.length > 0;
       el.lobbyStart.classList.toggle("hidden", mode !== "host");
       el.lobbyStart.disabled = !ready || !!countdownTimer;
-      el.lobbyStart.textContent = ready ? "全員そろった → 開始" : "参加者を待っています…";
+      el.lobbyStart.textContent = ready ? "ギルドがそろった → 出発" : "仲間を待っています…";
       for (const c of conns) {
         try { c.send({ t: "lobby", roster, names: G.partyNames }); } catch (e) {}
       }
@@ -6319,7 +7356,7 @@
       clearInterval(countdownTimer);
       countdownTimer = null;
       if (lobbyOpen) {
-        showLobby(roomCode, `${G.partyNames[TEAM_HERO]} を結成しました。コードを共有して仲間を集めよう。`);
+        showLobby(roomCode, hostLobbyStatus());
         broadcastLobby();
       }
     }
@@ -6332,6 +7369,10 @@
       clearInterval(countdownTimer);
       countdownTimer = null;
       lobbyOpen = false;
+      // 承認されないまま残っている申請は、出発と同時に断る
+      for (const req of requests) denyConn(req.conn, "このギルドはもう出発しています");
+      requests = [];
+      renderRequests();
 
       // 初期状態をここまで送らず、ホストと参加者の戦闘時間を同じにする。
       for (const c of conns) {
@@ -6347,40 +7388,27 @@
     function onClientConnect(conn) {
       conn.on("open", () => {
         if (!lobbyOpen || (G && G.running)) {
-          try { conn.send({ t: "reject", reason: "このルームのゲームは開始済みです" }); } catch (e) {}
-          setTimeout(() => conn.close(), 250);
-          return;
+          denyConn(conn, "このギルドはもう出発しています");
         }
-        conns.push(conn);
-        // 枠の割り当ては hello を受け取ってから行う。参加者は必ず勇者パーティに入る。
+        // 承認するまで conns には入れない。hello を受け取って申請一覧に載せる。
       });
       conn.on("data", (d) => {
         if (d.t === "hello") {
-          if (G.units.some((x) => x.controller === conn.peer)) return; // 二重hello
-          const slot = pickSlotForClient();
-          if (!slot) {
-            conns = conns.filter((c) => c !== conn);
-            try { conn.send({ t: "reject", reason: "このパーティは満員です" }); } catch (e) {}
-            setTimeout(() => conn.close(), 250);
-            return;
-          }
-          slot.controller = conn.peer;
-          slot.isHuman = true;
-          slot.name = d.name ? String(d.name).slice(0, 12) : "Player";
-          // 参加者が選んだキャラクターを反映してから強化を乗せる
-          applyClass(slot, d.cls || "swordsman");
-          slot.shopApplied = false;
-          applyShopUpgrades(slot, d.upgrades || {});
-          clientInputs[conn.peer] = {
-            mvx: 0, mvy: 0, aimAngle: 0, shoot: false, dash: false,
-            weaponWanted: -1, reloadEdge: false, bombEdge: false, interactEdge: false, parryEdge: false, glyphEdge: false, thornEdge: false, shield: false,
-          };
-          // パーティ名がまだ既定のままなら、最初に入った人のパーティ名を採用する。
-          if (d.party && G.partyNames[TEAM_HERO] === TEAM_DEFS[TEAM_HERO].name) {
-            G.partyNames[TEAM_HERO] = String(d.party).slice(0, 16);
-          }
-          try { conn.send({ t: "slot", team: slot.team, name: G.partyNames[slot.team] }); } catch (e) {}
-          broadcastLobby();
+          // 二重hello / 承認済みからの再送は無視する
+          if (requests.some((r) => r.conn === conn)) return;
+          if (G.units.some((x) => x.controller === conn.peer)) return;
+          if (!lobbyOpen || (G && G.running)) return;
+          requests.push({
+            id: conn.peer,
+            conn,
+            name: d.name ? String(d.name).slice(0, 12) : "Player",
+            cls: d.cls || "swordsman",
+            upgrades: d.upgrades || {},
+            party: d.party ? String(d.party).slice(0, 16) : "",
+          });
+          try { conn.send({ t: "pending" }); } catch (e) {}
+          renderRequests();
+          Audio.heal();
         } else if (d.t === "input") {
           clientInputs[conn.peer] = d.i;
         } else if (d.t === "pause") {
@@ -6395,6 +7423,11 @@
 
     function onClientGone(conn) {
       conns = conns.filter((c) => c !== conn);
+      // 承認を待たずに帰った人は申請一覧から消す
+      if (requests.some((r) => r.conn === conn)) {
+        requests = requests.filter((r) => r.conn !== conn);
+        renderRequests();
+      }
       const s = G && G.units.find((x) => x.controller === conn.peer);
       if (s) { s.controller = "cpu"; s.isHuman = false; s.name = pick(BOT_NAMES); }
       delete clientInputs[conn.peer];
@@ -6425,17 +7458,17 @@
         netMsg("ホストへ接続中…");
         hostConn = peer.connect("mr-" + roomCode, { reliable: false });
         hostConn.on("open", () => {
-          showLobby(roomCode, "接続しました。ホストの開始を待っています…");
+          showLobby(roomCode, "ギルドに参加を申し込みました。ホストの返事を待っています…");
           hostConn.send({ t: "hello", name: playerName, party: partyName, cls: playerClass, upgrades: shopLevels });
         });
         hostConn.on("data", (d) => onHostData(d));
         hostConn.on("close", () => { if (!joinRejected) netMsg("ホストとの接続が切れました", true); });
         hostConn.on("error", () => netMsg("接続エラー", true));
         setTimeout(() => {
-          if (!joinRejected && (!hostConn || hostConn.open !== true)) netMsg("ホストが見つかりません。コードを確認してください", true);
+          if (!joinRejected && (!hostConn || hostConn.open !== true)) netMsg("ホストが見つかりません。ギルド番号を確認してください", true);
         }, 8000);
       });
-      peer.on("error", (e) => netMsg("ルームが見つかりません (" + e.type + ")", true));
+      peer.on("error", (e) => netMsg("そのギルド番号は見つかりません (" + e.type + ")", true));
     }
 
     function onHostData(d) {
@@ -6454,17 +7487,22 @@
         G.running = true; G.over = false;
         Audio.startBgm(stageDef().bgm);
         if (d.paused) applyNetworkPause(true);
+      } else if (d.t === "pending") {
+        showLobby(roomCode, "ホストが承認するのを待っています…");
       } else if (d.t === "slot") {
         // ホストが受け入れたパーティ名。ここで確定する。
-        showLobby(roomCode, `${d.name || TEAM_DEFS[TEAM_HERO].name} に加わりました。ホストの開始を待っています…`);
+        showLobby(roomCode, `${d.name || TEAM_DEFS[TEAM_HERO].name} に加わりました。ホストの出発を待っています…`);
       } else if (d.t === "lobby") {
         renderRoster(d.roster, d.names);
       } else if (d.t === "countdown") {
         showLobby(roomCode, `ゲーム開始まで ${d.n} 秒`, true);
       } else if (d.t === "reject") {
         joinRejected = true;
-        showLobby(roomCode, d.reason || "このルームには参加できません");
-        netMsg(d.reason || "このルームには参加できません", true);
+        showLobby(roomCode, d.reason || "このギルドには入れません");
+        netMsg(d.reason || "このギルドには入れません", true);
+      } else if (d.t === "break") {
+        const i = G.obstacles.findIndex((o) => o.id === d.id);
+        if (i >= 0) { obstacleDebris(G.obstacles[i]); G.obstacles.splice(i, 1); }
       } else if (d.t === "snap") {
         applySnapshot(d);
       } else if (d.t === "pause") {
@@ -6511,6 +7549,11 @@
         s.undead = !!ns.ud;
         s.chilledUntil = now() + (ns.ch || 0);
         s.seesEnemyGlyphs = s.classKey ? classDef(s.classKey).seesEnemyGlyphs : false;
+        // 必殺技は描画にしか使わない。中心と進み具合だけ受け取る。
+        s.ultKey = s.classKey && ULTIMATES[s.classKey] ? s.classKey : null;
+        s.ult = ns.uk ? { key: ns.uk, x: ns.ux, y: ns.uy, p: ns.up || 0 } : null;
+        s.ultReadyAt = now() + (ns.uc || 0);
+        s.wardedUntil = now() + (ns.wd || 0);
         s.armor = ns.ar; s.maxArmor = ns.ma; s.shield = ns.sh; s.maxShield = ns.ms; s.shieldRaised = !!ns.sr;
         s.parryUntil = now() + (ns.pr || 0); s.parryCooldownUntil = now() + (ns.pc || 0); s.stunnedUntil = now() + (ns.st || 0);
         s.lastDamagedAt = now() - (AUTO_HEAL_DELAY_MS - (ns.rh || 0));
@@ -6533,6 +7576,7 @@
         beast.team = nd.tm; beast.name = nd.n; beast.hp = nd.hp; beast.maxHp = nd.mh;
         beast.dead = !!nd.d; beast.angle = nd.a; beast.moving = !!nd.mv; beast.rx = nd.x; beast.ry = nd.y;
         beast.wild = !!nd.wl;
+        beast.ragedUntil = now() + (nd.rg || 0);
         if (nd.bt) beast.biteAt = now();
       }
       G.beasts = G.beasts.filter((beast) => beastSeen.has(beast.id));
@@ -6594,6 +7638,10 @@
       G.thorns = (d.wr || []).map((thorn) => ({
         id: thorn.id, team: thorn.tm, x: thorn.x, y: thorn.y, owner: -1, seed: thorn.sd || 0,
       }));
+      G.flames = (d.fm || []).map((flame) => ({
+        id: flame.id, team: flame.tm, x: flame.x, y: flame.y, owner: -1,
+        dieAt: nt + (flame.rem || 0), seed: flame.sd || 0,
+      }));
       G.pickups = (d.p || []).map((p) => ({
         id: p.id, kind: p.k || "potion", x: p.x, y: p.y, active: !!p.ac,
         respawnAt: nt + (p.rem || 0), phase: p.id * 1.7,
@@ -6625,12 +7673,17 @@
         pr: Math.max(0, o.parryUntil - stamp), pc: Math.max(0, o.parryCooldownUntil - stamp), st: Math.max(0, o.stunnedUntil - stamp),
         rh: Math.max(0, AUTO_HEAL_DELAY_MS - (stamp - o.lastDamagedAt)),
         ki: o.kills, de: o.deaths, mv: o.moving ? 1 : 0, nr: o.noiseRadius || 0,
+        uk: o.ult ? o.ult.key : null,
+        ux: o.ult ? Math.round(o.ult.x) : 0, uy: o.ult ? Math.round(o.ult.y) : 0,
+        up: o.ult ? +clamp(o.ult.p || 0, 0, 1).toFixed(2) : 0,
+        uc: Math.max(0, (o.ultReadyAt || 0) - stamp), wd: Math.max(0, (o.wardedUntil || 0) - stamp),
         fl: (stamp - o.muzzle < (WEAPONS[o.weapon].melee ? 190 : 60)) ? 1 : 0,
       }));
       const dg = G.beasts.map((beast) => ({
         id: beast.id, tm: beast.team, n: beast.name, x: Math.round(beast.x), y: Math.round(beast.y),
         a: +beast.angle.toFixed(2), hp: Math.round(beast.hp), mh: beast.maxHp, d: beast.dead ? 1 : 0,
         mv: beast.moving ? 1 : 0, bt: stamp - beast.biteAt < 180 ? 1 : 0, wl: beast.wild ? 1 : 0,
+        rg: Math.max(0, (beast.ragedUntil || 0) - stamp),
       }));
       const tn = G.golems.map((golem) => ({
         id: golem.id, tm: golem.team, n: golem.name, x: Math.round(golem.x), y: Math.round(golem.y),
@@ -6663,18 +7716,28 @@
         a: +G.creature.angle.toFixed(2), h: G.creature.hunting ? 1 : 0,
         tg: G.creature.targetId, lg: stamp - G.creature.lungeAt < 220 ? 1 : 0,
       } : null;
+      const fm = G.flames.map((flame) => ({
+        id: flame.id, tm: flame.team, x: Math.round(flame.x), y: Math.round(flame.y),
+        rem: Math.max(0, flame.dieAt - stamp), sd: +(flame.seed || 0).toFixed(2),
+      }));
       const wr = G.thorns.map((thorn) => ({
         id: thorn.id, tm: thorn.team, x: Math.round(thorn.x), y: Math.round(thorn.y), sd: +(thorn.seed || 0).toFixed(2),
       }));
       const bs = G.bases.map((base) => ({ tm: base.team, hp: Math.round(base.hp), mh: base.maxHp, hf: +base.hitFlash.toFixed(2) }));
       const payload = { t: "snap", sc: G.score, an: G.partyNames, ck: Math.round(G.clock),
         fs: G.foesSlain, bsm: G.bossSummoned ? 1 : 0, bid: G.boss == null ? -1 : G.boss,
-        bs, s, dg, tn, tu, b, g, p, mn, wr, cre, kf: G.killfeed };
+        bs, s, dg, tn, tu, b, g, p, mn, wr, fm, cre, kf: G.killfeed };
       for (const c of conns) { try { c.send(payload); } catch (e) {} }
     }
 
     function broadcastEnd(w) {
       for (const c of conns) { try { c.send({ t: "end", w }); } catch (e) {} }
+    }
+
+    // 壊れた障害物。スナップショットには載らないので、壊れた瞬間だけ id を送る。
+    function broadcastBreak(id) {
+      if (id == null) return;
+      for (const c of conns) { try { c.send({ t: "break", id }); } catch (e) {} }
     }
 
     function broadcastPause(paused) {
@@ -6699,7 +7762,7 @@
             mvx: inp.mvx, mvy: inp.mvy, aimAngle: inp.aimAngle, shoot: inp.shoot, dash: inp.dash,
             weaponWanted: inp.weaponWanted, reloadEdge: inp.reloadEdge,
             bombEdge: inp.bombEdge, interactEdge: inp.interactEdge, glyphEdge: inp.glyphEdge, thornEdge: inp.thornEdge,
-            parryEdge: inp.parryEdge, shield: inp.shield,
+            parryEdge: inp.parryEdge, ultEdge: inp.ultEdge, shield: inp.shield,
           },
         });
       } catch (e) {}
@@ -6709,7 +7772,7 @@
       const humanCount = G ? G.units.filter((s) => s.controller !== "cpu").length : 1;
       el.menuHint && (el.menuHint.textContent = "");
       // 画面内バナー(キルフィードの下に流用)
-      banner(`ルームコード: ${roomCode}　参加者 ${humanCount}人　(共有して対戦)`);
+      banner(`ギルド番号: ${roomCode}　ギルド員 ${humanCount}人`);
     }
 
     function shutdown() {
@@ -6717,9 +7780,10 @@
       countdownTimer = null;
       lobbyOpen = false;
       try { conns.forEach((c) => c.close()); } catch (e) {}
+      try { requests.forEach((r) => r.conn.close()); } catch (e) {}
       try { hostConn && hostConn.close(); } catch (e) {}
       try { peer && peer.destroy(); } catch (e) {}
-      peer = null; conns = []; hostConn = null;
+      peer = null; conns = []; hostConn = null; requests = [];
       roomCode = "";
       pauseOwner = null;
       joinRejected = false;
@@ -6728,7 +7792,7 @@
 
     return {
       host, join, broadcastSnapshot, broadcastEnd, sendInput, setPause, shutdown,
-      startFromLobby: beginCountdown, clientInputs, get code() { return roomCode; },
+      startFromLobby: beginCountdown, clientInputs, broadcastBreak, get code() { return roomCode; },
     };
   })();
 
@@ -6779,12 +7843,12 @@
         b.classList.toggle("on", b.dataset.stage === playerStage);
       });
     }
-    // 訓練の間は1人用なので、選んでいる間はオンライン対戦を伏せる
+    // 訓練の間は1人用なので、選んでいる間はギルドを伏せる
     const onlineBtn = document.getElementById("btn-online");
     function syncOnlineAvailability() {
       const solo = stageIsTraining(playerStage);
       onlineBtn.disabled = solo;
-      onlineBtn.textContent = solo ? "オンライン協力（訓練の間では使えません）" : "オンライン協力プレイ";
+      onlineBtn.textContent = solo ? "🏰 ギルド（訓練の間では使えません）" : "🏰 ギルド（みんなで挑む）";
     }
     el.stageSeg.addEventListener("click", (e) => {
       const b = e.target.closest && e.target.closest("[data-stage]");
@@ -6802,7 +7866,9 @@
     playerClass = CLASS_BY_KEY[savedClass] ? savedClass : "swordsman";
     el.classSeg.innerHTML = CLASSES.map((c) =>
       `<button data-class="${c.key}"><span class="class-head">${c.icon} ${esc(c.name)}</span>` +
-      `<span class="class-desc">${esc(c.desc)}</span></button>`).join("");
+      `<span class="class-desc">${esc(c.desc)}</span>` +
+      (ultDef(c.key) ? `<span class="class-ult">⚡ 必殺技　${esc(ultDef(c.key).icon)} ${esc(ultDef(c.key).name)}</span>` : "") +
+      `</button>`).join("");
     function syncClassButtons() {
       el.classSeg.querySelectorAll("button").forEach((b) => {
         b.classList.toggle("on", b.dataset.class === playerClass);
@@ -6857,7 +7923,7 @@
     document.getElementById("btn-join").addEventListener("click", async () => {
       Audio.unlock();
       const code = (el.joinCode.value || "").trim();
-      if (code.length < 3) { netMsg("ルームコードを入力してください", true); return; }
+      if (code.length < 3) { netMsg("ギルド番号を入力してください", true); return; }
       try { await Net.join(code); } catch (e) { netMsg(e.message, true); }
     });
 
