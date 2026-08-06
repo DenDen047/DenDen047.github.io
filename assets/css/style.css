@@ -1016,6 +1016,25 @@ section {
     text-align: center;
 }
 
+.project-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 24px;
+    padding: 0 24px;
+}
+
+.project-grid .expert-card {
+    display: flex;
+    flex-direction: column;
+    width: auto;
+    margin: 0;
+}
+
+.project-grid .expert-description {
+    flex: 1;
+    height: auto;
+}
+
 .expert-card img,
 .expert-card iframe {
     height: 220px;
@@ -1061,6 +1080,27 @@ section {
 
 .expert .contact-btn:active {
     box-shadow: 0 2px #A1DFD1, 0 3px 16px rgba(0, 0, 0, .06)!important;
+}
+
+@media (max-width: 1200px) {
+    .project-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+}
+
+@media (max-width: 767px) {
+    .project-grid {
+        grid-template-columns: 1fr;
+        padding: 0 16px;
+    }
+
+    .project-grid .expert-card {
+        width: 100%;
+        max-width: 500px;
+        margin: 0 auto 24px;
+    }
 }
 
 @media (min-width: 992px) {

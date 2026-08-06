@@ -2,9 +2,14 @@
 
 🌏 [Web site](https://denden047.github.io/)
 
-📄 CV ([English](https://github.com/DenDen047/DenDen047.github.io/blob/master/CV/cv.pdf) / [Japanese](https://github.com/DenDen047/DenDen047.github.io/blob/master/CV/cv_ja.pdf))
+📄 [CV (English)](https://denden047.github.io/CV/cv.pdf)
 
 🎓 [Google Scholar](https://scholar.google.com/citations?user=H7NhyxQAAAAJ)
+
+## Research Projects
+
+- [WildDepth](https://yunshin.github.io/WildDepth/): Accepted at ECCV 2026 and the CV4Animals Workshop at CVPR 2026; a public multimodal RGB-LiDAR dataset for wildlife depth estimation and 3D perception.
+- [WildPose](https://denden047.github.io/wildpose.html): A long-range 3D wildlife motion capture system published as a 2025 cover article in *Journal of Experimental Biology*. [Code](https://github.com/DenDen047/WildPose_v1.1)
 
 ## Useful Tools
 
