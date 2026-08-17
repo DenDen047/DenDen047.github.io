@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>WARZONE: CHRONOFRONT ― 時蝕戦線</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- ===== ゲーム画面 ===== -->
+    <div id="stage-wrap">
+      <canvas id="game" width="960" height="600"></canvas>
+
+      <!-- HUD -->
+      <div id="hud">
+        <div class="hud-top">
+          <div class="objective"><span id="daytime" class="daytime">🌅 朝</span><b id="score-goal">他3軍の基地をすべて破壊</b></div>
+          <div id="team-board" class="team-board"></div>
+        </div>
+        <div class="hud-bottom">
+          <div class="vitals">
+            <div class="hp-row">
+              <span class="hp-bar"><span id="hp-fill" class="fill"></span></span>
+              <span id="hp-text" class="hp-text">100</span>
+            </div>
+            <div id="recovery-text" class="recovery-text">5秒間被弾なしで自動回復</div>
+            <div class="xp-row">
+              <span class="lv">Lv <b id="lv-text">1</b></span>
+              <span class="xp-bar"><span id="xp-fill" class="fill"></span></span>
+            </div>
+          </div>
+        </div>
+        <div class="weapon">
+          <span id="weapon-name" class="wname">アサルトライフル</span>
+          <span id="ammo-text" class="ammo">30 / 30</span>
+          <span id="grenade-text" class="grenade-count">💣 3　🧨 2</span>
+          <div class="equipment-status">
+            <div class="equip-row armor"><span class="equip-label">鎧</span><span class="equip-bar"><span id="armor-fill"></span></span><b id="armor-text">100</b></div>
+            <div class="equip-row shield"><span class="equip-label">盾</span><span class="equip-bar"><span id="shield-fill"></span></span><b id="shield-text">160</b></div>
+            <span id="shield-state" class="shield-state">Qを攻撃直前に押してパリィ</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="vehicle-hint" class="vehicle-hint hidden"></div>
+
+      <!-- 練習場のチュートリアル -->
+      <div id="training-panel" class="training-panel hidden">
+        <div class="tp-head"><span class="tp-title">🎯 練習メニュー</span><span id="tp-progress" class="tp-progress">0 / 0</span></div>
+        <ul id="tp-steps" class="tp-steps"></ul>
+        <button id="tp-skip" class="tp-skip">この項目をとばす</button>
+      </div>
+
+      <!-- ミニマップ -->
+      <canvas id="minimap" width="160" height="106"></canvas>
+
+      <!-- キルフィード -->
+      <div id="killfeed"></div>
+
+      <!-- 上部ボタン -->
+      <div id="topbtns">
+        <button id="btn-help" class="ui-btn" aria-label="あそびかた">?</button>
+        <button id="btn-mute" class="ui-btn" aria-label="ミュート">🔊</button>
+        <button id="btn-menu" class="ui-btn" aria-label="メニュー">≡</button>
+      </div>
+
+      <!-- レベルアップ通知 -->
+      <div id="levelup" class="hidden"></div>
+
+      <!-- 実績獲得の通知 -->
+      <div id="medal-toast" class="medal-toast hidden"></div>
+
+      <!-- ===== タッチ操作 (スマホ) ===== -->
+      <div id="touch" class="hidden">
+        <div id="stick-move" class="stick"><div class="knob"></div></div>
+        <div id="stick-aim" class="stick"><div class="knob"></div></div>
+        <div id="touch-btns">
+          <button id="t-grenade" class="tbtn action">💣 投げる</button>
+          <button id="t-mine" class="tbtn action">🧨 地雷</button>
+          <button id="t-wire" class="tbtn action hidden">🪤 鉄線</button>
+          <button id="t-tank" class="tbtn action">戦車</button>
+          <button id="t-shield" class="tbtn shield-btn">🛡 盾</button>
+          <button id="t-reload" class="tbtn">リロード</button>
+          <button id="t-swap" class="tbtn">武器</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== メニュー / ロビー ===== -->
+    <div id="menu" class="overlay">
+      <div class="panel">
+        <p class="era-mark">1947 // TEMPORAL BREACH 03</p>
+        <h1>WARZONE <span class="sub">CHRONOFRONT // 時蝕戦線</span></h1>
+        <p class="lead world-lead">破砕した「時芯」が、戦時の兵士・漂着した侍・時間喰らいの異形をひとつの前線へ引き寄せた。四軍の拠点を奪い、時蝕が世界を呑む前に戦線を制圧せよ。</p>
+
+        <label class="field">
+          <span>あなたの名前</span>
+          <input id="name-input" type="text" maxlength="12" placeholder="Soldier" value="">
+        </label>
+
+        <label class="field">
+          <span>あなたの軍の名前</span>
+          <input id="army-input" type="text" maxlength="16" placeholder="ブルー・フェニックス軍" value="">
+        </label>
+
+        <div class="field">
+          <span>所属チーム（4軍が同時に戦います）</span>
+          <div id="team-seg" class="team-seg"></div>
+        </div>
+
+        <div class="field">
+          <span>ステージ</span>
+          <div id="stage-seg" class="class-seg"></div>
+        </div>
+
+        <div class="field">
+          <span>境界兵を選択</span>
+          <div id="class-seg" class="class-seg character-grid"></div>
+        </div>
+
+        <div class="field">
+          <span>スキン（見た目だけが変わります）</span>
+          <div id="skin-seg" class="class-seg skin-seg"></div>
+        </div>
+
+        <div id="menu-main">
+          <p class="menu-wallet">所持金 <b id="menu-money">0</b> G</p>
+          <button id="btn-solo" class="big-btn primary">ソロ戦（CPUと対戦）</button>
+          <button id="btn-online" class="big-btn">オンライン対戦</button>
+          <div class="diff-row">
+            <span>難易度</span>
+            <div class="seg" id="diff-seg">
+              <button data-diff="easy">かんたん</button>
+              <button data-diff="normal" class="on">ふつう</button>
+              <button data-diff="hard">むずかしい</button>
+            </div>
+          </div>
+          <button id="btn-medals" class="big-btn">🎖 実績（メダル）</button>
+          <button id="btn-controls" class="big-btn">🎮 操作方法</button>
+        </div>
+
+        <!-- オンラインのサブパネル -->
+        <div id="menu-online" class="hidden">
+          <p class="lead small">同じルームコードを共有すると、ブラウザ同士で対戦できます（P2P / サーバー不要）。同じチームを選べば味方として一緒に戦えます。</p>
+          <div id="online-actions">
+            <button id="btn-host" class="big-btn primary">ルームを作成（ホスト）</button>
+            <div class="join-row">
+              <input id="join-code" type="text" maxlength="8" placeholder="ルームコード" autocapitalize="characters">
+              <button id="btn-join" class="big-btn">参加</button>
+            </div>
+          </div>
+          <div id="room-lobby" class="room-lobby hidden" aria-live="polite">
+            <span class="room-lobby-label">ルームコード</span>
+            <strong id="room-code">----</strong>
+            <p id="lobby-status">参加者を待っています…</p>
+            <div id="lobby-roster" class="lobby-roster"></div>
+            <button id="btn-lobby-start" class="big-btn primary hidden">参加者を待っています…</button>
+          </div>
+          <div id="net-status" class="net-status"></div>
+          <button id="btn-back" class="link-btn">← もどる</button>
+        </div>
+
+        <p class="hint" id="menu-hint"></p>
+      </div>
+    </div>
+
+    <!-- ===== 脱落（観戦するか、やめるか） ===== -->
+    <div id="eliminated" class="overlay hidden">
+      <div class="panel pause-panel">
+        <p class="pause-kicker">TEAM ELIMINATED</p>
+        <h2>あなたの軍は全滅しました</h2>
+        <p class="lead" id="eliminated-detail">基地を失い、生き残りも倒されました。もう復活はできません。</p>
+        <button id="btn-spectate" class="big-btn primary">観戦する（決着まで見届ける）</button>
+        <button id="btn-give-up" class="big-btn">やめてメニューへ</button>
+      </div>
+    </div>
+
+    <!-- ===== 一時停止 ===== -->
+    <div id="pause" class="overlay hidden">
+      <div class="panel pause-panel">
+        <p class="pause-kicker">MATCH PAUSED</p>
+        <h2>一時停止</h2>
+        <p class="lead">戦闘・復活・リロードなど、ゲーム内の時間は停止しています。</p>
+        <button id="btn-resume" class="big-btn primary">ゲームに戻る</button>
+        <button id="btn-pause-help" class="big-btn">🎮 操作方法</button>
+        <button id="btn-pause-quit" class="big-btn">メインメニューへ</button>
+      </div>
+    </div>
+
+    <!-- ===== あそびかた ===== -->
+    <div id="help" class="overlay hidden">
+      <div class="panel">
+        <h2>操作方法</h2>
+        <div class="help-cols">
+          <div>
+            <h3>PC</h3>
+            <ul>
+              <li><b>WASD</b> … 移動</li>
+              <li><b>マウス</b> … 照準</li>
+              <li><b>左クリック長押し</b> … 射撃</li>
+              <li><b>R</b> … リロード</li>
+              <li><b>G</b> … グレネードを投げる</li>
+              <li><b>F</b> … 足元に地雷を設置</li>
+              <li><b>C</b> … 有刺鉄線を張る（罠師のみ）</li>
+              <li><b>E</b> … 戦車・機関銃座に乗る / 降りる</li>
+              <li><b>Q</b> … 攻撃直前に押してパリィ / 長押しで防御</li>
+              <li><b>1〜3</b> / ホイール … 武器切替（持てる武器はキャラごとに固定）</li>
+              <li><b>Shift</b> … ダッシュ</li>
+            </ul>
+          </div>
+          <div>
+            <h3>スマホ</h3>
+            <ul>
+              <li><b>左スティック</b> … 移動</li>
+              <li><b>右スティック</b> … 照準＆自動射撃</li>
+              <li>指を離しても<b>最後に向いた方向を維持</b>します</li>
+              <li><b>💣 投げる</b> … グレネード</li>
+              <li><b>🧨 地雷</b> … 足元に設置</li>
+              <li><b>戦車</b> … 近くの戦車・機関銃座に乗る / 降りる</li>
+              <li><b>🛡 盾</b> … 攻撃直前に押してパリィ / 長押しで防御</li>
+              <li><b>リロード / 武器</b> … 右下ボタン</li>
+            </ul>
+          </div>
+        </div>
+        <h3 style="margin-top:6px">戦い方（サバイバル）</h3>
+        <p class="help-rpg"><b>4軍による同時戦</b>です。基地を破壊された軍は<b>それ以降いっさい復活できません</b>。生き残っている兵士は戦い続けられますが、倒されたらその軍は脱落。最後まで残った1軍の勝ちです。だから自分の基地を守ることが何より大事で、逆に敵の基地さえ落とせば、あとは残党を掃討するだけになります。オンラインでは同じチームを選んだ人同士が味方になります。</p>
+        <h3 style="margin-top:6px">キャラクター</h3>
+        <p class="help-rpg">キャラクターごとに<b>持てる武器が決まっています</b>。数字キーの1〜3は、そのキャラの装備の1番目〜3番目に対応します。</p>
+        <ul class="help-classes">
+          <li><b>🎖️ 兵士</b> … アサルトライフル / ハンドガン / 銃剣。撃ち合いに強い標準型。</li>
+          <li><b>⚔️ 侍</b> … 打刀 / 戦斧 / コンバットナイフ。<b>銃は一切持てません</b>が、体力＋30・移動速度＋18%・近接ダメージ1.12倍で、パリィの受付も長め。懐に飛び込むのが仕事です。<b>打刀は構え方で技が変わります</b>：走りながら斬ると正面の1体を斬る通常攻撃、<b>足を止めて斬ると全方位の範囲攻撃</b>になり、まわりを囲む敵をまとめて薙ぎ払えます（間合いも少し広がる代わりに、1体あたりの威力は下がります）。さらに<b>足を止めて振っている間は、飛んできた銃弾を刀で弾き返します</b>。囲まれたら止まって振る、追うときは走りながら振る、と使い分けてください。</li>
+          <li><b>🪤 罠師</b> … サブマシンガン / ショットガン / 軍用シャベル。地雷を5個持ち、その地雷は敵からほとんど見えません。敵の地雷も見抜けて、有刺鉄線（Cキー）で敵の足を止められます。そのぶん体力は低めです。</li>
+          <li><b>🚀 重火器兵</b> … ロケットランチャー / スナイパー / ハンドガン。ロケット弾は弾速が遅くて避けられますが、当たれば戦車や基地を大きく削ります。足は遅く、接近戦は苦手です。</li>
+        </ul>
+        <h3 style="margin-top:6px">ステージ「練習場」</h3>
+        <p class="help-rpg">はじめての人のための訓練施設です。<b>敵兵はいません</b>。マップの中央に的が並んでいて、撃っても撃ち返されません。壊した的は数秒で立て直るので、何度でも練習できます。</p>
+        <p class="help-rpg">画面の左に<b>練習メニュー</b>が出ます。案内された操作をそのとおりにやると、次の項目へ進みます。移動・射撃・リロード・武器の持ちかえ・グレネード・地雷・盾・機関銃座・戦車・基地での補給まで、ひととおり試せば本番のステージで困りません。うまくいかない項目は「この項目をとばす」で先に進めます。</p>
+        <p class="help-rpg">中央には<b>動く的</b>とドラム缶もあります。動く的は少し先を狙うと当たります。ドラム缶は撃つと爆発するので、近くにいると自分もダメージを受けます。勝ち負けはないので、飽きたらメニューから本番のステージへどうぞ。</p>
+
+        <h3 style="margin-top:6px">ステージ「時の森」</h3>
+        <p class="help-rpg">薄明かりの森です。<b>マップの中央にある岩に、剣が1本だけ刺さっています</b>（ミニマップに剣の印が出ます）。岩に近づいて <b>E キー</b>（スマホは「戦車」ボタン）を<b>5秒間押し続ける</b>と剣が抜けます。途中で手を離すと戻ってしまうので、安全を確かめてから抜きましょう。</p>
+        <p class="help-rpg">抜いた<b>時の剣</b>は、森が育てた聖剣です。持っているあいだ、<b>自分の近くに飛んできた銃弾は時間が止まったようにゆっくりになります</b>。ゆっくり流れてくる弾は歩いてよけられるので、そのまま相手の懐へ踏み込めます。剣は倒されても失いません。</p>
+        <p class="help-rpg">森には<b>魔物</b>が棲んでいます。銃でも倒せますが体力が非常に高く、削り切るには時間がかかります。ところが<b>時の剣で叩けば一撃で倒せます</b>。魔物はどの軍の兵士も襲うので、他の軍との戦いの最中に出くわさないよう気をつけてください。</p>
+
+        <h3 style="margin-top:6px">ステージ「暗黒の森」</h3>
+        <p class="help-rpg">夜が明けない密林のステージです。木と茂みが密生していて視界はほとんど利きません。そしてこの森には<b>クリーチャーが1体だけ</b>棲んでいます。</p>
+        <p class="help-rpg">クリーチャーは<b>音に反応します</b>。Shift でダッシュすると足音が響いて気づかれ、銃を撃つとさらに遠くから寄ってきます。歩いている限りは、すぐ近くまで行かないかぎり見つかりません。</p>
+        <p class="help-rpg"><b>倒すことはできません。</b>どんな武器も効かないので、見つかったら逃げるしかありません。そして<b>触れられたら一撃で死にます</b>。追われている間は画面の縁が赤く脈打ち、ミニマップに赤い点が出ます。走って逃げれば足音でずっと追われるので、遮蔽に隠れて歩いて撒くのが賢いやり方です。</p>
+
+        <h3 style="margin-top:6px">乗り物と銃座</h3>
+        <p class="help-rpg"><b>戦車</b>は<b>120mm主砲</b>（爆発・対戦車）と<b>同軸機関銃</b>（連射・対歩兵）を積んでいます。数字キーかホイール（スマホは「武器」ボタン）で切り替えてください。</p>
+        <p class="help-rpg"><b>機関銃座</b>はマップ上に8つ置かれた中立の設備です。近づいてEキー（スマホは「戦車」ボタン）で取り付けます。動けなくなる代わりに、連射の効く重機関銃を撃て、防盾のおかげで被弾も半分になります。誰でも先に取り付いた者が使えるので、要所の銃座は奪い合いになります。</p>
+        <p class="help-rpg"><b>隠れる</b>：敵は壁やコンテナの裏にいる相手を見つけられず、正面の視野角の外も見えません。<b>茂み</b>は通り抜けられるのに視線を遮るので、待ち伏せに最適です。ただし至近距離まで近づくと向きに関係なく気づかれます。走ると足音が響くので、忍び寄るときは歩きましょう。</p>
+        <p class="help-rpg"><b>昼と夜</b>：時間が進むと朝→昼→夕方→夜と移り変わります。<b>朝のあいだは夜明けの光で戦場全体が見渡せ</b>、敵の位置がすべて分かります。昼は遠くまで見通せ、夜は視界がぐっと狭まるので奇襲のチャンスです。</p>
+        <p class="help-rpg"><b>降下</b>：試合はソロ戦のとき、輸送機からのパラシュート降下で始まります。降りている間は攻撃も被弾もできませんが、移動キーで少しだけ流されるように動けます。着地したところが最初の位置になります。</p>
+
+        <h3 style="margin-top:6px">ミッションと実績（メダル）</h3>
+        <p class="help-rpg">「1試合で20体倒す」「暗黒の森で勝つ」といった<b>ミッション</b>があり、達成すると<b>メダル</b>がもらえます。集めたメダルはメニューの<b>「🎖 実績（メダル）」</b>に貯まっていきます。まだ取っていないメダルも条件が見えるので、次の目標にしてください。練習場での戦果は数えません（訓練のメダルだけは練習場で取れます）。</p>
+
+        <h3 style="margin-top:6px">スキン</h3>
+        <p class="help-rpg">メニューの<b>スキン</b>で自分の見た目を変えられます。強さはいっさい変わりません。迷彩のほかに、半透明で走査線が流れる<b>ホログラム兵</b>、発光ラインが走る<b>ネオングリッド</b>、バイザーが光る<b>クロムメック</b>、ブロック体の<b>ボクセル</b>といったSF系もあります。</p>
+        <p class="help-rpg"><b>地雷</b>：足元に設置すると約1秒後に作動し、踏んだ敵を吹き飛ばします。味方には見えますが、敵にはすぐ近くに来るまで見えません。戦車にも大ダメージ。</p>
+        <p class="help-rpg">攻撃直前に盾を構えるとパリィ成功。銃弾は敵へ跳ね返し、近接武器や軍用犬の攻撃は相手をひるませます。パリィ受付は短く、成功後も約1秒の再使用待ちがあります。通常の盾防御は正面攻撃を軽減しますが、構え中は攻撃不可・移動速度低下。防弾鎧と盾はフィールド装備または基地で補給できます。</p>
+        <button id="btn-help-close" class="big-btn primary">とじる</button>
+      </div>
+    </div>
+
+    <!-- ===== 結果 ===== -->
+    <div id="result" class="overlay hidden">
+      <div class="panel result-panel">
+        <h2 id="result-title">勝利！</h2>
+        <div id="reward-summary" class="reward-summary"></div>
+        <div id="result-stats" class="result-stats"></div>
+        <section class="shop-panel" aria-labelledby="shop-title">
+          <div class="shop-head">
+            <h3 id="shop-title">補給ショップ</h3>
+            <span>所持金 <b id="shop-money">0</b> G</span>
+          </div>
+          <p class="shop-note">購入した強化は次の試合から適用されます。</p>
+          <div id="shop-items" class="shop-items"></div>
+          <p id="shop-message" class="shop-message" aria-live="polite"></p>
+        </section>
+        <button id="btn-again" class="big-btn primary">もう一度</button>
+        <button id="btn-result-medals" class="big-btn">🎖 実績（メダル）を見る</button>
+        <button id="btn-tomenu" class="big-btn">メニューへ</button>
+      </div>
+    </div>
+
+    <!-- ===== 実績（メダル） ===== -->
+    <div id="medals" class="overlay hidden">
+      <div class="panel medal-panel">
+        <h2>🎖 実績（メダル）</h2>
+        <p class="lead">ミッションを達成するとメダルがここに増えます。練習場での戦果は数えません（訓練のメダルだけは練習場で取れます）。</p>
+        <p class="medal-count">獲得 <b id="medal-count">0</b> / <span id="medal-total">0</span></p>
+        <div id="medal-grid" class="medal-grid"></div>
+        <button id="btn-medals-close" class="big-btn primary">とじる</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
