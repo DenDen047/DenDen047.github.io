@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>HOLLOW TOYS ― 廃墟のおもちゃ工場</title>
+  <meta name="description" content="懐中電灯ひとつで廃墟のおもちゃ工場に潜る2Dサバイバルホラー。壁で遮られる光、正気度、バッテリー管理。5人のキャラクターから選んで3フロアを踏破し、マザーを止める。">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <div id="stage-wrap">
+    <canvas id="game" width="960" height="600"></canvas>
+
+    <!-- ===== HUD ===== -->
+    <div id="hud" class="hidden">
+      <div class="hud-top">
+        <div class="floor-chip"><span id="hud-floor">B1 組立ライン</span></div>
+        <div class="objective" id="hud-objective">🔌 ヒューズ <b>0/3</b></div>
+      </div>
+
+      <div class="hud-bottom">
+        <div class="vitals">
+          <div class="bar-row hp">
+            <span class="bar-label">HP</span>
+            <span class="bar"><span id="hp-fill" class="fill"></span></span>
+            <b id="hp-text">100</b>
+          </div>
+          <div class="bar-row san">
+            <span class="bar-label">SAN</span>
+            <span class="bar"><span id="san-fill" class="fill"></span></span>
+            <b id="san-text">100</b>
+          </div>
+          <div class="bar-row bat">
+            <span class="bar-label">🔦</span>
+            <span class="bar"><span id="bat-fill" class="fill"></span></span>
+            <b id="bat-text">100</b>
+          </div>
+          <div class="stam-row"><span id="stam-fill"></span></div>
+        </div>
+
+        <div class="status">
+          <canvas id="body-map" width="56" height="92" title="被弾した部位"></canvas>
+          <div class="lung-box">
+            <canvas id="lung" width="76" height="46" title="呼吸"></canvas>
+            <span class="oxy-bar"><span id="oxy-fill"></span></span>
+            <span class="lung-hint"><b>V</b> 息を止める</span>
+          </div>
+        </div>
+
+        <div class="kit">
+          <div class="kit-item"><span class="k-key">R</span>🩹<b id="inv-bandage">2</b></div>
+          <div class="kit-item"><span class="k-key">T</span>💊<b id="inv-sedative">1</b></div>
+          <div class="ability">
+            <span class="k-key">Q</span>
+            <span class="ab-text"><b id="ability-name">保安灯</b><i id="ability-cd" class="ready">READY</i></span>
+          </div>
+        </div>
+      </div>
+
+      <div id="toast" class="toast"></div>
+    </div>
+
+    <div id="boss-line" class="hidden"></div>
+    <div id="interact-hint" class="hidden">E 調べる</div>
+    <canvas id="minimap" class="hidden" width="168" height="126"></canvas>
+
+    <div id="topbtns">
+      <button id="btn-help" class="ui-btn" aria-label="あそびかた">?</button>
+      <button id="btn-mute" class="ui-btn" aria-label="ミュート">🔊</button>
+      <button id="btn-menu" class="ui-btn" aria-label="メニュー">≡</button>
+    </div>
+
+    <!-- ===== タッチ操作 ===== -->
+    <div id="touch" class="hidden">
+      <div id="stick-move" class="stick"><div class="knob"></div></div>
+      <div id="stick-aim" class="stick"><div class="knob"></div></div>
+      <div id="touch-btns">
+        <button id="t-light" class="tbtn small">🔦</button>
+        <button id="t-crouch" class="tbtn small">🐈</button>
+        <button id="t-heal" class="tbtn small">🩹</button>
+        <button id="t-map" class="tbtn small">🗺️</button>
+        <button id="t-breath" class="tbtn small">🫁</button>
+        <button id="t-grab" class="tbtn grab">🧤</button>
+        <button id="t-ability" class="tbtn ability">Q</button>
+        <button id="t-use" class="tbtn use">調べる</button>
+        <button id="t-focus" class="tbtn focus">集束</button>
+        <button id="t-attack" class="tbtn attack">攻撃</button>
+        <button id="t-sprint" class="tbtn sprint">走る</button>
+      </div>
+    </div>
+
+    <!-- ===== タイトル ===== -->
+    <div id="screen-title" class="screen">
+      <div class="title-wrap">
+        <div class="title-sub">SURVIVAL HORROR</div>
+        <h1 class="title-main"><span class="flick">HOLLOW</span> TOYS</h1>
+        <div class="title-jp">廃墟のおもちゃ工場</div>
+        <p class="title-lead">
+          十年前に止まったはずのラインが、また動いている。<br>
+          手にあるのは懐中電灯ひとつ。光の届かないところに、あれはいる。
+        </p>
+        <div class="title-btns">
+          <button id="btn-start" class="btn primary">工場へ入る</button>
+          <button id="btn-title-help" class="btn">あそびかた</button>
+        </div>
+        <div class="title-foot">推奨: PC (キーボード + マウス) ／ スマホはタッチ操作に自動対応</div>
+      </div>
+    </div>
+
+    <!-- ===== キャラクター選択 ===== -->
+    <div id="screen-select" class="screen">
+      <div class="panel wide">
+        <h2 class="panel-title">同行者を選ぶ</h2>
+        <p class="panel-lead">全員が懐中電灯を持っている。違うのは、その先で何ができるかだ。</p>
+        <div id="char-list" class="char-list"></div>
+        <div class="select-footer">
+          <div class="diff-block">
+            <span class="diff-title">難易度</span>
+            <div id="diff-list" class="diff-list"></div>
+          </div>
+          <div class="panel-btns">
+            <button id="btn-back" class="btn">もどる</button>
+            <button id="btn-go" class="btn primary">潜入する</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== ブリーフィング ===== -->
+    <div id="screen-briefing" class="screen dark">
+      <div class="panel brief">
+        <div id="brief-body"></div>
+        <button id="btn-brief-go" class="btn primary">進む</button>
+      </div>
+    </div>
+
+    <!-- ===== 休憩室(強化) ===== -->
+    <div id="screen-safe" class="screen dark">
+      <div class="panel wide">
+        <h2 class="panel-title">非常階段の踊り場</h2>
+        <p class="panel-lead">扉を閉めた。ここまでは、まだ来ない。ひとつだけ持ち出せる。</p>
+        <div id="safe-info" class="safe-info"></div>
+        <div id="upgrade-list" class="upgrade-list"></div>
+      </div>
+    </div>
+
+    <!-- ===== メモ ===== -->
+    <div id="screen-note" class="screen dark">
+      <div class="panel note">
+        <div id="note-body"></div>
+        <button id="btn-note-close" class="btn primary">閉じる</button>
+      </div>
+    </div>
+
+    <!-- ===== 死亡 ===== -->
+    <div id="screen-over" class="screen dark">
+      <div class="panel">
+        <h2 class="panel-title dead">検 品 完 了</h2>
+        <div id="over-body"></div>
+        <div class="panel-btns">
+          <button id="btn-change" class="btn">キャラを変える</button>
+          <button id="btn-retry" class="btn primary">もう一度</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== クリア ===== -->
+    <div id="screen-win" class="screen dark">
+      <div class="panel">
+        <h2 class="panel-title win">脱 出</h2>
+        <div id="win-body"></div>
+        <div class="panel-btns">
+          <button id="btn-win-again" class="btn primary">別の同行者で挑む</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== あそびかた ===== -->
+    <div id="screen-help" class="screen dark">
+      <div class="panel wide help-panel">
+        <h2 class="panel-title">あそびかた</h2>
+        <div class="help-grid" id="help-grid">
+          <div class="help-col">
+            <h3>操作</h3>
+            <ul class="keys">
+              <li><b>WASD / ←↑↓→</b>移動</li>
+              <li><b>マウス</b>懐中電灯を向ける</li>
+              <li><b>左クリック</b>近接攻撃</li>
+              <li><b>右クリック長押し</b>集束照射（敵をひるませる・電池を大量に食う）</li>
+              <li><b>Shift</b>走る（足音が大きい）</li>
+              <li><b>Ctrl / C</b>しゃがみ歩き（静か・見つかりにくい）</li>
+              <li><b>F</b>ライト ON / OFF</li>
+              <li><b>E</b>調べる・拾う・ロッカーに隠れる</li>
+              <li><b>Q</b>固有アビリティ</li>
+              <li><b>Space / G</b>グラップパック（入手後）</li>
+              <li><b>V 長押し</b>息を止める（足音・呼吸音が消える）</li>
+              <li><b>X</b>ぬいぐるみを脱ぐ</li>
+              <li><b>Tab</b>ステージ全体マップ</li>
+              <li><b>R</b>包帯を使う</li>
+              <li><b>T</b>鎮静剤を使う</li>
+              <li><b>Esc</b>メニュー</li>
+              <li><b>M</b>ミュート</li>
+            </ul>
+            <h3>3つのゲージ</h3>
+            <ul class="tips">
+              <li><b class="c-hp">HP</b>ゼロになれば終わり。包帯で回復する。</li>
+              <li><b class="c-san">SAN（正気度）</b>暗闇にいると減り、明かりの中で戻る。低いと画面が歪み、幻覚が出て、足元が狂う。ゼロでも体力は減らないが、何が本物か分からなくなる。</li>
+              <li><b class="c-bat">バッテリー</b>点灯している間ずっと減る。切れれば真っ暗。電池を拾って繋ぐ。</li>
+            </ul>
+          </div>
+          <div class="help-col">
+            <h3>光は武器であり、旗でもある</h3>
+            <ul class="tips">
+              <li>光は壁でさえぎられる。角の向こうは本当に見えない。</li>
+              <li><b>躄り人形</b>は光を当てている間だけ止まる。目を離した分だけ近づく。</li>
+              <li>ライトを点けていると、敵からも見つかりやすい。消して忍ぶ判断も要る。</li>
+              <li>追われたら<b>ロッカー</b>に隠れる。見失わせられる。</li>
+              <li>章のボスは倒せない。<b>右クリックの集束光</b>を顔に当てれば数秒だけ足が止まる。</li>
+            </ul>
+            <h3>チャプター</h3>
+            <ul class="tips">
+              <li><b>第1章 組立ライン</b>ヒューズ3本と<b>グラップパック</b>を集めて逃げる。ゼンマイ巡査が徘徊している。</li>
+              <li><b>第2章 塗装・検品室</b>検品長が言いつける3つの仕事をこなす。断る手段はない。</li>
+              <li><b>第3章 保管庫</b>再び逃走。ネムリネコは速く、赤い眠り煙を撒く。</li>
+              <li><b>最終章 焼却炉ホール</b>ここだけは戦う。ブレーカー4基で装甲をこじ開ける。</li>
+            </ul>
+            <h3>グラップパック</h3>
+            <ul class="tips">
+              <li>敵に当てる → 引き寄せてひるませる。</li>
+              <li>落ちている物に当てる → 手元まで手繰り寄せる。</li>
+              <li>壁に当てる → 自分が飛ぶ。逃走用の切り札。</li>
+            </ul>
+            <h3>身体と呼吸</h3>
+            <ul class="tips">
+              <li><b>人型の表示</b>どこを痛めたかが分かる。脚は移動が遅くなり、腕は攻撃が鈍り、頭は正気度が削れやすくなる。包帯はいちばん深い傷から手当てする。</li>
+              <li><b>肺の表示</b>走る・怖い・傷が深いほど息が上がる。息が荒いと近くの敵に聞こえる。</li>
+              <li><b>V を長押し</b>で息を止められる。酸素が尽きると大きく喘いで居場所がばれる。</li>
+              <li><b>ぬいぐるみ</b>中身の抜けた玩具に潜り込むと、敵は仲間だと思う。ただし走ると見破られる。</li>
+            </ul>
+          </div>
+        </div>
+        <button id="btn-help-close" class="btn primary">閉じる</button>
+      </div>
+    </div>
+
+    <!-- ===== ポーズ ===== -->
+    <div id="screen-pause" class="screen dark">
+      <div class="panel">
+        <h2 class="panel-title">一時停止</h2>
+        <div class="panel-btns col">
+          <button id="btn-resume" class="btn primary">つづける</button>
+          <button id="btn-quit" class="btn">タイトルへ戻る</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+<script src="game.js"></script>
+</body>
+</html>
