@@ -2,6 +2,10 @@
 # Local Claude Code per-clone settings (machine-specific, not for sharing)
 .claude/
 
+# Dated one-off planning notes and their assets (kept locally, not published)
+docs/
+assets/img/war-zone-qr.png
+
 # Created by https://www.gitignore.io/api/osx,macos,linux,windows
 # Edit at https://www.gitignore.io/?templates=osx,macos,linux,windows
 
