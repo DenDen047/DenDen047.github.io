@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#120e0a">
+  <title>FORGE &amp; CROWN ― 鍛冶と王冠</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ===================== タイトル ===================== -->
+  <div id="screen-title" class="screen">
+    <div class="title-bg"></div>
+    <div class="title-inner">
+      <div class="title-crest">⚒️</div>
+      <h1 class="game-title"><span class="t1">FORGE</span><span class="amp">&amp;</span><span class="t2">CROWN</span></h1>
+      <p class="game-sub">鍛冶と王冠 ― 西方大陸エルデンマルク戦記</p>
+      <p class="game-lead">一兵卒から始めて、畑を耕し、城を築き、己の手で鎧を打ち、大陸を統べる。</p>
+      <div class="title-btns">
+        <button id="btn-continue" class="big-btn primary hidden">つづきから</button>
+        <button id="btn-newgame" class="big-btn">はじめから</button>
+        <button id="btn-title-help" class="big-btn ghost">あそびかた</button>
+      </div>
+      <p class="title-foot">キーボード／タッチ対応　―　進行は自動で保存されます</p>
+    </div>
+  </div>
+
+  <!-- ===================== 名前入力 ===================== -->
+  <div id="panel-name" class="panel hidden">
+    <div class="panel-box name-box">
+      <h2>名を名乗れ</h2>
+      <p class="dim">辺境の砦に着任する新兵の名前を決めます。</p>
+      <input id="input-lord" type="text" maxlength="10" value="アルド" autocomplete="off">
+      <div class="row-btns">
+        <button id="btn-name-cancel" class="ghost-btn">もどる</button>
+        <button id="btn-name-ok" class="big-btn primary">着任する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 戦略画面（領地） ===================== -->
+  <div id="screen-realm" class="screen hidden">
+    <div class="topbar">
+      <div class="tb-left">
+        <span class="rank-chip"><b id="tb-rank">従士</b><i id="tb-lord">アルド</i></span>
+      </div>
+      <div class="tb-res" id="tb-res"></div>
+      <div class="tb-right">
+        <button id="btn-realm-help" class="ui-btn" aria-label="あそびかた">？</button>
+        <button id="btn-mute" class="ui-btn" aria-label="音">🔊</button>
+        <button id="btn-realm-menu" class="ui-btn" aria-label="メニュー">≡</button>
+      </div>
+    </div>
+
+    <div class="datebar">
+      <span class="date" id="tb-date">1年 3月</span>
+      <span class="season" id="tb-season">春</span>
+      <span class="ap" id="tb-ap">行動力 ⏳⏳⏳</span>
+      <span class="valor" id="tb-valor">戦功 0</span>
+    </div>
+
+    <div id="map-wrap">
+      <div id="map-scroll"><canvas id="map"></canvas></div>
+      <div id="map-hint" class="map-hint">領地をタップすると詳しく見られます</div>
+    </div>
+
+    <div class="cmdbar">
+      <button class="cmd" data-cmd="castle"><span class="ci">🏰</span><span class="cl">城づくり</span></button>
+      <button class="cmd" data-cmd="forge"><span class="ci">⚒️</span><span class="cl">鍛冶</span></button>
+      <button class="cmd" data-cmd="armory"><span class="ci">🛡️</span><span class="cl">装備</span></button>
+      <button class="cmd" data-cmd="affairs"><span class="ci">📜</span><span class="cl">内政</span></button>
+      <button class="cmd" data-cmd="status"><span class="ci">🎖️</span><span class="cl">身上</span></button>
+      <button class="cmd primary" data-cmd="endturn"><span class="ci">⏭️</span><span class="cl">月を送る</span></button>
+    </div>
+    <div id="toast-area"></div>
+  </div>
+
+  <!-- ===================== 領地の詳細 ===================== -->
+  <div id="panel-region" class="panel hidden">
+    <div class="panel-box region-box">
+      <header class="panel-head">
+        <h2 id="rg-name">領地</h2>
+        <button class="close-btn" data-close="panel-region">✕</button>
+      </header>
+      <div class="panel-body" id="rg-body"></div>
+      <footer class="panel-foot" id="rg-foot"></footer>
+    </div>
+  </div>
+
+  <!-- ===================== 城づくり ===================== -->
+  <div id="panel-castle" class="panel hidden">
+    <div class="panel-box castle-box">
+      <header class="panel-head">
+        <h2>🏰 城づくり</h2>
+        <div class="head-right">
+          <span class="chip" id="castle-plot">敷地 3×3</span>
+          <button class="close-btn" data-close="panel-castle">✕</button>
+        </div>
+      </header>
+      <div class="panel-body castle-body">
+        <div class="castle-left">
+          <div id="castle-grid" class="castle-grid"></div>
+          <div class="castle-legend" id="castle-legend"></div>
+        </div>
+        <div class="castle-right">
+          <div class="build-head">建てるものを選ぶ</div>
+          <div id="build-list" class="build-list"></div>
+          <div id="castle-info" class="castle-info"></div>
+        </div>
+      </div>
+      <footer class="panel-foot">
+        <span class="hint" id="castle-hint">建物を選んでから、敷地のマスをタップします。</span>
+        <span class="chip" id="castle-def">防衛力 0</span>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ===================== 鍛冶（4×4パズル） ===================== -->
+  <div id="panel-forge" class="panel hidden">
+    <div class="panel-box forge-box">
+      <header class="panel-head">
+        <h2>⚒️ 鍛冶場 ― 鎧を組む</h2>
+        <div class="head-right">
+          <span class="chip" id="forge-quality">仕上がり ×1.00</span>
+          <button class="close-btn" data-close="panel-forge">✕</button>
+        </div>
+      </header>
+      <div class="panel-body forge-body">
+        <div class="forge-col forge-ore">
+          <div class="col-head">① 鉱石をえらぶ</div>
+          <div id="ore-list" class="ore-list"></div>
+        </div>
+
+        <div class="forge-col forge-grid-col">
+          <div class="col-head">③ 4×4にはめ込む</div>
+          <div class="forge-stage">
+            <div class="row-labels" id="row-labels"></div>
+            <div id="forge-grid" class="forge-grid"></div>
+          </div>
+          <div class="forge-tools">
+            <button id="btn-rotate" class="tool-btn">⟳ 回転 <i>R</i></button>
+            <button id="btn-undo" class="tool-btn">↶ 1つ戻す</button>
+            <button id="btn-clear" class="tool-btn danger">🗑 全部外す</button>
+          </div>
+          <div id="forge-msg" class="forge-msg"></div>
+        </div>
+
+        <div class="forge-col forge-piece">
+          <div class="col-head">② 形をえらぶ</div>
+          <div id="shape-list" class="shape-list"></div>
+        </div>
+
+        <div class="forge-col forge-stat">
+          <div class="col-head">できあがり</div>
+          <div id="forge-preview" class="forge-preview"></div>
+        </div>
+      </div>
+      <footer class="panel-foot">
+        <span class="hint" id="forge-hint">16マス全部を埋めると「完品」ボーナスがつきます。</span>
+        <button id="btn-forge-go" class="big-btn primary">鍛造する</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ===================== 装備・装飾 ===================== -->
+  <div id="panel-armory" class="panel hidden">
+    <div class="panel-box armory-box">
+      <header class="panel-head">
+        <h2>🛡️ 武具庫</h2>
+        <div class="head-right">
+          <span class="chip" id="decor-slots">装飾スロット 0</span>
+          <button class="close-btn" data-close="panel-armory">✕</button>
+        </div>
+      </header>
+      <div class="panel-body armory-body">
+        <div class="armory-left">
+          <div class="col-head">持っている鎧</div>
+          <div id="armor-list" class="armor-list"></div>
+        </div>
+        <div class="armory-right" id="armor-detail"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 内政コマンド ===================== -->
+  <div id="panel-affairs" class="panel hidden">
+    <div class="panel-box affairs-box">
+      <header class="panel-head">
+        <h2>📜 内政</h2>
+        <div class="head-right">
+          <span class="chip" id="aff-ap">行動力 3</span>
+          <button class="close-btn" data-close="panel-affairs">✕</button>
+        </div>
+      </header>
+      <div class="panel-body">
+        <div id="affairs-list" class="affairs-list"></div>
+        <div class="income-box">
+          <h3>来月の見込み</h3>
+          <div id="income-table"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 身上（階級） ===================== -->
+  <div id="panel-status" class="panel hidden">
+    <div class="panel-box status-box">
+      <header class="panel-head">
+        <h2>🎖️ 身上書</h2>
+        <button class="close-btn" data-close="panel-status">✕</button>
+      </header>
+      <div class="panel-body" id="status-body"></div>
+    </div>
+  </div>
+
+  <!-- ===================== 月送りの結果 ===================== -->
+  <div id="panel-turn" class="panel hidden">
+    <div class="panel-box turn-box">
+      <h2 id="turn-title">4月</h2>
+      <div id="turn-body"></div>
+      <button id="btn-turn-ok" class="big-btn primary">つづける</button>
+    </div>
+  </div>
+
+  <!-- ===================== 出陣前 ===================== -->
+  <div id="panel-brief" class="panel hidden">
+    <div class="panel-box brief-box">
+      <div id="brief-body"></div>
+      <div class="row-btns">
+        <button id="btn-brief-back" class="ghost-btn">やめる</button>
+        <button id="btn-brief-armory" class="ghost-btn">装備を見る</button>
+        <button id="btn-brief-go" class="big-btn danger">出陣する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 戦闘 ===================== -->
+  <div id="screen-battle" class="screen hidden">
+    <canvas id="battle"></canvas>
+
+    <div id="battle-hud">
+      <div class="bh-top">
+        <div class="bh-side me">
+          <div class="bh-name" id="bh-my-name">アルド</div>
+          <div class="bar hp"><i id="bh-hp"></i><span id="bh-hp-txt">100 / 100</span></div>
+          <div class="bar rage"><i id="bh-rage"></i><span>闘気</span></div>
+          <div class="bar sta"><i id="bh-sta"></i><span>息</span></div>
+          <div class="bh-sub"><span id="bh-armor">布の胴着</span> / <span id="bh-weapon">短剣</span></div>
+        </div>
+        <div class="bh-mid">
+          <div class="bh-obj" id="bh-obj">敵の指揮官を討て</div>
+          <div class="bh-counts"><span class="ally" id="bh-ally">味方 0</span><span class="foe" id="bh-foe">敵 0</span></div>
+        </div>
+        <div class="bh-side foe">
+          <div class="bh-name" id="bh-cap-name">指揮官</div>
+          <div class="bar hp foe"><i id="bh-cap-hp"></i><span id="bh-cap-hp-txt"></span></div>
+          <button id="btn-battle-menu" class="ui-btn">≡</button>
+        </div>
+      </div>
+      <div id="ult-ready" class="ult-ready hidden">闘気満タン！ <b>Space</b> で必殺技</div>
+      <div id="battle-toast" class="battle-toast"></div>
+    </div>
+
+    <div id="touch" class="hidden">
+      <div id="stick" class="stick"><div class="knob"></div></div>
+      <div id="touch-btns">
+        <button id="t-atk" class="tbtn a">斬</button>
+        <button id="t-guard" class="tbtn b">護</button>
+        <button id="t-dash" class="tbtn c">疾</button>
+        <button id="t-ult" class="tbtn d">必殺</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 戦闘結果 ===================== -->
+  <div id="panel-result" class="panel hidden">
+    <div class="panel-box result-box">
+      <div id="result-body"></div>
+      <button id="btn-result-ok" class="big-btn primary">城にもどる</button>
+    </div>
+  </div>
+
+  <!-- ===================== メニュー / ヘルプ ===================== -->
+  <div id="panel-menu" class="panel hidden">
+    <div class="panel-box menu-box">
+      <header class="panel-head"><h2>≡ メニュー</h2><button class="close-btn" data-close="panel-menu">✕</button></header>
+      <div class="panel-body menu-body">
+        <button id="btn-menu-help" class="menu-item">あそびかた</button>
+        <button id="btn-menu-log" class="menu-item">これまでの出来事</button>
+        <button id="btn-menu-title" class="menu-item">タイトルにもどる</button>
+        <button id="btn-menu-retreat" class="menu-item danger hidden">戦いを捨てて退く</button>
+        <button id="btn-menu-reset" class="menu-item danger">セーブデータを消す</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="panel-log" class="panel hidden">
+    <div class="panel-box log-box">
+      <header class="panel-head"><h2>📖 出来事</h2><button class="close-btn" data-close="panel-log">✕</button></header>
+      <div class="panel-body" id="log-body"></div>
+    </div>
+  </div>
+
+  <div id="panel-help" class="panel hidden">
+    <div class="panel-box help-box">
+      <header class="panel-head"><h2>あそびかた</h2><button class="close-btn" data-close="panel-help">✕</button></header>
+      <div class="panel-body help-body">
+        <section>
+          <h3>このゲームの流れ</h3>
+          <ol>
+            <li><b>内政</b>：城に建物を置き、畑と鉱山を回して資源を貯める</li>
+            <li><b>鍛冶</b>：掘った鉱石で鎧を組む（4×4のパズル）</li>
+            <li><b>出陣</b>：隣の領地に攻め込み、自分で剣を振って指揮官を討つ</li>
+            <li><b>昇進</b>：戦功が貯まると階級が上がり、率いる兵と装飾スロットが増える</li>
+          </ol>
+          <p class="note">16の領地すべてを制圧すると大陸統一です。</p>
+        </section>
+        <section>
+          <h3>行動力（⏳）</h3>
+          <p>1か月に3つまで内政の手を打てます。「月を送る」で行動力が戻り、収入が入り、敵も動きます。</p>
+        </section>
+        <section>
+          <h3>城づくり</h3>
+          <p>敷地は7×7。最初は本丸の周り1マスだけ使えて、階級が上がると広がります。</p>
+          <ul>
+            <li>地形との相性で産出が変わります（農場は平地、鉱山は岩場が◎）</li>
+            <li>水車小屋の隣の農場は食料 +50%、鍛冶場の隣の鉱山は鉱石 +25%</li>
+            <li>城壁と見張り塔は、敵に攻め込まれたときの防衛力になります</li>
+          </ul>
+        </section>
+        <section>
+          <h3>鎧づくり（4×4パズル）</h3>
+          <p>鉱石を選び、形を選び、4×4の枠にはめ込みます。ピースのマス数だけ鉱石を使います。</p>
+          <table class="key-table">
+            <tr><td>完品</td><td>16マスを隙間なく埋める → 防御系すべて +12%</td></tr>
+            <tr><td>純度</td><td>同じ鉱石が8マス以上 → その鉱石の特殊能力が目覚める</td></tr>
+            <tr><td>均整</td><td>左右対称に組む → 防御 +6%・重量 -5%</td></tr>
+            <tr><td>混合鍛造</td><td>4種類以上の鉱石を使う → 魔法防御 +10%</td></tr>
+          </table>
+          <p>4×4の行は上から <b>兜・肩 / 胸 / 胴 / 脚</b>。胸は防御が1.35倍に効き、脚は重さが1.35倍響きます。<b>重い鉱石を脚に置くと足が遅くなります。</b></p>
+          <p>必殺技は「一番多く使った鉱石」で決まります。竜鱗なら火炎放射、ミスリルなら神速連斬。</p>
+        </section>
+        <section>
+          <h3>装飾（最大3つ）</h3>
+          <p>打ち上がった鎧には装飾を付けられます。付けられる数は階級で決まり、<b>最大3つ</b>までです。装飾は遺跡の発掘、礼拝堂や魔法塔の建設、戦利品で手に入ります。</p>
+        </section>
+        <section>
+          <h3>戦いの操作</h3>
+          <table class="key-table">
+            <tr><td>WASD / 方向キー</td><td>移動</td></tr>
+            <tr><td>J / クリック</td><td>斬る（3段まで繋がる）</td></tr>
+            <tr><td>K（長押し）</td><td>ガード。当たる直前に押すとパリィ</td></tr>
+            <tr><td>L / Shift</td><td>ダッシュ回避（息を使う）</td></tr>
+            <tr><td>Space</td><td>必殺技（闘気が満タンのとき）</td></tr>
+          </table>
+          <p class="note">スマホ・タブレットでは左のスティックと右の4ボタンで同じ操作ができます。</p>
+        </section>
+        <section>
+          <h3>階級（ランク）</h3>
+          <p>敵を倒すと戦功が入ります。指揮官を討つと大きく入ります。</p>
+          <div id="help-ranks" class="rank-table"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 確認ダイアログ ===================== -->
+  <div id="panel-confirm" class="panel hidden">
+    <div class="panel-box confirm-box">
+      <p id="confirm-text"></p>
+      <div class="row-btns">
+        <button id="confirm-no" class="ghost-btn">やめる</button>
+        <button id="confirm-yes" class="big-btn danger">実行する</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="wipe" class="wipe"></div>
+</div>
+
+<script src="data.js"></script>
+<script src="core.js"></script>
+<script src="realm.js"></script>
+<script src="forge.js"></script>
+<script src="battle.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
