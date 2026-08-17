@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#07101a">
+  <title>GACHA STRIKERS ― ガチャストライカーズ</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ===================== 描画キャンバス（庭 / 試合 共用） ===================== -->
+  <div id="stage-wrap">
+    <canvas id="game"></canvas>
+
+    <!-- ---------- 庭のHUD ---------- -->
+    <div id="garden-hud" class="hud hidden">
+      <div class="topbar">
+        <div class="club">
+          <span class="crest" id="club-crest"></span>
+          <span class="club-text"><b id="club-name">フロッグジラフ・クラブ</b><i id="club-sub">クラブハウスの庭</i></span>
+        </div>
+        <div class="wallet">
+          <span class="wallet-item" id="wallet-ticket"><span class="ico">🎟️</span><b id="ticket-count">0</b></span>
+          <span class="wallet-item sub"><span class="ico">👥</span><b id="squad-count">0</b></span>
+        </div>
+        <div class="top-actions">
+          <button id="btn-help" class="ui-btn" aria-label="あそびかた">？</button>
+          <button id="btn-mute" class="ui-btn" aria-label="音">🔊</button>
+        </div>
+      </div>
+      <div id="interact-prompt" class="interact hidden"><b class="key">E</b><span class="txt"></span></div>
+      <div id="toast-area"></div>
+    </div>
+
+    <!-- ---------- 試合のHUD ---------- -->
+    <div id="match-hud" class="hud hidden">
+      <div class="scoreboard">
+        <div class="sb-team home">
+          <span class="sb-flag" id="sb-flag-home"></span>
+          <span class="sb-name" id="sb-name-home">HOME</span>
+        </div>
+        <div class="sb-core">
+          <div class="sb-score"><b id="sb-score-home">0</b><i>-</i><b id="sb-score-away">0</b></div>
+          <div class="sb-clock"><span id="sb-half">前半</span><b id="sb-time">0'</b></div>
+        </div>
+        <div class="sb-team away">
+          <span class="sb-name" id="sb-name-away">AWAY</span>
+          <span class="sb-flag" id="sb-flag-away"></span>
+        </div>
+      </div>
+
+      <div class="player-card" id="player-card">
+        <div class="pc-head">
+          <span class="pc-pos" id="pc-pos">FW</span>
+          <span class="pc-name" id="pc-name">-</span>
+          <span class="pc-elem" id="pc-elem">🔥</span>
+        </div>
+        <div class="pc-bar sp"><i id="pc-sp-fill"></i><span class="pc-bar-label">SP</span></div>
+        <div class="pc-bar st"><i id="pc-st-fill"></i><span class="pc-bar-label">スタミナ</span></div>
+        <div class="pc-hissatsu" id="pc-hissatsu">必殺技なし</div>
+      </div>
+
+      <div class="match-actions">
+        <button id="btn-match-menu" class="ui-btn" aria-label="メニュー">≡</button>
+      </div>
+
+      <div id="event-banner" class="event-banner hidden"></div>
+      <div id="commentary" class="commentary"></div>
+    </div>
+
+    <!-- ---------- タッチ操作 ---------- -->
+    <div id="touch" class="hidden">
+      <div id="stick" class="stick"><div class="knob"></div></div>
+      <div id="touch-btns">
+        <button id="t-a" class="tbtn a">パス</button>
+        <button id="t-b" class="tbtn b">シュート</button>
+        <button id="t-c" class="tbtn c">ダッシュ</button>
+        <button id="t-d" class="tbtn d">必殺技</button>
+      </div>
+      <button id="t-e" class="tbtn e">E</button>
+    </div>
+  </div>
+
+  <!-- ===================== タイトル ===================== -->
+  <div id="screen-title" class="screen">
+    <div class="title-bg"></div>
+    <div class="title-inner">
+      <h1 class="game-title"><span class="t1">GACHA</span><span class="t2">STRIKERS</span></h1>
+      <p class="game-sub">ガチャで集めて、編成で勝つ。2Dサッカー</p>
+      <div class="title-btns">
+        <button id="btn-continue" class="big-btn primary hidden">つづきから</button>
+        <button id="btn-newgame" class="big-btn">はじめから</button>
+        <button id="btn-title-help" class="big-btn ghost">あそびかた</button>
+      </div>
+      <p class="title-foot">キーボード / タッチ対応　―　データは自動保存されます</p>
+    </div>
+  </div>
+
+  <!-- ===================== ガチャショップ ===================== -->
+  <div id="panel-gacha" class="panel hidden">
+    <div class="panel-box gacha-box">
+      <header class="panel-head">
+        <h2>🎰 ガチャショップ</h2>
+        <div class="head-right">
+          <span class="ticket-chip"><span class="ico">🎟️</span><b id="gacha-tickets">0</b></span>
+          <button class="close-btn" data-close="panel-gacha">✕</button>
+        </div>
+      </header>
+      <div class="panel-body">
+        <div class="gacha-banner">
+          <div class="gb-art" id="gacha-art"></div>
+          <div class="gb-text">
+            <h3>ストライカーズ・スカウト</h3>
+            <p>★5 3% ／ ★4 12% ／ ★3 35% ／ ★2 50%</p>
+            <p class="pity">天井まであと <b id="pity-left">30</b> 連（★5確定）</p>
+          </div>
+        </div>
+        <div class="gacha-btns">
+          <button id="btn-pull1" class="pull-btn"><b>単発</b><span>🎟️ 1</span></button>
+          <button id="btn-pull10" class="pull-btn multi"><b>10連</b><span>🎟️ 10</span><i class="tag">★4以上 確定</i></button>
+        </div>
+        <p class="gacha-note">チケットはステージに勝つともらえます。被った選手は「限界突破」に変わり、上限を超えて強くなります。</p>
+        <div class="rate-table" id="rate-table"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== ガチャ演出 ===================== -->
+  <div id="gacha-stage" class="gacha-stage hidden">
+    <canvas id="gacha-fx"></canvas>
+    <div id="gacha-results" class="gacha-results"></div>
+    <button id="gacha-skip" class="gacha-skip">タップでスキップ</button>
+    <button id="gacha-done" class="big-btn primary hidden">とじる</button>
+  </div>
+
+  <!-- ===================== 編成 ===================== -->
+  <div id="panel-team" class="panel hidden">
+    <div class="panel-box team-box">
+      <header class="panel-head">
+        <h2>📋 編成</h2>
+        <div class="head-right">
+          <span class="rating-chip">総合力 <b id="team-rating">0</b></span>
+          <button class="close-btn" data-close="panel-team">✕</button>
+        </div>
+      </header>
+      <div class="panel-body team-body">
+        <div class="team-left">
+          <div class="formation-picker">
+            <label>フォーメーション</label>
+            <select id="formation-select"></select>
+            <span class="fm-bonus" id="formation-bonus"></span>
+          </div>
+          <div class="mini-pitch" id="mini-pitch"></div>
+          <div class="chem" id="chem-box"></div>
+        </div>
+        <div class="team-right">
+          <div class="roster-head">
+            <span>所持選手 <b id="roster-count">0</b></span>
+            <div class="roster-filters">
+              <button class="fbtn active" data-filter="ALL">全</button>
+              <button class="fbtn" data-filter="GK">GK</button>
+              <button class="fbtn" data-filter="DF">DF</button>
+              <button class="fbtn" data-filter="MF">MF</button>
+              <button class="fbtn" data-filter="FW">FW</button>
+              <select id="roster-sort">
+                <option value="rating">総合力順</option>
+                <option value="rarity">レア度順</option>
+                <option value="level">レベル順</option>
+                <option value="pos">ポジション順</option>
+              </select>
+            </div>
+          </div>
+          <div class="roster-list" id="roster-list"></div>
+        </div>
+      </div>
+      <footer class="panel-foot">
+        <span class="hint" id="team-hint">スロットを選んでから選手を選ぶと配置できます。</span>
+        <button id="btn-auto-team" class="ghost-btn">おまかせ編成</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ===================== 選手詳細 ===================== -->
+  <div id="panel-char" class="panel hidden">
+    <div class="panel-box char-box">
+      <button class="close-btn floating" data-close="panel-char">✕</button>
+      <div id="char-detail"></div>
+    </div>
+  </div>
+
+  <!-- ===================== ステージ選択 ===================== -->
+  <div id="panel-stage" class="panel hidden">
+    <div class="panel-box stage-box">
+      <header class="panel-head">
+        <h2>⚽ スタジアム</h2>
+        <div class="head-right">
+          <span class="ticket-chip"><span class="ico">🎟️</span><b id="stage-tickets">0</b></span>
+          <button class="close-btn" data-close="panel-stage">✕</button>
+        </div>
+      </header>
+      <div class="panel-body">
+        <div class="stage-list" id="stage-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 試合前ブリーフィング ===================== -->
+  <div id="panel-brief" class="panel hidden">
+    <div class="panel-box brief-box">
+      <div id="brief-body"></div>
+      <div class="brief-btns">
+        <button id="btn-brief-back" class="ghost-btn">もどる</button>
+        <button id="btn-brief-team" class="ghost-btn">編成を見る</button>
+        <button id="btn-kickoff" class="big-btn primary">キックオフ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 図鑑 ===================== -->
+  <div id="panel-dex" class="panel hidden">
+    <div class="panel-box dex-box">
+      <header class="panel-head">
+        <h2>🏆 トロフィールーム</h2>
+        <div class="head-right">
+          <span class="rating-chip">コンプ率 <b id="dex-rate">0%</b></span>
+          <button class="close-btn" data-close="panel-dex">✕</button>
+        </div>
+      </header>
+      <div class="panel-body">
+        <div class="record-strip" id="record-strip"></div>
+        <div class="dex-grid" id="dex-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 試合結果 ===================== -->
+  <div id="panel-result" class="panel hidden">
+    <div class="panel-box result-box">
+      <div id="result-body"></div>
+      <div class="result-btns">
+        <button id="btn-result-retry" class="ghost-btn">もう一度</button>
+        <button id="btn-result-garden" class="big-btn primary">庭にもどる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== ハーフタイム ===================== -->
+  <div id="panel-half" class="panel hidden">
+    <div class="panel-box half-box">
+      <h2>ハーフタイム</h2>
+      <div id="half-body"></div>
+      <button id="btn-half-go" class="big-btn primary">後半へ</button>
+    </div>
+  </div>
+
+  <!-- ===================== メニュー / ヘルプ ===================== -->
+  <div id="panel-menu" class="panel hidden">
+    <div class="panel-box menu-box">
+      <header class="panel-head"><h2>≡ メニュー</h2><button class="close-btn" data-close="panel-menu">✕</button></header>
+      <div class="panel-body menu-body">
+        <button id="btn-menu-help" class="menu-item">あそびかた</button>
+        <button id="btn-menu-abandon" class="menu-item danger">試合を放棄して庭へ</button>
+        <button id="btn-menu-reset" class="menu-item danger">セーブデータを消す</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="panel-help" class="panel hidden">
+    <div class="panel-box help-box">
+      <header class="panel-head"><h2>あそびかた</h2><button class="close-btn" data-close="panel-help">✕</button></header>
+      <div class="panel-body help-body">
+        <section>
+          <h3>ゲームの流れ</h3>
+          <ol>
+            <li>庭（クラブハウス）を歩いて、施設に入る</li>
+            <li>スタジアムでステージに挑戦 → <b>勝つとチケット</b>がもらえる</li>
+            <li>チケットでガチャショップから選手を引く</li>
+            <li>編成テントでフォーメーションと選手を組み直す</li>
+          </ol>
+        </section>
+        <section>
+          <h3>庭の操作</h3>
+          <table class="key-table">
+            <tr><td>WASD / 方向キー</td><td>歩く</td></tr>
+            <tr><td>E / Space</td><td>施設に入る</td></tr>
+          </table>
+        </section>
+        <section>
+          <h3>試合の操作</h3>
+          <table class="key-table">
+            <tr><td>WASD / 方向キー</td><td>移動（狙う方向も兼ねる）</td></tr>
+            <tr><td>J</td><td>パス／こぼれ球にプレス</td></tr>
+            <tr><td>K（長押し）</td><td>シュート（チャージするほど強い）／タックル</td></tr>
+            <tr><td>L</td><td>ダッシュ（スタミナ消費）</td></tr>
+            <tr><td>Space</td><td><b>必殺技</b>（SP消費）</td></tr>
+            <tr><td>Shift</td><td>操作する選手を切り替え</td></tr>
+          </table>
+          <p class="note">操作キャラはボールに一番近い味方に自動で切り替わります。GKはAIが担当します。</p>
+        </section>
+        <section>
+          <h3>必殺技</h3>
+          <p>SPが溜まると Space で発動します。持っている選手の技タイプで効果が変わります。</p>
+          <ul>
+            <li><b>シュート技</b>：超威力のシュート。GKの必殺キャッチと真っ向勝負になる</li>
+            <li><b>ドリブル技</b>：一定時間、当たり負けせず突破する</li>
+            <li><b>ブロック技</b>：相手のボールを強制的に奪う。飛んでくる必殺シュートも止められる</li>
+            <li><b>キャッチ技</b>：GK専用。相手の必殺シュートに自動で対抗する</li>
+          </ul>
+        </section>
+        <section>
+          <h3>属性の相性</h3>
+          <p>炎は風を焼き、風は雷を散らし、雷は森を焦がし、森は炎を鎮める。光と闇は互いに強い。相性が良いと必殺技の威力が上がります。</p>
+        </section>
+        <section>
+          <h3>編成のコツ</h3>
+          <ul>
+            <li>本職と違うポジションに置くと能力が下がります（GKは特に大きい）</li>
+            <li>同じ属性を3人以上そろえると<b>属性ボーナス</b>がつきます</li>
+            <li>フォーメーションごとに固有のボーナスがあります</li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 確認ダイアログ ===================== -->
+  <div id="panel-confirm" class="panel hidden">
+    <div class="panel-box confirm-box">
+      <p id="confirm-text"></p>
+      <div class="confirm-btns">
+        <button id="confirm-no" class="ghost-btn">やめる</button>
+        <button id="confirm-yes" class="big-btn danger">実行する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 場面転換 ===================== -->
+  <div id="wipe" class="wipe"></div>
+</div>
+
+<script src="data.js"></script>
+<script src="core.js"></script>
+<script src="garden.js"></script>
+<script src="match.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
