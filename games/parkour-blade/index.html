@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#080b11">
+<title>PARKOUR BLADE ― 刃の回廊</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ==================== ゲーム画面 ==================== -->
+  <div id="stage-wrap">
+    <canvas id="game"></canvas>
+    <div id="vignette"></div>
+    <div id="flash"></div>
+
+    <!-- ---------- HUD ---------- -->
+    <div id="hud" class="hidden">
+      <div class="hud-tl">
+        <div id="hud-time">00:00.00</div>
+        <div class="hud-sub"><span id="hud-best">ベスト --:--.--</span></div>
+      </div>
+
+      <div class="hud-tr">
+        <div id="hud-stage">STAGE 1 ― 搬入デッキ</div>
+        <div class="hud-sub">
+          <span id="hud-bolts">⚙ 0/3</span>
+          <span id="hud-deaths">💀 0</span>
+        </div>
+      </div>
+
+      <div class="hud-bl">
+        <div class="grip-block">
+          <div class="grip-label">握力</div>
+          <div class="grip-track"><div id="grip-fill"></div></div>
+        </div>
+        <div id="hud-keys">
+          <span>［Space］跳ぶ・壁キック</span>
+          <span>［Shift］ダッシュ</span>
+          <span>［C］スライディング</span>
+          <span>［R］やり直し</span>
+        </div>
+      </div>
+
+      <div id="toast"></div>
+      <div id="tip-banner"><span id="tip-text"></span></div>
+      <div id="rotate-hint">📱 横向きにすると遊びやすくなります</div>
+    </div>
+
+    <!-- ---------- タッチ操作 ---------- -->
+    <div id="touch" class="hidden">
+      <div id="tpad"><div id="tpad-knob"></div></div>
+      <div class="tbtns">
+        <button class="tbtn t-slide" data-act="slide">スライド</button>
+        <button class="tbtn t-dash" data-act="dash">ダッシュ</button>
+        <button class="tbtn t-jump" data-act="jump">ジャンプ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== タイトル ==================== -->
+  <div id="screen-title" class="screen">
+    <div class="bg-grid"></div>
+    <div class="bg-blade"></div>
+    <div class="title-inner">
+      <div class="title-tag">TOP-DOWN PARKOUR ACTION</div>
+      <h1 class="game-title"><span class="t1">PARKOUR</span><span class="t2">BLADE</span></h1>
+      <p class="game-sub">刃 の 回 廊</p>
+      <p class="game-lead">
+        床の抜けた鉄骨の谷を、壁を蹴って渡る。回るノコギリに触れれば一撃で終わり。<br>
+        走り・跳び・滑り・壁キックだけを頼りに、六つの区画を最短で駆け抜けろ。
+      </p>
+      <div class="title-btns">
+        <button id="btn-start" class="btn btn-main">ステージを選ぶ</button>
+        <button id="btn-howto" class="btn">操作と刃の見分け方</button>
+      </div>
+      <div class="title-foot">
+        <button id="btn-mute" class="linkbtn">🔊 音 ON</button>
+        <button id="btn-reset" class="linkbtn">記録を消す</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== ステージ選択 ==================== -->
+  <div id="screen-select" class="screen hidden">
+    <div class="bg-grid"></div>
+    <div class="panel wide">
+      <div class="panel-head">
+        <h2>ステージ選択</h2>
+        <button class="btn btn-ghost" data-back="title">タイトルへ</button>
+      </div>
+      <div id="stage-list" class="stage-list"></div>
+      <div class="panel-foot">
+        <span id="total-line">総ボルト 0/18 ・ 総合タイム --</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 操作説明 ==================== -->
+  <div id="screen-howto" class="screen hidden">
+    <div class="bg-grid"></div>
+    <div class="panel wide">
+      <div class="panel-head">
+        <h2>操作と刃の見分け方</h2>
+        <button class="btn btn-ghost" data-back="title">タイトルへ</button>
+      </div>
+
+      <div class="howto-grid">
+        <section class="howto-card">
+          <h3>操作</h3>
+          <table class="keytable">
+            <tr><th>移動</th><td>WASD ／ 矢印キー</td></tr>
+            <tr><th>ダッシュ</th><td>Shift（押しっぱなし）</td></tr>
+            <tr><th>ジャンプ</th><td>Space ／ Z</td></tr>
+            <tr><th>壁キック</th><td>壁に掴まっている間に Space</td></tr>
+            <tr><th>スライディング</th><td>C ／ K</td></tr>
+            <tr><th>やり直し</th><td>R（直前のチェックポイントへ）</td></tr>
+            <tr><th>一時停止</th><td>Esc ／ P</td></tr>
+          </table>
+          <p class="note">
+            見下ろし視点なので、跳んでいる高さは影とプレイヤーを結ぶ細い線で分かる。
+            線が長いほど高い位置にいる。
+          </p>
+        </section>
+
+        <section class="howto-card">
+          <h3>刃の三種</h3>
+          <ul class="blade-list">
+            <li><span class="chip chip-low">低刃</span>
+              床すれすれを回る。<b>ジャンプで跳び越す</b>。滑ってもくぐれない。</li>
+            <li><span class="chip chip-high">吊り刃</span>
+              腰の高さを回る。<b>スライディングでくぐる</b>。跳ぶと逆に当たる。</li>
+            <li><span class="chip chip-full">大刃</span>
+              足元から頭上まで薙ぎ払う。<b>迂回して避けるしかない</b>。</li>
+          </ul>
+          <p class="note">床には刃の通り道が赤い縞で描いてある。踏み込む前に縞を見ること。</p>
+        </section>
+
+        <section class="howto-card">
+          <h3>壁キックで谷を渡る</h3>
+          <ol class="steps">
+            <li>ダッシュしたまま谷へ跳び出す。</li>
+            <li>空中で<b>壁のある側を押し続ける</b>と自動で掴まる。</li>
+            <li>掴まったまま<b>進みたい方向を押しながら Space</b>で蹴り出す。</li>
+            <li>反対側の壁へ届いたらまた掴まる。これを繰り返して渡り切る。</li>
+          </ol>
+          <p class="note">
+            掴まっている間は<b>握力ゲージ</b>が減り、尽きると手が離れる。床に降りれば一気に回復する。
+            壁は蹴った方向へ強く出るので、真横ではなく<b>斜め前</b>を意識するとよい。
+          </p>
+        </section>
+
+        <section class="howto-card">
+          <h3>そのほかの仕掛け</h3>
+          <ul class="blade-list">
+            <li><span class="chip chip-pad">ジャンプ台</span>
+              乗ると大きく打ち上がる。この高さのときだけ黄黒の<b>柵</b>を越えられる。</li>
+            <li><span class="chip chip-plat">動く足場</span>
+              乗っているあいだ体を運ぶ。降りるときは足場の進む向きに注意。</li>
+            <li><span class="chip chip-check">チェックポイント</span>
+              触れると復帰地点が更新される。死んでもここから再開する。</li>
+            <li><span class="chip chip-bolt">ボルト</span>
+              各ステージに3つ。取り逃しても先へは進めるが、記録には残る。</li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== リザルト ==================== -->
+  <div id="screen-result" class="screen hidden">
+    <div class="bg-grid"></div>
+    <div class="panel">
+      <div id="result-head" class="result-head">
+        <div id="result-rank" class="rank">S</div>
+        <div>
+          <h2 id="result-title">区画突破</h2>
+          <p id="result-stage" class="result-stage">STAGE 1 ― 搬入デッキ</p>
+        </div>
+      </div>
+      <div class="result-rows">
+        <div class="rrow"><span>タイム</span><b id="result-time">00:00.00</b></div>
+        <div class="rrow"><span>自己ベスト</span><b id="result-best">--:--.--</b></div>
+        <div class="rrow"><span>ボルト</span><b id="result-bolts">0/3</b></div>
+        <div class="rrow"><span>死亡回数</span><b id="result-deaths">0</b></div>
+      </div>
+      <div id="result-new" class="result-new hidden">◆ 自己ベスト更新</div>
+      <div class="panel-foot btns">
+        <button id="btn-next" class="btn btn-main">次のステージ</button>
+        <button id="btn-retry" class="btn">もう一度</button>
+        <button id="btn-toselect" class="btn btn-ghost">ステージ選択</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== ポーズ ==================== -->
+  <div id="screen-pause" class="screen hidden">
+    <div class="panel narrow">
+      <h2>一時停止</h2>
+      <p id="pause-stage" class="result-stage">STAGE 1 ― 搬入デッキ</p>
+      <div class="panel-foot btns col">
+        <button id="btn-resume" class="btn btn-main">再開</button>
+        <button id="btn-restart" class="btn">最初からやり直す</button>
+        <button id="btn-quit" class="btn btn-ghost">ステージ選択へ</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="levels.js"></script>
+<script src="core.js"></script>
+<script src="game.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
