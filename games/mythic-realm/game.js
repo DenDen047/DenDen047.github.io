@@ -256,6 +256,9 @@
     glyphArmMul: 1, glyphBlastMul: 1, glyphStealthMul: 1, seesEnemyGlyphs: false,
     // 体の半径。0 なら標準の UNIT_R。大きいほど当たり判定も見た目も大きくなる。
     bodyR: 0,
+    // summoner = 攻撃ボタンの長押しで魔物を呼べる職業。
+    // bodyStyle = 描き分け。"" なら勇者の標準の体つき。
+    summoner: false, bodyStyle: "",
   };
   const CLASSES = [
     {
@@ -308,11 +311,12 @@
     },
     {
       key: "darkmage", name: "闇魔導士", icon: "🌑",
-      desc: "闇の槍・呪詛・魂喰らい。自身が闇をまとうので闇の攻撃はほとんど効かないが、聖なる力には脆い。鎌で斬るとダメージの一部を吸って回復する。",
+      desc: "闇の槍・呪詛・魂喰らい。魔物側の闇術師と同じ、足を持たない浮遊するローブ姿。攻撃ボタンを長押しすると魔物を呼び出し、敵へけしかける。闇の攻撃はほとんど効かないが、聖なる力には脆い。",
       hpBonus: -15, speedMul: 0.98, magicMul: 1.3, meleeMul: 0.85, rangedMul: 0.8,
       element: "dark", mana: 120, bombs: 2, glyphs: 3,
+      summoner: true, bodyStyle: "warlock",
       weapons: ["darkspear", "hex", "soulscythe"],
-      look: { robe: "#2e2340", trim: "#b07cff", skin: "#d8c8e4", hair: "#1d1626", head: "hood", cape: "#150f1e" },
+      look: { robe: "#3d2450", trim: "#b07cff", skin: "#b9a6c8", hair: "#1d1626", head: "hood", cape: "#241539", eye: "#d07cff" },
     },
     {
       key: "dragoon", name: "竜騎士", icon: "🐲",
@@ -495,6 +499,103 @@
   };
 
   // ============================================================
+  //  魔物の召喚 (闇魔導士)
+  //  攻撃ボタンを押し続けると、通常攻撃を続けたまま魔物を1体呼び出す。
+  //  呼ばれた魔物は術者の味方として、自分で敵を探して襲いかかる。
+  //  もう1体呼ぶにはボタンをいったん離してから押し直す。
+  // ============================================================
+  const SUMMON_HOLD_MS = 700;      // これだけ押し続けると呼び出す
+  const SUMMON_MANA = 32;          // 1体ぶんの魔力
+  const SUMMON_COOLDOWN = 4200;    // 次に呼べるまで
+  const SUMMON_MAX = 3;            // 同時に従えられる数
+  const SUMMON_LIFE_MS = 24000;    // 呼んだ魔物が消えるまで
+  const SUMMON_HP_MUL = 0.8;       // 本物の魔物より少しもろい
+
+  // 術者のレベルが上がるほど、呼び出せる魔物の格も上がる。
+  const SUMMON_TIERS = [
+    { level: 1, key: "goblin" },
+    { level: 4, key: "skeleton" },
+    { level: 7, key: "venomspider" },
+    { level: 10, key: "warlock" },
+    { level: 14, key: "gargoyle" },
+    { level: 17, key: "wraith" },
+  ];
+  function summonKeyFor(s) {
+    let key = SUMMON_TIERS[0].key;
+    for (const tier of SUMMON_TIERS) if (s.level >= tier.level) key = tier.key;
+    return key;
+  }
+
+  const summonCount = (s) => G.units.filter((u) => u.summon && !u.dead && u.summonerId === s.id).length;
+
+  // 呼べるかどうか。呼べない理由は HUD 側で伝える。
+  function summonBlockReason(s, t) {
+    if (!s || !s.summoner || s.dead) return "none";
+    if (summonCount(s) >= SUMMON_MAX) return "full";
+    if (t < (s.summonReadyAt || 0)) return "cooldown";
+    if ((s.mana || 0) < SUMMON_MANA) return "mana";
+    return null;
+  }
+
+  function trySummon(s, t) {
+    if (summonBlockReason(s, t)) return false;
+    s.mana -= SUMMON_MANA;
+    s.summonReadyAt = t + SUMMON_COOLDOWN;
+    const key = summonKeyFor(s);
+    const def = foeDef(key);
+    // 術者の正面すこし先。壁の中に出さないよう何度か位置を試す。
+    let spot = null;
+    for (let i = 0; i < 14; i++) {
+      const a = s.aimAngle + rand(-0.9, 0.9);
+      const d = rand(40, 92);
+      const x = clamp(s.x + Math.cos(a) * d, 40, WORLD_W - 40);
+      const y = clamp(s.y + Math.sin(a) * d, 40, WORLD_H - 40);
+      if (G.obstacles.some((o) => isSolid(o) && circleRect(x, y, def.r + 4, o.x, o.y, o.w, o.h))) continue;
+      spot = { x, y }; break;
+    }
+    if (!spot) spot = { x: s.x, y: s.y };
+    const m = makeUnit({ id: G.nextId++, team: s.team, name: def.name });
+    applyFoe(m, key);
+    m.name = `${def.name}の僕`;
+    m.summon = true;
+    m.summonerId = s.id;
+    m.expireAt = t + SUMMON_LIFE_MS;
+    m.maxHp = Math.max(20, Math.round(m.maxHp * SUMMON_HP_MUL));
+    m.hp = m.maxHp;
+    // 術者が育つほど僕も強くなる
+    m.dmgMul *= 0.85 + s.level * 0.03;
+    m.xpValue = 0;
+    m.x = spot.x; m.y = spot.y; m.rx = spot.x; m.ry = spot.y;
+    m.angle = s.aimAngle; m.aimAngle = s.aimAngle;
+    m.ai.wx = spot.x; m.ai.wy = spot.y;
+    G.units.push(m);
+    Audio.roar();
+    for (let i = 0; i < 18; i++) {
+      const a = Math.random() * Math.PI * 2;
+      addParticle(spot.x, spot.y, {
+        kind: "rune", vx: Math.cos(a) * rand(30, 120), vy: Math.sin(a) * rand(30, 120) - 40,
+        life: rand(420, 900), size: rand(3, 7),
+      });
+    }
+    if (s.id === G.localId) banner(`🌑 ${m.name} を召喚（${summonCount(s)}/${SUMMON_MAX}）`);
+    return true;
+  }
+
+  // 寿命の切れた僕は闇に還る。
+  function updateSummons(t) {
+    for (let i = G.units.length - 1; i >= 0; i--) {
+      const m = G.units[i];
+      if (!m.summon || m.dead) continue;
+      const master = m.summonerId >= 0 ? G.units.find((u) => u.id === m.summonerId) : null;
+      if (t < m.expireAt && master && !master.dead) continue;
+      for (let k = 0; k < 10; k++) {
+        addParticle(m.x, m.y, { kind: "rune", vx: rand(-40, 40), vy: rand(-90, -20), life: rand(300, 700), size: rand(3, 6) });
+      }
+      G.units.splice(i, 1);
+    }
+  }
+
+  // ============================================================
   //  ステージ
   // ============================================================
   // fixedLight: 明るさを固定するステージだけが持つ (null = 昼夜サイクルどおり)。
@@ -504,8 +605,19 @@
   // foes: その章の門から湧く魔物。章が進むほど顔ぶれが変わる。
   // foePower: 魔物とボスの体力・攻撃力の倍率。章が進むほど強くなる。
   // heroBoost: 勇者側の底上げ。強敵しか出ない章だけ持つ。
-  const STAGE_DEFAULTS = { chapter: 0, foePower: 1, heroBoost: 0, creature: false, training: false, fixedLight: null, boss: null };
+  const STAGE_DEFAULTS = {
+    chapter: 0, foePower: 1, heroBoost: 0, creature: false, training: false, fixedLight: null, boss: null,
+    // adventure = 冒険の大地の入口 / lava・doomStaff = その土地の仕掛け
+    // wilds = 野良の魔狼の数 (null なら従来どおりの既定値)
+    adventure: false, lava: false, doomStaff: false, wilds: null,
+  };
   const STAGES = [
+    {
+      key: "adventure", name: "冒険の大地", icon: "🗺",
+      desc: "12の土地がひと続きになった世界。決まったステージを1つずつ攻略するのではなく、村を出て自分の足で歩き回る。端まで進めば隣の土地へ。宝箱を開けて強くなり、2つの紋章を集めて魔王の玉座の封印を解こう。",
+      adventure: true, bgm: "bgm-battle",
+      ground: ["#3f4f2a", "#47582f", "#384824"],
+    },
     {
       key: "training", name: "訓練の間", icon: "🎯",
       desc: "はじめての人はここから。反撃してこない木人を相手に、操作を1つずつ順番に練習できる。",
@@ -531,7 +643,7 @@
     {
       key: "abyss", name: "第3章 魔界", icon: "👹",
       desc: "門の向こう側。溶岩の池と黒い岩の荒野で、魔王が玉座から見下ろしている。魔物は桁違いに強いが、こちらも魔界の力で底上げされる。第2章をクリアすると挑める。",
-      bgm: "bgm-battle", chapter: 3, fixedLight: 0.45, boss: "demonlord", foePower: 1.7, heroBoost: 0.25,
+      bgm: "bgm-battle", chapter: 3, fixedLight: 0.45, boss: "demonlord", foePower: 1.7, heroBoost: 0.25, lava: true,
       foes: ["warlock", "gargoyle", "wraith", "ifrit", "venomspider"],
       phase: { key: "dusk", label: "👹 魔界", note: "空が燃えている" },
       ground: ["#2a1418", "#33181c", "#211014"],
@@ -539,7 +651,7 @@
     {
       key: "ruinforest", name: "破壊の森", icon: "🥀",
       desc: "枯れ木と岩だけの静かな森。木はまばらで見通しがよい。中央の祭壇に「破壊の杖」が祀られていて、拾えば誰でも振るえる。章には属さないので、いつでも遊べる。",
-      bgm: "bgm-darkforest", fixedLight: 0.7, boss: null, foePower: 1.15,
+      bgm: "bgm-darkforest", fixedLight: 0.7, boss: null, foePower: 1.15, doomStaff: true,
       foes: ["goblin", "orc", "skeleton", "warlock"],
       phase: { key: "dusk", label: "🥀 破壊の森", note: "中央に杖が眠る" },
       ground: ["#3b3a2c", "#443f30", "#332f26"],
@@ -547,13 +659,571 @@
   ].map((st) => Object.assign({}, STAGE_DEFAULTS, st));
   const STAGE_BY_KEY = {};
   STAGES.forEach((s) => (STAGE_BY_KEY[s.key] = s));
-  const stageDef = () => STAGE_BY_KEY[G && G.stage ? G.stage : playerStage] || STAGE_BY_KEY.ruins;
+  // 冒険中は、今いる区画の設定がそのままステージ設定になる。
+  // これで地面の色・明るさ・出る魔物といった既存の処理がそのまま土地ごとに切り替わる。
+  const stageDef = () =>
+    (G && G.adv ? advHere().stage : STAGE_BY_KEY[G && G.stage ? G.stage : playerStage] || STAGE_BY_KEY.ruins);
   const stageIsTraining = (key) => !!(STAGE_BY_KEY[key] && STAGE_BY_KEY[key].training);
   const isTraining = () => !!stageDef().training;
   const bossDef = () => BOSSES[stageDef().boss] || null;
   // 章の進み具合。clearedChapter までが踏破済みで、その次の章まで選べる。
   const chapterUnlocked = (st) => !st.chapter || st.chapter <= clearedChapter + 1;
   const nextChapterStage = (st) => STAGES.find((x) => x.chapter === (st.chapter || 0) + 1) || null;
+
+  // ============================================================
+  //  冒険の大地 (地続きのフィールド探索)
+  //  4×3 の区画がひとつながりになった世界。端まで歩くと隣の土地へ移る。
+  //  「章を選んで1戦する」形ではなく、村を出て自分の足で歩き、
+  //  宝箱を開け、2つの紋章を集めて魔王の玉座の封印を解く。
+  // ============================================================
+  const ADV_COLS = 4, ADV_ROWS = 3;
+  const ADV_EDGE = 24;         // 端からこの距離まで寄ると隣の土地へ移る
+  const ADV_ENTER_PAD = 120;   // 移った先で端からこれだけ内側に立つ
+  const ADV_FOE_INTERVAL = 7000;
+  const ADV_CHEST_R = 48;      // 宝箱を開けられる距離
+  const ADV_HOME = { x: 0, y: 1 };
+
+  const ADV_GROUND = {
+    hills:   ["#3f4f2a", "#47582f", "#384824"],
+    village: ["#4c4535", "#544d3c", "#443e31"],
+    ruins:   ["#4a4636", "#53503c", "#423f31"],
+    forest:  ["#1b2416", "#1f291a", "#161e12"],
+    snow:    ["#49535f", "#515c69", "#404a55"],
+    abyss:   ["#2a1418", "#33181c", "#211014"],
+    swamp:   ["#2c3a2e", "#334233", "#263227"],
+    quarry:  ["#4b4740", "#545046", "#413d37"],
+  };
+
+  // 紋章。ボスを倒すと手に入り、2つそろうと魔王の玉座の封印が解ける。
+  const ADV_EMBLEMS = {
+    flame: { key: "flame", name: "炎の紋章", icon: "🔥" },
+    frost: { key: "frost", name: "氷の紋章", icon: "❄️" },
+  };
+  const ADV_EMBLEM_ORDER = ["flame", "frost"];
+
+  // 区画の定義。並び順がそのまま地図の並び (左上から右へ、4つで次の段)。
+  //   map      = 使う地形生成
+  //   roamers  = うろついている魔物の数
+  //   tierMax  = 出てくる魔物の強さの上限
+  //   chests   = 置く宝箱の中身
+  const ADV_REGIONS = [
+    // ---- 北の段 ----
+    {
+      key: "hills", name: "風鳴りの丘", icon: "🌾", map: "ruins", ground: "hills",
+      note: "見晴らしのよい草の丘", foes: ["goblin", "orc"], tierMax: 1, foePower: 0.9,
+      roamers: 4, wilds: 1, chests: ["gold"],
+    },
+    {
+      key: "graves", name: "忘れられた墓所", icon: "⚰️", map: "abyss", ground: "quarry",
+      note: "骨が土から突き出ている", foes: ["skeleton", "warlock", "goblin"], tierMax: 2, foePower: 1.1,
+      fixedLight: 0.35, phase: { key: "dusk", label: "🌆 薄明", note: "骨が鳴いている" },
+      roamers: 6, wilds: 0, chests: ["heart"],
+    },
+    {
+      key: "darkwood", name: "常闇の樹海", icon: "🌲", map: "forest", ground: "forest",
+      note: "夜が明けない密林。何かが徘徊している", foes: ["orc", "skeleton", "warlock", "gargoyle"],
+      tierMax: 3, foePower: 1.3, creature: true, fixedLight: 0.1,
+      phase: { key: "night", label: "🌙 常闇", note: "何かが見ている" },
+      boss: "fenrir", emblem: "frost", bgm: "bgm-darkforest",
+      roamers: 5, wilds: 2, chests: [],
+    },
+    {
+      key: "pass", name: "凍える峠", icon: "🏔", map: "forest", ground: "snow",
+      note: "岩と雪の細い道", foes: ["skeleton", "gargoyle"], tierMax: 3, foePower: 1.25,
+      fixedLight: 0.85, phase: { key: "noon", label: "☀️ 白昼", note: "風が刺さる" },
+      roamers: 5, wilds: 1, chests: ["mana", "gold"],
+    },
+    // ---- 中の段 ----
+    {
+      key: "village", name: "辺境の村", icon: "🏘", map: "ruinforest", ground: "village",
+      note: "旅の起点。祭壇で傷と道具が戻る", foes: ["goblin"], tierMax: 0, foePower: 0.8,
+      home: true, roamers: 0, wilds: 0, chests: ["kit"],
+    },
+    {
+      key: "road", name: "古の街道", icon: "🛤", map: "ruins", ground: "ruins",
+      note: "崩れた石畳が east へ続く", foes: ["goblin", "orc", "skeleton"], tierMax: 2, foePower: 1,
+      roamers: 5, wilds: 1, chests: ["gold"],
+    },
+    {
+      key: "temple", name: "崩れた神殿", icon: "🏛", map: "ruins", ground: "ruins",
+      note: "門の奥に古の竜が眠る", foes: ["goblin", "orc", "skeleton", "gargoyle"], tierMax: 3, foePower: 1.15,
+      boss: "drake", emblem: "flame",
+      roamers: 4, wilds: 0, chests: [],
+    },
+    {
+      key: "scorched", name: "焦土の谷", icon: "🌋", map: "abyss", ground: "abyss",
+      note: "溶岩だまりに気をつけろ", foes: ["ifrit", "venomspider", "gargoyle"], tierMax: 3, foePower: 1.45,
+      lava: true, fixedLight: 0.45, phase: { key: "dusk", label: "🔥 燃える空", note: "溶岩だまりに近づくな" },
+      roamers: 6, wilds: 0, chests: ["heart"],
+    },
+    // ---- 南の段 ----
+    {
+      key: "marsh", name: "霧の沼地", icon: "🥀", map: "ruinforest", ground: "swamp",
+      note: "中央の祭壇に破壊の杖が眠る", foes: ["goblin", "skeleton", "venomspider"], tierMax: 2, foePower: 1.1,
+      doomStaff: true, fixedLight: 0.55, phase: { key: "dusk", label: "🌫 濃霧", note: "中央の祭壇に杖が眠る" },
+      roamers: 5, wilds: 2, chests: ["mana"],
+    },
+    {
+      key: "quarry", name: "石工の採石場", icon: "⛏", map: "ruins", ground: "quarry",
+      note: "切り出された岩が積み上がる", foes: ["orc", "gargoyle", "skeleton"], tierMax: 3, foePower: 1.3,
+      roamers: 6, wilds: 1, chests: ["kit", "gold"],
+    },
+    {
+      key: "abyssgate", name: "深淵の入口", icon: "🕳", map: "abyss", ground: "abyss",
+      note: "魔界の気配が濃い", foes: ["warlock", "wraith", "ifrit"], tierMax: 3, foePower: 1.55,
+      lava: true, fixedLight: 0.4, phase: { key: "dusk", label: "🌑 深淵の光", note: "地が脈打っている" },
+      roamers: 6, wilds: 0, chests: ["heart", "mana"],
+    },
+    {
+      key: "throne", name: "魔王の玉座", icon: "👹", map: "abyss", ground: "abyss",
+      note: "2つの紋章がなければ入れない", foes: ["wraith", "ifrit", "gargoyle"], tierMax: 3, foePower: 1.7,
+      heroBoost: 0.25, lava: true, sealed: true, boss: "demonlord",
+      fixedLight: 0.35, phase: { key: "dusk", label: "👹 魔王の気配", note: "玉座が見下ろしている" },
+      roamers: 5, wilds: 0, chests: [],
+    },
+  ];
+  // 区画ごとに、既存のステージ定義と同じ形の設定を1つ持たせる。
+  // これで stageDef() を通す既存の処理 (地面の色・明るさ・魔物の顔ぶれ) がそのまま動く。
+  ADV_REGIONS.forEach((def, i) => {
+    def.gx = i % ADV_COLS;
+    def.gy = Math.floor(i / ADV_COLS);
+    def.stage = Object.assign({}, STAGE_DEFAULTS, {
+      key: "adv-" + def.key, name: def.name, icon: def.icon, desc: def.note,
+      bgm: def.bgm || "bgm-battle",
+      ground: ADV_GROUND[def.ground] || ADV_GROUND.ruins,
+      fixedLight: def.fixedLight == null ? null : def.fixedLight,
+      phase: def.phase || null,
+      foes: def.foes, foePower: def.foePower || 1, heroBoost: def.heroBoost || 0,
+      creature: !!def.creature, boss: def.boss || null,
+      lava: !!def.lava, wilds: def.wilds || 0, adventureRegion: true,
+    });
+  });
+
+  const advActive = () => !!(G && G.adv);
+  const advInBounds = (x, y) => x >= 0 && y >= 0 && x < ADV_COLS && y < ADV_ROWS;
+  const advRegionDef = (x, y) => ADV_REGIONS[y * ADV_COLS + x];
+  const advHere = () => (advActive() ? advRegionDef(G.adv.cx, G.adv.cy) : ADV_REGIONS[0]);
+  const advHasEmblem = (key) => !!(G && G.adv && G.adv.emblems[key]);
+  const advEmblemCount = () => ADV_EMBLEM_ORDER.filter(advHasEmblem).length;
+  const advSealOpen = () => advEmblemCount() >= ADV_EMBLEM_ORDER.length;
+
+  // 区画ごとの中身。一度作った地形と宝箱は覚えておき、戻ってきても同じ土地になる。
+  function advRecord(x, y) {
+    const id = x + "," + y;
+    const cache = G.adv.regions;
+    if (cache[id]) return cache[id];
+    const def = advRegionDef(x, y);
+    // 地形生成は stageDef() を見ないので、その区画の地形をそのまま指定できる
+    const obstacles = def.map === "forest" ? genForestMap()
+      : def.map === "ruinforest" ? genRuinForestMap()
+      : def.map === "abyss" ? genAbyssMap()
+      : genRuinsMap();
+    const rec = {
+      id, obstacles, pickups: [], chests: [],
+      visited: false, gateBroken: false, bossDead: false,
+    };
+    cache[id] = rec;
+    // 回復薬などの配置には G.obstacles を見る処理があるので、いったん差し替えて作る
+    const keepObstacles = G.obstacles, keepPickups = G.pickups;
+    G.obstacles = obstacles;
+    spawnPickups();
+    rec.pickups = G.pickups;
+    G.obstacles = keepObstacles; G.pickups = keepPickups;
+    rec.chests = (def.chests || []).map((kind, i) => {
+      const spot = advFreeSpot(obstacles, 300);
+      return { id: i, kind, x: spot.x, y: spot.y, opened: false };
+    });
+    return rec;
+  }
+
+  // 壁にめり込まない開けた場所を探す。minEdge = 端からこれだけ離す。
+  function advFreeSpot(obstacles, minEdge) {
+    for (let i = 0; i < 120; i++) {
+      const x = rand(minEdge, WORLD_W - minEdge), y = rand(minEdge, WORLD_H - minEdge);
+      if (obstacles.some((o) => isSolid(o) && circleRect(x, y, 34, o.x, o.y, o.w, o.h))) continue;
+      return { x, y };
+    }
+    return { x: WORLD_W / 2, y: WORLD_H / 2 };
+  }
+
+  // 区画の拠点。村には勇者の祭壇、ボスの棲む土地には魔界の門を置く。
+  // それ以外の土地では両方 hidden にして、拠点の無い野外にする。
+  function advMakeBases(def, rec) {
+    return TEAMS.map((team) => {
+      const spot = BASE_SPOTS[team];
+      const home = team === TEAM_HERO;
+      const shown = home ? !!def.home : !!def.boss;
+      const x = home ? WORLD_W * 0.28 : WORLD_W * 0.72;
+      const y = WORLD_H * 0.5;
+      return {
+        kind: "base", team, hidden: !shown,
+        name: home ? "勇者の祭壇" : "魔界の門",
+        x, y, r: 185, heading: home ? 0 : Math.PI,
+        hp: !home && rec.gateBroken ? 0 : spot.maxHp,
+        maxHp: spot.maxHp, hitFlash: 0,
+        destroyed: !home && rec.gateBroken,
+      };
+    });
+  }
+
+  // 隣の土地から歩いて入ってきたときの立ち位置
+  function advEntryPoint(from) {
+    const cy = WORLD_H / 2, cx = WORLD_W / 2;
+    if (from === "west") return { x: ADV_ENTER_PAD, y: cy };
+    if (from === "east") return { x: WORLD_W - ADV_ENTER_PAD, y: cy };
+    if (from === "north") return { x: cx, y: ADV_ENTER_PAD };
+    if (from === "south") return { x: cx, y: WORLD_H - ADV_ENTER_PAD };
+    return { x: WORLD_W * 0.32, y: cy };
+  }
+
+  // 勇者パーティをまとめて置きなおす
+  function advPlaceParty(entry) {
+    const party = G.units.filter((u) => u.team === TEAM_HERO && !u.summon);
+    party.forEach((u, i) => {
+      const a = (i / Math.max(1, party.length)) * Math.PI * 2;
+      const d = i === 0 ? 0 : 46 + i * 8;
+      let x = clamp(entry.x + Math.cos(a) * d, 50, WORLD_W - 50);
+      let y = clamp(entry.y + Math.sin(a) * d, 50, WORLD_H - 50);
+      for (let k = 0; k < 24 && G.obstacles.some((o) => isSolid(o) && circleRect(x, y, unitR(u) + 3, o.x, o.y, o.w, o.h)); k++) {
+        x = clamp(entry.x + rand(-140, 140), 50, WORLD_W - 50);
+        y = clamp(entry.y + rand(-140, 140), 50, WORLD_H - 50);
+      }
+      u.x = x; u.y = y; u.rx = x; u.ry = y;
+      u.vehicleId = -1; u.ballistaId = -1;
+      u.snared = false;
+      u.ai.targetId = -1; u.ai.wx = x; u.ai.wy = y;
+      if (u.dead) respawn(u);
+    });
+  }
+
+  // その土地に出る魔物を1体選ぶ
+  function advPickFoeKey(def) {
+    const roster = (def.foes || []).map((key) => foeDef(key));
+    const pool = roster.filter((f) => f.tier <= (def.tierMax == null ? 3 : def.tierMax));
+    return pick(pool.length ? pool : roster.length ? roster : FOES).key;
+  }
+
+  // うろつく魔物を1体置く。away = ここから離れた場所に出す。
+  function advSpawnRoamer(def, away) {
+    const spot = (() => {
+      for (let i = 0; i < 60; i++) {
+        const p = advFreeSpot(G.obstacles, 140);
+        if (away && dist2(p.x, p.y, away.x, away.y) < 620 ** 2) continue;
+        return p;
+      }
+      return advFreeSpot(G.obstacles, 140);
+    })();
+    const foe = makeUnit({ id: G.nextId++, team: TEAM_FOE, name: "魔物" });
+    applyFoe(foe, advPickFoeKey(def));
+    foe.weapon = pick(foe.loadout);
+    foe.ammo = WEAPONS[foe.weapon].mag;
+    foe.x = spot.x; foe.y = spot.y; foe.rx = spot.x; foe.ry = spot.y;
+    // なわばり。敵を見失っている間はこのあたりをうろつく。
+    foe.roam = { x: spot.x, y: spot.y };
+    foe.ai.wx = spot.x; foe.ai.wy = spot.y;
+    G.units.push(foe);
+    return foe;
+  }
+
+  function advRoamerCount() {
+    return G.units.filter((s) => s.team === TEAM_FOE && !s.dead && !s.boss).length;
+  }
+
+  function advSpawnRoamers(def) {
+    const n = Math.round((def.roamers || 0) * DIFF[difficulty].foeMul);
+    const me = localUnit();
+    for (let i = 0; i < n; i++) advSpawnRoamer(def, me);
+  }
+
+  // 区画をまたぐ移動。simulate() の頭で1回だけ実行する。
+  function advRequestTravel(x, y, from) {
+    if (!advActive() || G.adv.pending) return;
+    G.adv.pending = { x, y, from };
+  }
+
+  function advEnterRegion(x, y, from) {
+    const adv = G.adv;
+    adv.cx = x; adv.cy = y;
+    const def = advRegionDef(x, y);
+    const rec = advRecord(x, y);
+    G.stage = def.stage.key;
+    G.obstacles = rec.obstacles;
+    G.pickups = rec.pickups;
+    G.chests = rec.chests;
+    G.bases = advMakeBases(def, rec);
+    // 前の土地に残していくもの
+    G.projectiles.length = 0;
+    G.bombs.length = 0;
+    G.glyphs.length = 0;
+    G.thorns.length = 0;
+    G.flames.length = 0;
+    G.particles.length = 0;
+    G.soundPings.length = 0;
+    G.golems = [];
+    G.ballistas = [];
+    G.doomStaff = null;
+    G.creature = null;
+    G.boss = null;
+    G.bossSummoned = rec.bossDead;
+    // 勇者パーティだけ連れていく。魔物と召喚した僕は置いていく。
+    G.units = G.units.filter((u) => u.team === TEAM_HERO && !u.summon);
+    for (const u of G.units) u.doomStaff = false;
+    if (G.units.length) advPlaceParty(advEntryPoint(from));
+    // 地形ごとの仕掛け
+    if (def.lava) spawnLava();
+    if (def.doomStaff) spawnDoomStaff();
+    if (def.creature) spawnCreature();
+    spawnBeasts();
+    advSpawnRoamers(def);
+    rec.visited = true;
+    G.nextFoeAt = now() + ADV_FOE_INTERVAL;
+    el.scoreGoal.textContent = objectiveText();
+    Audio.startBgm(def.stage.bgm);
+    if (from !== null) banner(`${def.icon} ${def.name}　${def.note}`);
+  }
+
+  // 端まで歩いたら隣の土地へ。封印された土地には紋章がそろうまで入れない。
+  function advCheckEdge() {
+    const me = localUnit();
+    if (!me || me.dead || G.over || G.adv.pending) return;
+    const adv = G.adv;
+    let nx = adv.cx, ny = adv.cy, from = null;
+    if (me.x <= ADV_EDGE) { nx--; from = "east"; }
+    else if (me.x >= WORLD_W - ADV_EDGE) { nx++; from = "west"; }
+    else if (me.y <= ADV_EDGE) { ny--; from = "south"; }
+    else if (me.y >= WORLD_H - ADV_EDGE) { ny++; from = "north"; }
+    if (from === null) return;
+    if (!advInBounds(nx, ny)) return;
+    const def = advRegionDef(nx, ny);
+    if (def.sealed && !advSealOpen()) {
+      const left = ADV_EMBLEM_ORDER.filter((k) => !advHasEmblem(k)).map((k) => ADV_EMBLEMS[k].name).join("・");
+      if (now() - (adv.sealNoteAt || -9999) > 3000) {
+        adv.sealNoteAt = now();
+        banner(`封印されている　— あと ${left} が必要`);
+      }
+      // 押し返す
+      me.x = clamp(me.x, ADV_EDGE + 26, WORLD_W - ADV_EDGE - 26);
+      me.y = clamp(me.y, ADV_EDGE + 26, WORLD_H - ADV_EDGE - 26);
+      return;
+    }
+    advRequestTravel(nx, ny, from);
+  }
+
+  // 倒れたら村へ戻される。冒険そのものは終わらない。
+  function advSendHome(reason) {
+    if (!advActive() || G.adv.pending) return;
+    G.adv.pending = { x: ADV_HOME.x, y: ADV_HOME.y, from: null, reason };
+  }
+
+  // ボス撃破。紋章を落とし、魔王を倒せば冒険は終わる。
+  function advBossDefeated(boss) {
+    const def = advHere();
+    const rec = advRecord(def.gx, def.gy);
+    rec.bossDead = true;
+    if (def.emblem && !advHasEmblem(def.emblem)) {
+      // 紋章はその場に宝箱として落ちる
+      rec.chests.push({ id: rec.chests.length, kind: "emblem", emblem: def.emblem, x: boss.x, y: boss.y, opened: false });
+      G.chests = rec.chests;
+      banner(`${ADV_EMBLEMS[def.emblem].icon} ${ADV_EMBLEMS[def.emblem].name} の宝箱が現れた`);
+    }
+    if (def.boss === "demonlord") {
+      banner("魔王を討ち取った！　冒険の終わり");
+      endMatch(TEAM_HERO);
+    }
+  }
+
+  // ---- 宝箱 ----
+  function advNearestChest(s) {
+    if (!advActive() || !G.chests) return null;
+    let best = null, bestD = ADV_CHEST_R * ADV_CHEST_R;
+    for (const chest of G.chests) {
+      if (chest.opened) continue;
+      const d = dist2(s.x, s.y, chest.x, chest.y);
+      if (d < bestD) { bestD = d; best = chest; }
+    }
+    return best;
+  }
+
+  function advOpenChest(s) {
+    const chest = advNearestChest(s);
+    if (!chest) return false;
+    chest.opened = true;
+    Audio.levelup();
+    for (let i = 0; i < 18; i++) {
+      addParticle(chest.x, chest.y - 6, {
+        kind: "rune", vx: rand(-70, 70), vy: rand(-140, -30), life: rand(500, 1000), size: rand(3, 6),
+      });
+    }
+    if (chest.kind === "emblem") {
+      const em = ADV_EMBLEMS[chest.emblem];
+      G.adv.emblems[chest.emblem] = true;
+      banner(`${em.icon} ${em.name} を手に入れた！（${advEmblemCount()}/${ADV_EMBLEM_ORDER.length}）`);
+      if (advSealOpen()) banner("2つの紋章がそろった　— 魔王の玉座の封印が解けた");
+      return true;
+    }
+    if (chest.kind === "gold") {
+      money += 90;
+      saveProgress();
+      el.menuMoney.textContent = money;
+      banner("💰 金貨 +90 G");
+      return true;
+    }
+    if (chest.kind === "heart") {
+      s.maxHp += 20; s.hp = s.maxHp;
+      banner(`❤️ 命の器　最大体力 +20（${s.maxHp}）`);
+      return true;
+    }
+    if (chest.kind === "mana") {
+      if (s.maxMana) {
+        s.manaPotions = Math.min(MANA_POTION_MAX, (s.manaPotions || 0) + 2);
+        s.mana = s.maxMana;
+        banner(`🧿 魔力の秘薬 +2（${s.manaPotions}/${MANA_POTION_MAX}）`);
+      } else {
+        s.hp = s.maxHp;
+        banner("🧿 秘薬を飲み干した　体力が全快した");
+      }
+      return true;
+    }
+    // 旅の道具袋
+    s.maxBombs = (s.maxBombs || 2) + 1;
+    s.maxGlyphs = (s.maxGlyphs || 1) + 1;
+    s.bombs = s.maxBombs; s.glyphs = s.maxGlyphs;
+    s.thorns = s.maxThorns || 0;
+    s.ammo = WEAPONS[s.weapon].mag; s.reloading = false;
+    banner(`🎒 旅の道具袋　火炎瓶と呪印の持てる数が増えた（🔥${s.maxBombs} 🔮${s.maxGlyphs}）`);
+    return true;
+  }
+
+  function drawChests() {
+    if (!advActive() || !G.chests) return;
+    const t = now();
+    for (const chest of G.chests) {
+      if (chest.opened) continue;
+      if (!isEntityVisible({ x: chest.x, y: chest.y })) continue;
+      const emblem = chest.kind === "emblem";
+      ctx.save();
+      ctx.translate(chest.x, chest.y);
+      // 足元の影
+      ctx.fillStyle = "rgba(0,0,0,0.32)";
+      ctx.beginPath(); ctx.ellipse(0, 10, 20, 8, 0, 0, Math.PI * 2); ctx.fill();
+      // ほのかな光
+      const glow = ctx.createRadialGradient(0, 0, 4, 0, 0, 34);
+      const tint = emblem ? "255,190,80" : "255,220,130";
+      glow.addColorStop(0, `rgba(${tint},${0.3 + Math.sin(t * 0.005) * 0.12})`);
+      glow.addColorStop(1, `rgba(${tint},0)`);
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(0, 0, 34, 0, Math.PI * 2); ctx.fill();
+      // 箱
+      ctx.fillStyle = "#6b4a2c";
+      ctx.strokeStyle = "rgba(24,16,10,0.9)"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.rect(-17, -6, 34, 18); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#7d5833";
+      ctx.beginPath();
+      ctx.moveTo(-17, -6); ctx.quadraticCurveTo(0, -22, 17, -6); ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      // 金具
+      ctx.fillStyle = emblem ? "#ffd76a" : "#c9b06a";
+      ctx.fillRect(-3, -10, 6, 16);
+      ctx.beginPath(); ctx.arc(0, 2, 3.4, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // 仲間の復活位置。冒険では拠点ではなくプレイヤーのそばへ戻す。
+  function advAllySpawn(s) {
+    const me = localUnit();
+    const anchor = me && !me.dead ? me : { x: WORLD_W * 0.3, y: WORLD_H * 0.5 };
+    for (let i = 0; i < 40; i++) {
+      const a = rand(0, Math.PI * 2), d = rand(70, 190);
+      const x = clamp(anchor.x + Math.cos(a) * d, 50, WORLD_W - 50);
+      const y = clamp(anchor.y + Math.sin(a) * d, 50, WORLD_H - 50);
+      if (G.obstacles.some((o) => isSolid(o) && circleRect(x, y, unitR(s) + 3, o.x, o.y, o.w, o.h))) continue;
+      return { x, y };
+    }
+    return { x: anchor.x, y: anchor.y };
+  }
+
+  // 冒険中の増援。ボスの土地では門が壊れた時点でボスが出る。
+  function advUpdateSpawns(t) {
+    const def = advHere();
+    const rec = advRecord(G.adv.cx, G.adv.cy);
+    const gate = G.bases[TEAM_FOE];
+    if (gate && !gate.hidden && gate.hp <= 0) {
+      rec.gateBroken = true;
+      summonBoss();
+    }
+    if (t < G.nextFoeAt) return;
+    G.nextFoeAt = t + ADV_FOE_INTERVAL;
+    const cap = Math.round((def.roamers || 0) * DIFF[difficulty].foeMul);
+    if (advRoamerCount() >= cap) return;
+    advSpawnRoamer(def, localUnit());
+  }
+
+  // ---- 世界地図 (M キー / ミニマップをクリック) ----
+  function advToggleMap() {
+    if (!advActive()) return;
+    G.adv.mapOpen = !G.adv.mapOpen;
+  }
+
+  function drawAdventureMap(vw, vh) {
+    if (!advActive() || !G.adv.mapOpen) return;
+    const cellW = Math.min(120, (vw - 120) / ADV_COLS);
+    const cellH = Math.min(84, (vh - 190) / ADV_ROWS);
+    const gw = cellW * ADV_COLS, gh = cellH * ADV_ROWS;
+    const ox = (vw - gw) / 2, oy = (vh - gh) / 2 - 6;
+    ctx.save();
+    ctx.fillStyle = "rgba(8,10,14,0.93)";
+    ctx.fillRect(0, 0, vw, vh);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#ffd23f";
+    ctx.font = "700 18px system-ui, sans-serif";
+    ctx.fillText("🗺 冒険の大地", vw / 2, oy - 46);
+    ctx.fillStyle = "#cfd7e2";
+    ctx.font = "600 12px system-ui, sans-serif";
+    const got = ADV_EMBLEM_ORDER.map((k) => `${advHasEmblem(k) ? ADV_EMBLEMS[k].icon : "🔒"} ${ADV_EMBLEMS[k].name}`).join("　");
+    ctx.fillText(`紋章　${got}`, vw / 2, oy - 26);
+    for (let y = 0; y < ADV_ROWS; y++) {
+      for (let x = 0; x < ADV_COLS; x++) {
+        const def = advRegionDef(x, y);
+        const rec = G.adv.regions[x + "," + y];
+        const seen = !!(rec && rec.visited);
+        const hereNow = x === G.adv.cx && y === G.adv.cy;
+        const px = ox + x * cellW, py = oy + y * cellH;
+        ctx.fillStyle = hereNow ? "rgba(255,210,63,0.20)" : seen ? "rgba(120,150,190,0.16)" : "rgba(255,255,255,0.05)";
+        ctx.fillRect(px + 2, py + 2, cellW - 4, cellH - 4);
+        ctx.strokeStyle = hereNow ? "#ffd23f" : seen ? "rgba(190,210,235,0.6)" : "rgba(255,255,255,0.16)";
+        ctx.lineWidth = hereNow ? 2.5 : 1.2;
+        ctx.strokeRect(px + 2, py + 2, cellW - 4, cellH - 4);
+        if (seen || hereNow) {
+          ctx.fillStyle = "#f2f5fa";
+          ctx.font = "16px system-ui, sans-serif";
+          ctx.fillText(def.icon, px + cellW / 2, py + cellH / 2 - 2);
+          ctx.font = "600 10px system-ui, sans-serif";
+          ctx.fillStyle = hereNow ? "#ffd23f" : "#c8d2e0";
+          ctx.fillText(def.name, px + cellW / 2, py + cellH - 12);
+          if (def.boss) {
+            const done = rec && rec.bossDead;
+            ctx.fillStyle = done ? "#8cf06a" : "#ff8a6a";
+            ctx.font = "10px system-ui, sans-serif";
+            ctx.fillText(done ? "討伐済" : "ボス", px + cellW / 2, py + 14);
+          }
+        } else {
+          ctx.fillStyle = "rgba(210,220,235,0.35)";
+          ctx.font = "16px system-ui, sans-serif";
+          ctx.fillText("？", px + cellW / 2, py + cellH / 2 + 4);
+        }
+        if (def.sealed && !advSealOpen()) {
+          ctx.fillStyle = "#ffb84a";
+          ctx.font = "11px system-ui, sans-serif";
+          ctx.fillText("🔒", px + cellW - 14, py + 16);
+        }
+      }
+    }
+    ctx.fillStyle = "rgba(210,220,235,0.75)";
+    ctx.font = "600 12px system-ui, sans-serif";
+    ctx.fillText(isTouch ? "🗺ボタンでとじる　端まで歩くと隣の土地へ進む" : "M でとじる　端まで歩くと隣の土地へ進む", vw / 2, oy + gh + 26);
+    ctx.restore();
+  }
 
   const DIFF = {
     easy:   { aimErr: 0.19, react: 430, fireChance: 0.62, hpMul: 0.80, dmgMul: 0.80, foeMul: 0.7 },
@@ -987,6 +1657,8 @@
     if (!e.repeat && (e.key === "q" || e.key === "Q")) localInput.parryEdge = true;
     if (!e.repeat && (e.key === "x" || e.key === "X")) localInput.ultEdge = true;
     if (!e.repeat && (e.key === "v" || e.key === "V")) localInput.potionEdge = true;
+    // 冒険の世界地図
+    if (!e.repeat && (e.key === "m" || e.key === "M")) advToggleMap();
     // 数字キーは「所持している武器の何番目か」。全武器の通し番号ではない。
     if (e.key >= "1" && e.key <= "9") {
       const me = localUnit();
@@ -1048,6 +1720,8 @@
     elm.addEventListener("pointerup", up);
     elm.addEventListener("pointercancel", up);
   }
+  // ミニマップを押すと冒険の世界地図を開く(スマホでも同じ操作)
+  mini.addEventListener("pointerdown", (e) => { e.preventDefault(); advToggleMap(); });
   bindStick(document.getElementById("stick-move"), stickMove);
   bindStick(document.getElementById("stick-aim"), stickAim);
   document.getElementById("t-reload").addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.reloadEdge = true; });
@@ -1059,7 +1733,8 @@
   ultBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.ultEdge = true; });
   const potionBtn = document.getElementById("t-potion");
   potionBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.potionEdge = true; });
-  document.getElementById("t-golem").addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.interactEdge = true; });
+  const interactBtn = document.getElementById("t-golem");
+  interactBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.interactEdge = true; });
   const touchShieldBtn = document.getElementById("t-shield");
   touchShieldBtn.addEventListener("pointerdown", (e) => {
     e.preventDefault();
@@ -1186,6 +1861,9 @@
       particles: [],
       pickups: [],
       obstacles: [],
+      chests: [],
+      // 冒険の大地の進行状況。冒険以外では null。
+      adv: null,
       bases: makeBases(stageIsTraining(playerStage)),
       score: TEAMS.map(() => 0),
       goal: GATE_MAX_HP,
@@ -1687,6 +2365,10 @@
     // 0 のときは unitR() が標準の UNIT_R に落とす
     s.r = c.bodyR;
     s.element = c.element || "none";
+    // 攻撃ボタン長押しの召喚 (闇魔導士)
+    s.summoner = !!c.summoner;
+    s.summonReadyAt = 0;
+    s.holdSummoned = false;
     s.maxMana = c.mana || 0;
     s.mana = s.maxMana;
     s.manaPotions = s.maxMana ? 1 : 0;
@@ -1715,6 +2397,7 @@
     const D = DIFF[difficulty];
     s.foeKey = f.key;
     s.classKey = null;
+    s.summoner = false;
     s.name = f.name;
     const power = stageDef().foePower || 1;
     s.maxHp = Math.round(f.hp * D.hpMul * power);
@@ -1739,6 +2422,7 @@
     s.boss = true;
     s.bossKey = def.key;
     s.classKey = null;
+    s.summoner = false;
     s.name = def.name;
     const power = stageDef().foePower || 1;
     s.maxHp = Math.round(def.hp * D.hpMul * power);
@@ -1779,7 +2463,12 @@
       thorns: 0, maxThorns: 0, lastThorn: -99999,
       ultKey: null, ult: null, ultReadyAt: 0, wardedUntil: 0, element: "none",
       maxMana: 0, mana: 0, manaPotions: 0, manaBoostUntil: 0,
-      holdStart: 0, holdFired: false, doomStaff: false,
+      holdStart: 0, holdFired: false, holdSummoned: false, doomStaff: false,
+      // 召喚まわり。summoner = 呼べる側 / summon = 呼ばれた側。
+      summoner: false, summonReadyAt: 0,
+      summon: false, summonerId: -1, expireAt: 0,
+      // 冒険でうろつく魔物のなわばり (null なら拠点へ進軍する従来の動き)
+      roam: null,
       isHuman: !!opt.isHuman,
       controller: opt.controller || "cpu", // 'cpu' | 'local' | peerId
       x: sp.x, y: sp.y, vx: 0, vy: 0,
@@ -1872,6 +2561,7 @@
 
   function updateFoeSpawns(t) {
     if (isTraining() || G.over) return;
+    if (advActive()) { advUpdateSpawns(t); return; }
     const gate = G.bases[TEAM_FOE];
     if (!gate || gate.hp <= 0) { summonBoss(); return; }
     if (t < G.nextFoeAt) return;
@@ -2002,7 +2692,8 @@
     }
     if (isTraining()) return;
     // 魔物側の野良魔狼。主を持たず、祭壇めがけて襲ってくる。
-    const wilds = Math.round(2 * DIFF[difficulty].foeMul);
+    const perStage = stageDef().wilds;
+    const wilds = Math.round((perStage == null ? 2 : perStage) * DIFF[difficulty].foeMul);
     for (let i = 0; i < wilds; i++) G.beasts.push(makeWolf(id++, TEAM_FOE, null));
   }
 
@@ -2219,7 +2910,7 @@
   const DOOM_HOLD_MS = 320;          // これ以上押し続けたら遠距離攻撃
 
   function spawnDoomStaff() {
-    if (stageDef().key !== "ruinforest") return;
+    if (!stageDef().doomStaff) return;
     G.doomStaff = {
       x: DOOMSTAFF_ALTAR.x, y: DOOMSTAFF_ALTAR.y,
       onAltar: true, holderId: -1, returnAt: 0,
@@ -2306,7 +2997,7 @@
 
   // 魔界の溶岩だまり。どちらの陣営にも等しく熱い。
   function spawnLava() {
-    if (stageDef().key !== "abyss") return;
+    if (!stageDef().lava) return;
     for (let i = 0; i < LAVA_POOLS; i++) {
       let x = 0, y = 0, ok = false;
       for (let attempt = 0; attempt < 40; attempt++) {
@@ -3706,13 +4397,14 @@
   // 「参戦中」= 拠点が健在(増援できる) or 生き残りがまだ立っている。
   function teamInPlay(team) {
     if (teamAlive(team)) return true;
-    if (G.units.some((s) => s.team === team && !s.dead)) return true;
+    // 召喚獣は勝敗を左右しない(術者が倒れれば消えるため)
+    if (G.units.some((s) => s.team === team && !s.dead && !s.summon)) return true;
     return G.beasts.some((b) => b.team === team && !b.dead);
   }
 
   function checkVictory() {
-    // 訓練の間に勝敗は無い
-    if (G.over || isTraining()) return;
+    // 訓練の間に勝敗は無い。冒険では魔王を倒したときだけ終わる。
+    if (G.over || isTraining() || advActive()) return;
     // 魔物側は門が壊れたあと、ボスを召喚しきるまで決着を保留する
     if (!G.bossSummoned && !teamAlive(TEAM_FOE)) return;
     const inPlay = TEAMS.filter(teamInPlay);
@@ -3789,6 +4481,8 @@
       addKillfeed(null, target);
     }
     if (target.team === TEAM_FOE) G.foesSlain++;
+    // 冒険では、ボスを倒した土地が紋章を落とす
+    if (advActive() && target.boss) advBossDefeated(target);
     // 拠点を失った陣営の生き残りが倒されたら、その陣営は消えたかもしれない
     if (!teamAlive(target.team)) {
       if (!teamInPlay(target.team) && target.team === TEAM_HERO) banner("勇者パーティ全滅…");
@@ -3817,7 +4511,9 @@
   }
 
   function respawn(s) {
-    const sp = s.dummy ? dummyPost(s) : teamSpawn(s.team);
+    const sp = s.dummy ? dummyPost(s)
+      : advActive() && s.team === TEAM_HERO ? advAllySpawn(s)
+      : teamSpawn(s.team);
     s.x = sp.x; s.y = sp.y; s.rx = sp.x; s.ry = sp.y;
     s.hp = s.maxHp; s.dead = false; s.vx = 0; s.vy = 0;
     s.lastDamagedAt = -99999;
@@ -3830,7 +4526,8 @@
     s.snared = false;
     s.mana = s.maxMana || 0;
     s.manaBoostUntil = 0;
-    s.holdStart = 0; s.holdFired = false;
+    s.holdStart = 0; s.holdFired = false; s.holdSummoned = false;
+    if (s.summoner) s.summonReadyAt = Math.max(s.summonReadyAt, now() + SUMMON_COOLDOWN);
     // 必殺技は撃ち途中でも仕切り直し。復活直後は少しだけ待たせる。
     s.ult = null;
     s.wardedUntil = 0;
@@ -4207,10 +4904,17 @@
       // ターゲット無し → 一番近い敵拠点へ進軍。
       // 拠点がもう無いなら、残った敵を探しに行く(そうしないと双方が立ち止まって決着しない)。
       if (a.targetId < 0) {
-        const objective = nearestEnemyBase(s.x, s.y, s.team) || nearestEnemyFoe(s.x, s.y, s.team);
-        if (objective) {
-          a.wx = objective.x + rand(-45, 45);
-          a.wy = objective.y + rand(-45, 45);
+        if (s.roam) {
+          // なわばり持ちの魔物は、拠点へ進軍せずその一帯をうろつく
+          const ang = rand(0, Math.PI * 2), d = rand(60, 340);
+          a.wx = clamp(s.roam.x + Math.cos(ang) * d, 60, WORLD_W - 60);
+          a.wy = clamp(s.roam.y + Math.sin(ang) * d, 60, WORLD_H - 60);
+        } else {
+          const objective = nearestEnemyBase(s.x, s.y, s.team) || nearestEnemyFoe(s.x, s.y, s.team);
+          if (objective) {
+            a.wx = objective.x + rand(-45, 45);
+            a.wy = objective.y + rand(-45, 45);
+          }
         }
       }
       if (t > a.strafeUntil) { a.strafe = Math.random() < 0.5 ? 1 : -1; a.strafeUntil = t + rand(500, 1100); }
@@ -4261,6 +4965,8 @@
       if (vis && d > 130 && d < 430 + (targetIsBase ? BASE_CORE_R : 0) && s.bombs > 0 && t - s.lastBomb > 6500 && Math.random() < 0.008) {
         tryThrowBomb(s, t, desiredAim);
       }
+      // 闇魔導士の仲間も、敵が見えていれば僕を呼ぶ
+      if (s.summoner && vis && d < 620 && Math.random() < 0.02) trySummon(s, t);
       // 必殺技。狙える相手が間合いに入っていれば撃つ。
       const ult = ultDef(s.ultKey);
       if (ult && !s.ult && vis && t >= s.ultReadyAt && t >= s.stunnedUntil && d < ult.aiRange && Math.random() < 0.03) {
@@ -4468,6 +5174,8 @@
 
   // E キーはゴーレムと砲台の両方に使う。近いほうへ乗り降りする。
   function enterOrExitGolem(s) {
+    // 冒険中はまず足元の宝箱を調べる
+    if (advActive() && advOpenChest(s)) return;
     if (s.ballistaId >= 0) { dismountBallista(s); return; }
     if (s.vehicleId < 0) {
       let nearestBallista = null, bestBallista = BALLISTA_MOUNT_R * BALLISTA_MOUNT_R;
@@ -4692,7 +5400,8 @@
   // 陥落した拠点は補給・回復の機能を失う
   function inFriendlyBase(entity) {
     const base = G.bases[entity.team];
-    return !!base && base.hp > 0 && dist2(entity.x, entity.y, base.x, base.y) < base.r ** 2;
+    if (!base || base.hidden || base.hp <= 0) return false;
+    return dist2(entity.x, entity.y, base.x, base.y) < base.r ** 2;
   }
 
   function updateBases(dt, t) {
@@ -4754,6 +5463,13 @@
   //  シミュレーション (host / sp)
   // ============================================================
   function simulate(dt, t) {
+    // 区画をまたぐ移動は、ほかの処理を始める前に片づける
+    if (G.adv && G.adv.pending) {
+      const go = G.adv.pending;
+      G.adv.pending = null;
+      advEnterRegion(go.x, go.y, go.from);
+      if (go.reason === "death") banner("力尽きた…　村の祭壇で目を覚ました");
+    }
     updateDayCycle(dt);
     // ローカルプレイヤー入力反映
     const me = localUnit();
@@ -4791,15 +5507,20 @@
       }
       if (s.hitFlash > 0) s.hitFlash = Math.max(0, s.hitFlash - dt * 4);
       if (s.recoil > 0) s.recoil = Math.max(0, s.recoil - dt * 26);
-      // 倒した魔物は復活せず、少し経つと消える。増援は門から新しく湧く。
-      if (s.dead && s.team === TEAM_FOE && !s.dummy) {
+      // 倒した魔物と、力尽きた召喚獣は復活せず、少し経つと消える。
+      if (s.dead && (s.team === TEAM_FOE || s.summon) && !s.dummy) {
         if (t >= s.respawnAt - RESPAWN_MS + 900) G.units.splice(i, 1);
         continue;
       }
       // 祭壇を失った勇者は復活できない(サバイバル形式)。木人だけは無関係に立て直る。
-      if (s.dead && t >= s.respawnAt && (s.dummy || teamAlive(s.team))) respawn(s);
+      // 冒険では祭壇を失うことがなく、倒れたプレイヤーは村へ戻される。
+      if (s.dead && t >= s.respawnAt && (s.dummy || teamAlive(s.team))) {
+        respawn(s);
+        if (advActive() && s.id === G.localId) advSendHome("death");
+      }
     }
     updateFoeSpawns(t);
+    updateSummons(t);
     // 飛び道具
     updateProjectiles(dt);
     updateBombs(dt, t);
@@ -4822,6 +5543,7 @@
     }
     updateParticles(dt);
     updateTraining(dt, t);
+    if (advActive()) advCheckEdge();
   }
 
   // 砲台に取り付いている間は動けない。照準と攻撃だけ。
@@ -4900,6 +5622,7 @@
   // 押しっぱなしの長さで技が変わる武器のための入力さばき。
   //  ・長弓 (charge)      … 離した瞬間に、引き絞った長さぶんの矢を放つ
   //  ・破壊の杖 (holdRanged) … 短く押せば薙ぎ払い、押し続ければ破滅弾
+  //  ・闇魔導士 (summoner)   … 押し続けたまま攻撃は続き、0.7秒で魔物を1体呼ぶ
   //  それ以外の武器はこれまでどおり、押している間そのまま撃つ。
   function handleAttackInput(s, inp, t) {
     const w = WEAPONS[s.weapon];
@@ -4925,6 +5648,21 @@
       }
       if (s.holdStart && !s.holdFired) tryShoot(s, t);   // 短く押した ＝ 近距離
       s.holdStart = 0; s.holdFired = false;
+      return;
+    }
+    // 闇魔導士: 押している間は普通に攻撃しつつ、長押しに達した瞬間だけ魔物を呼ぶ。
+    // もう1体呼ぶには、いったん指を離してから押し直す。
+    if (s.summoner) {
+      if (inp.shoot) {
+        if (!s.holdStart) { s.holdStart = t; s.holdSummoned = false; }
+        else if (!s.holdSummoned && held >= SUMMON_HOLD_MS) {
+          s.holdSummoned = true;
+          trySummon(s, t);
+        }
+        tryShoot(s, t);
+        return;
+      }
+      s.holdStart = 0; s.holdSummoned = false;
       return;
     }
     s.holdStart = 0; s.holdFired = false;
@@ -5118,6 +5856,7 @@
     drawGlyphs();
     drawUltimateZones();
     drawPickups();
+    drawChests();
     for (const ballista of G.ballistas) if (!ballista.dead && isEntityVisible(ballista)) drawBallistaShadow(ballista);
     for (const golem of G.golems) if (!golem.dead && isEntityVisible(golem)) drawGolemShadow(golem);
     for (const beast of G.beasts) if (!beast.dead && isEntityVisible(beast)) drawBeastShadow(beast);
@@ -5143,6 +5882,7 @@
     drawHuntedWarning(vw, vh);
     drawVisionMask(vw, vh);
     drawFootstepIndicators(vw, vh);
+    drawAdventureMap(vw, vh);
     drawMinimap();
     updateHUD();
   }
@@ -6094,6 +6834,7 @@
   // 勇者(職業持ち)の描画。服・マント・かぶりものが職業ごとに変わる。
   function drawHero(s, c) {
     if (s.classKey === "colossus") { drawColossus(s, c); return; }
+    if (classDef(s.classKey).bodyStyle === "warlock") { drawWarlockHero(s, c); return; }
     const look = classDef(s.classKey).look;
     const w = WEAPONS[s.weapon];
     const recoilBack = s.recoil * 0.6;
@@ -6205,6 +6946,74 @@
     }
   }
 
+  // 闇術師の姿。浮遊するローブ・フードの奥の闇・光る眼。
+  // 魔物側の闇術師と、勇者側の闇魔導士がこれを共有する。
+  // 原点が中心、+X が正面。orb = 掲げた闇の球を描くか。
+  function drawWarlockShape(r, cloth, eye, attacking, orb) {
+    const t = now();
+    const outline = "rgba(12,10,16,0.85)";
+    ctx.lineJoin = "round";
+    const swirl = ctx.createRadialGradient(0, 0, 2, 0, 0, r + 12);
+    swirl.addColorStop(0, "rgba(150,70,210,0.55)");
+    swirl.addColorStop(1, "rgba(150,70,210,0)");
+    ctx.fillStyle = swirl;
+    ctx.beginPath(); ctx.arc(0, 0, r + 12, 0, Math.PI * 2); ctx.fill();
+    // 後ろへ広がるローブ
+    ctx.fillStyle = cloth;
+    ctx.strokeStyle = outline; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(r * 0.7, 0);
+    ctx.quadraticCurveTo(0, -r * 1.05, -r * 1.25, -r * 0.75);
+    ctx.quadraticCurveTo(-r * 0.5, 0, -r * 1.25, r * 0.75);
+    ctx.quadraticCurveTo(0, r * 1.05, r * 0.7, 0);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    // フードの奥は真っ暗
+    ctx.fillStyle = "rgba(16,8,26,0.92)";
+    ctx.beginPath(); ctx.ellipse(r * 0.22, 0, r * 0.5, r * 0.48, 0, 0, Math.PI * 2); ctx.fill();
+    // 光る眼
+    ctx.fillStyle = eye;
+    ctx.beginPath(); ctx.arc(r * 0.35, -r * 0.2, 2.3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(r * 0.35, r * 0.2, 2.3, 0, Math.PI * 2); ctx.fill();
+    // 掲げた闇の球
+    if (orb) {
+      const glow = 0.55 + Math.sin(t * 0.006) * 0.25 + (attacking ? 0.4 : 0);
+      ctx.fillStyle = `rgba(190,110,255,${clamp(glow, 0, 1)})`;
+      ctx.beginPath(); ctx.arc(r * 1.15, r * 0.5, 4.4, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  // 勇者側でも闇術師と同じ姿を使う職業 (闇魔導士)。
+  // 見た目は魔物の闇術師そのものだが、手にした武器は持ち替えたものが出る。
+  function drawWarlockHero(s, c) {
+    const look = classDef(s.classKey).look;
+    const r = unitR(s);
+    const t = now();
+    const attacking = t - s.muzzle < 220;
+    // 魔物側の闇術師とまったく同じ色で描く。自分だけは金の縁取りで見分ける。
+    drawWarlockShape(r, look.robe, look.eye || look.trim, attacking, false);
+    if (s.id === G.localId) {
+      ctx.strokeStyle = YOU_ACCENT; ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(r * 0.7, 0);
+      ctx.quadraticCurveTo(0, -r * 1.05, -r * 1.25, -r * 0.75);
+      ctx.quadraticCurveTo(-r * 0.5, 0, -r * 1.25, r * 0.75);
+      ctx.quadraticCurveTo(0, r * 1.05, r * 0.7, 0);
+      ctx.closePath(); ctx.stroke();
+    }
+    drawHeldWeapon(s, WEAPONS[s.weapon], s.recoil * 0.6, look);
+    // 召喚の詠唱。押し続けている間、足元の闇が濃くなっていく。
+    const held = s.holdStart ? t - s.holdStart : 0;
+    if (s.summoner && held > 0 && !s.holdSummoned) {
+      const p = clamp(held / SUMMON_HOLD_MS, 0, 1);
+      ctx.save();
+      ctx.rotate(-s.aimAngle);
+      ctx.strokeStyle = `rgba(190,110,255,${0.25 + p * 0.6})`;
+      ctx.lineWidth = 2 + p * 2;
+      ctx.beginPath(); ctx.arc(0, 0, r + 8 + p * 10, -Math.PI / 2, -Math.PI / 2 + p * Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
+  }
+
   // 魔物の描画。種族ごとに輪郭・色・目つきを変える。
   // 小さく表示されても種類が分かるよう、暗い縁取りと「必ず見える武器」で
   // シルエットを立たせる。原点が中心、+X が正面。
@@ -6222,35 +7031,7 @@
     ctx.lineJoin = "round";
     const outline = "rgba(12,10,16,0.85)";
 
-    if (style === "warlock") {
-      // 闇術師: 浮遊するローブ。足はなく、闇が渦を巻く。
-      const swirl = ctx.createRadialGradient(0, 0, 2, 0, 0, r + 12);
-      swirl.addColorStop(0, "rgba(150,70,210,0.55)");
-      swirl.addColorStop(1, "rgba(150,70,210,0)");
-      ctx.fillStyle = swirl;
-      ctx.beginPath(); ctx.arc(0, 0, r + 12, 0, Math.PI * 2); ctx.fill();
-      // 後ろへ広がるローブ
-      ctx.fillStyle = look.cloth;
-      ctx.strokeStyle = outline; ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(r * 0.7, 0);
-      ctx.quadraticCurveTo(0, -r * 1.05, -r * 1.25, -r * 0.75);
-      ctx.quadraticCurveTo(-r * 0.5, 0, -r * 1.25, r * 0.75);
-      ctx.quadraticCurveTo(0, r * 1.05, r * 0.7, 0);
-      ctx.closePath(); ctx.fill(); ctx.stroke();
-      // フードの奥は真っ暗
-      ctx.fillStyle = "rgba(16,8,26,0.92)";
-      ctx.beginPath(); ctx.ellipse(r * 0.22, 0, r * 0.5, r * 0.48, 0, 0, Math.PI * 2); ctx.fill();
-      // 光る眼
-      ctx.fillStyle = look.eye;
-      ctx.beginPath(); ctx.arc(r * 0.35, -r * 0.2, 2.3, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(r * 0.35, r * 0.2, 2.3, 0, Math.PI * 2); ctx.fill();
-      // 掲げた闇の球
-      const orb = 0.55 + Math.sin(t * 0.006) * 0.25 + (attacking ? 0.4 : 0);
-      ctx.fillStyle = `rgba(190,110,255,${clamp(orb, 0, 1)})`;
-      ctx.beginPath(); ctx.arc(r * 1.15, r * 0.5, 4.4, 0, Math.PI * 2); ctx.fill();
-      return;
-    }
+    if (style === "warlock") { drawWarlockShape(r, look.cloth, look.eye, attacking, true); return; }
 
     if (style === "wraith") {
       // 亡霊騎士: 錆びた鎧と、裾が霧のように溶けた下半身
@@ -6722,7 +7503,17 @@
     const r = unitR(s);
     ctx.save();
     ctx.translate(s.x, s.y);
-    if (s.team === TEAM_FOE) {
+    // 召喚された魔物は、味方でも魔物の姿のまま描く
+    if (s.foeKey || s.boss) {
+      // 味方に呼ばれた僕は、足元の紫の環で見分けられるようにする
+      if (s.summon) {
+        const pulse = 0.35 + Math.sin(now() * 0.006 + s.id) * 0.15;
+        ctx.strokeStyle = `rgba(190,110,255,${pulse + 0.25})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(0, 0, r + 6, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = `rgba(150,70,210,${pulse * 0.5})`;
+        ctx.beginPath(); ctx.arc(0, 0, r + 6, 0, Math.PI * 2); ctx.fill();
+      }
       ctx.rotate(a);
       // 魔物の脚(ボスは自前の脚を持つ)
       if (!s.boss) {
@@ -6734,14 +7525,17 @@
       drawFoeBody(s);
     } else {
       // 脚 (歩行)。体の大きい職業は脚も同じ比率で大きくする。
-      const legSwing = s.moving ? Math.sin(s.legPhase) * 5 : 0;
-      const k = r / UNIT_R;
-      ctx.save();
-      ctx.rotate(a);
-      ctx.fillStyle = "#2a2a22";
-      ctx.fillRect(-4 * k, (-10 - legSwing * 0.3) * k, 9 * k, 6 * k);
-      ctx.fillRect(-4 * k, (4 + legSwing * 0.3) * k, 9 * k, 6 * k);
-      ctx.restore();
+      // 闇術師の姿を持つ職業は宙に浮いているので脚を描かない。
+      if (classDef(s.classKey).bodyStyle !== "warlock") {
+        const legSwing = s.moving ? Math.sin(s.legPhase) * 5 : 0;
+        const k = r / UNIT_R;
+        ctx.save();
+        ctx.rotate(a);
+        ctx.fillStyle = "#2a2a22";
+        ctx.fillRect(-4 * k, (-10 - legSwing * 0.3) * k, 9 * k, 6 * k);
+        ctx.fillRect(-4 * k, (4 + legSwing * 0.3) * k, 9 * k, 6 * k);
+        ctx.restore();
+      }
       ctx.rotate(a);
       drawHero(s, c);
     }
@@ -7608,6 +8402,14 @@
       mctx.fillStyle = kit.kind === "potion" ? "#62df7a" : kit.kind === "armor" ? "#65aaf0" : "#74e9e2";
       mctx.fillRect(kit.x * sx - 1, kit.y * sy - 1, 2, 2);
     }
+    // 宝箱は見つけていなくても位置が分かる(探索の目印)
+    if (G.chests) {
+      for (const chest of G.chests) {
+        if (chest.opened) continue;
+        mctx.fillStyle = chest.kind === "emblem" ? "#ffb84a" : "#ffd76a";
+        mctx.fillRect(chest.x * sx - 2, chest.y * sy - 2, 4, 4);
+      }
+    }
     // 勇者と魔物
     for (const s of G.units) {
       if (s.dead || s.vehicleId >= 0) continue;
@@ -7701,10 +8503,19 @@
     }
   }
 
+  let lastObjective = "";
   let lastFeedKey = "";
   function updateHUD() {
     const me = localUnit();
     updateTeamBoard();
+    if (advActive()) {
+      // 紋章の増減やボス討伐で目標文が変わるので、変化したときだけ書き換える
+      const text = objectiveText();
+      if (text !== lastObjective) { lastObjective = text; el.scoreGoal.textContent = text; }
+      interactBtn.textContent = "🎁 調べる";
+    } else {
+      interactBtn.textContent = "ゴーレム";
+    }
     const phase = dayPhase();
     el.daytime.textContent = phase.label;
     el.daytime.className = "daytime " + phase.key;
@@ -7795,9 +8606,18 @@
         }
         const hasThorns = (me.maxThorns || 0) > 0;
         const thornText = hasThorns ? `　🌿 ${me.thorns == null ? 0 : me.thorns}` : "";
+        // 召喚できる職業は、従えている数と呼べない理由を出す
+        let summonText = "";
+        if (me.summoner) {
+          const reason = summonBlockReason(me, now());
+          const note = reason === "full" ? "満員"
+            : reason === "cooldown" ? `${Math.ceil((me.summonReadyAt - now()) / 1000)}秒`
+            : reason === "mana" ? "魔力不足" : "長押しで召喚";
+          summonText = `　🌑 ${summonCount(me)}/${SUMMON_MAX}(${note})`;
+        }
         const label = ammoLabel(w);
         const ammoNote = label ? `${label}　` : "";
-        el.bomb.textContent = `${ammoNote}🔥 ${me.bombs == null ? 0 : me.bombs}　🔮 ${me.glyphs == null ? 0 : me.glyphs}${thornText}`;
+        el.bomb.textContent = `${ammoNote}🔥 ${me.bombs == null ? 0 : me.bombs}　🔮 ${me.glyphs == null ? 0 : me.glyphs}${thornText}${summonText}`;
         // 茨ボタンは茨を持つ職業のときだけ出す
         thornBtn.classList.toggle("hidden", !hasThorns);
       }
@@ -7846,7 +8666,13 @@
       }
 
       let hint = "";
-      if (!me.dead && golem) hint = isTouch ? "「ゴーレム」で降りる" : "E：ゴーレムから降りる";
+      // 冒険では足元の宝箱を最優先で知らせる
+      const chest = !me.dead ? advNearestChest(me) : null;
+      if (chest) {
+        const label = chest.kind === "emblem" ? `${ADV_EMBLEMS[chest.emblem].icon} ${ADV_EMBLEMS[chest.emblem].name}の宝箱` : "宝箱";
+        hint = isTouch ? `「🎁調べる」で${label}を開ける` : `E：${label}を開ける`;
+      }
+      else if (!me.dead && golem) hint = isTouch ? "「ゴーレム」で降りる" : "E：ゴーレムから降りる";
       else if (!me.dead && me.ballistaId >= 0) hint = isTouch ? "「ゴーレム」で砲台から離れる" : "E：魔導砲台から離れる";
       else if (!me.dead) {
         const nearby = G.golems.some((x) => !x.dead && x.team === me.team && x.driverId < 0 && dist2(me.x, me.y, x.x, x.y) < 78 ** 2);
@@ -8191,19 +9017,45 @@
   // ============================================================
   //  マッチ制御
   // ============================================================
+  // 冒険の大地は村から始まる。以降の土地は歩いて広げていく。
+  function startAdventure() {
+    G.adv = {
+      cx: ADV_HOME.x, cy: ADV_HOME.y,
+      regions: {}, emblems: {}, pending: null, mapOpen: false, sealNoteAt: -99999,
+    };
+    G.goal = GATE_MAX_HP;
+    const def = advRegionDef(ADV_HOME.x, ADV_HOME.y);
+    const rec = advRecord(ADV_HOME.x, ADV_HOME.y);
+    G.stage = def.stage.key;
+    G.obstacles = rec.obstacles;
+    G.pickups = rec.pickups;
+    G.chests = rec.chests;
+    G.bases = advMakeBases(def, rec);
+    rec.visited = true;
+    spawnTeams();
+    spawnBeasts();
+    advSpawnRoamers(def);
+    G.nextFoeAt = now() + ADV_FOE_INTERVAL;
+    banner(`${def.icon} ${def.name}　端まで歩けば隣の土地へ。地図はミニマップを押すか M キー`);
+  }
+
   function startSoloMatch() {
     mode = "sp";
     G = emptyState();
-    G.obstacles = genMap();
-    G.goal = GATE_MAX_HP;
-    spawnTeams();
-    spawnBeasts();
-    spawnGolems();
-    spawnBallistas();
-    spawnCreature();
-    spawnLava();
-    spawnDoomStaff();
-    spawnPickups();
+    if (STAGE_BY_KEY[playerStage] && STAGE_BY_KEY[playerStage].adventure) {
+      startAdventure();
+    } else {
+      G.obstacles = genMap();
+      G.goal = GATE_MAX_HP;
+      spawnTeams();
+      spawnBeasts();
+      spawnGolems();
+      spawnBallistas();
+      spawnCreature();
+      spawnLava();
+      spawnDoomStaff();
+      spawnPickups();
+    }
     el.scoreGoal.textContent = objectiveText();
     resize();
     hideOverlays();
@@ -8215,6 +9067,16 @@
 
   // HUD 上部の目標表示。進行に合わせて言い換える。
   function objectiveText() {
+    if (advActive()) {
+      const def = advHere();
+      const rec = advRecord(def.gx, def.gy);
+      const seal = `紋章 ${advEmblemCount()}/${ADV_EMBLEM_ORDER.length}`;
+      if (def.boss && !rec.bossDead) {
+        return `${def.icon} ${def.name}　門を破壊 → ${BOSSES[def.boss].name} を討伐（${seal}）`;
+      }
+      if (advSealOpen()) return `${def.icon} ${def.name}　封印は解けた → 魔王の玉座へ（${seal}）`;
+      return `${def.icon} ${def.name}　紋章を集めて魔王の玉座へ（${seal}）`;
+    }
     if (isTraining()) return "練習メニューを順番にこなそう";
     const boss = bossDef();
     return boss ? `魔界の門を破壊 → ${boss.name} を討伐` : "魔界の門を破壊し、魔物を一掃";
@@ -8246,21 +9108,28 @@
     if (!G.rewardClaimed) {
       G.rewardClaimed = true;
       if (win) {
-        reward = WIN_REWARD;
+        reward = advActive() ? WIN_REWARD * 2 : WIN_REWARD;
         money += reward;
-        // 章を踏破すると次の章が解放される
-        if (stage.chapter && stage.chapter > clearedChapter) {
+        // 章を踏破すると次の章が解放される。冒険の踏破は全ての章を解放する。
+        if (advActive()) {
+          if (clearedChapter < 3) { clearedChapter = 3; newlyCleared = true; }
+        } else if (stage.chapter && stage.chapter > clearedChapter) {
           clearedChapter = stage.chapter;
           newlyCleared = true;
         }
         saveProgress();
       }
     }
-    const next = win ? nextChapterStage(stage) : null;
+    const adventure = advActive();
+    const next = win && !adventure ? nextChapterStage(stage) : null;
     const boss = bossDef();
-    el.resultTitle.textContent = win ? (stage.chapter ? `${stage.name} 踏破！ 🏆` : "魔境を制覇！ 🏆") : "全滅…";
+    el.resultTitle.textContent = adventure
+      ? (win ? "魔王を討ち取った！ 🏆" : "冒険はここまで…")
+      : win ? (stage.chapter ? `${stage.name} 踏破！ 🏆` : "魔境を制覇！ 🏆") : "全滅…";
     el.resultTitle.style.color = win ? "#8cf06a" : "#ff7a6a";
-    const unlockNote = newlyCleared && next ? `　▶ ${next.name} が解放されました` : "";
+    const unlockNote = adventure
+      ? (newlyCleared ? "　▶ すべての章と職業が解放されました" : "")
+      : newlyCleared && next ? `　▶ ${next.name} が解放されました` : "";
     el.rewardSummary.textContent = win ? `勝利報酬 +${reward || WIN_REWARD} G${unlockNote}` : `勝利すると ${WIN_REWARD} G 獲得できます`;
     el.rewardSummary.classList.toggle("win", win);
     // 次の章がある勝利では、そのまま続けて挑めるようにする
@@ -8274,7 +9143,15 @@
 
     const gate = G.bases[TEAM_FOE];
     const bossKilled = G.bossSummoned && !G.units.some((s) => s.boss && !s.dead);
-    const table = [
+    const advTable = advActive() ? [
+      ["訪れた土地", `${Object.values(G.adv.regions).filter((r) => r.visited).length} / ${ADV_REGIONS.length}`, true],
+      ["集めた紋章", `${advEmblemCount()} / ${ADV_EMBLEM_ORDER.length}`, advSealOpen()],
+      ["開けた宝箱", `${Object.values(G.adv.regions).reduce((n, r) => n + r.chests.filter((c) => c.opened).length, 0)} 個`, true],
+      ["倒した魔物", `${G.foesSlain} 体`, G.foesSlain > 0],
+    ] : null;
+    const table = advTable ? advTable.map(([name, value, good]) =>
+      `<div class="row"><span>${esc(name)}</span><b style="color:${good ? "#8cf06a" : "#ff9a8d"}">${esc(value)}</b></div>`
+    ).join("") : [
       ["魔界の門", gate && gate.hp > 0 ? `健在 ${Math.ceil(gate.hp)}` : "破壊", gate && gate.hp <= 0],
       [boss ? boss.name : "ボス", !G.bossSummoned ? "未出現" : bossKilled ? "討伐" : "健在", bossKilled],
       ["勇者の祭壇", teamAlive(TEAM_HERO) ? `健在 ${Math.ceil(G.bases[TEAM_HERO].hp)}` : "破壊", teamAlive(TEAM_HERO)],
@@ -8319,12 +9196,12 @@
   // パーティが全滅したら一度だけ「観戦する / やめる」を聞く。
   // 試合は止めない(オンラインでは他のプレイヤーが戦い続けているため)。
   function checkElimination() {
-    if (!G || G.over || isTraining() || eliminationPrompted || spectating) return;
+    if (!G || G.over || isTraining() || advActive() || eliminationPrompted || spectating) return;
     const me = localUnit();
     if (!me || !me.dead) return;
     const team = me.team;
     if (teamAlive(team)) return;
-    if (G.units.some((s) => s.team === team && !s.dead)) return;
+    if (G.units.some((s) => s.team === team && !s.dead && !s.summon)) return;
     eliminationPrompted = true;
     el.eliminatedDetail.textContent =
       "祭壇を失い、仲間も倒れました。もう復活はできません。魔物の軍勢が魔境を覆います。";
@@ -9197,14 +10074,15 @@
 
     // ステージ
     const savedStage = localStorage.getItem("mr-stage");
-    playerStage = STAGE_BY_KEY[savedStage] ? savedStage : "ruins";
+    playerStage = STAGE_BY_KEY[savedStage] ? savedStage : "adventure";
     function renderStageButtons() {
       el.stageSeg.innerHTML = STAGES.map((st) => {
         const open = chapterUnlocked(st);
         const lock = open ? "" : `<span class="stage-lock">🔒 前の章をクリアすると挑めます</span>`;
         const done = st.chapter && st.chapter <= clearedChapter ? `<span class="stage-clear">踏破済み</span>` : "";
+        const tag = st.adventure ? `<span class="stage-clear">おすすめ</span>` : "";
         return `<button data-stage="${st.key}"${open ? "" : " disabled"}>` +
-          `<span class="class-head">${st.icon} ${esc(st.name)}${done}</span>` +
+          `<span class="class-head">${st.icon} ${esc(st.name)}${done}${tag}</span>` +
           `<span class="class-desc">${esc(st.desc)}</span>${lock}</button>`;
       }).join("");
     }
@@ -9212,17 +10090,21 @@
     function syncStageButtons() {
       // 未解放の章を選んだままにしない
       const cur = STAGE_BY_KEY[playerStage];
-      if (cur && !chapterUnlocked(cur)) playerStage = "ruins";
+      if (cur && !chapterUnlocked(cur)) playerStage = "adventure";
       el.stageSeg.querySelectorAll("button").forEach((b) => {
         b.classList.toggle("on", b.dataset.stage === playerStage);
       });
     }
-    // 訓練の間は1人用なので、選んでいる間はギルドを伏せる
+    // 訓練の間と冒険の大地は1人用なので、選んでいる間はギルドを伏せる
     const onlineBtn = document.getElementById("btn-online");
     function syncOnlineAvailability() {
-      const solo = stageIsTraining(playerStage);
+      const st = STAGE_BY_KEY[playerStage];
+      const adventure = !!(st && st.adventure);
+      const solo = stageIsTraining(playerStage) || adventure;
       onlineBtn.disabled = solo;
-      onlineBtn.textContent = solo ? "🏰 ギルド（訓練の間では使えません）" : "🏰 ギルド（みんなで挑む）";
+      onlineBtn.textContent = solo
+        ? `🏰 ギルド（${adventure ? "冒険の大地" : "訓練の間"}では使えません）`
+        : "🏰 ギルド（みんなで挑む）";
     }
     el.stageSeg.addEventListener("click", (e) => {
       const b = e.target.closest && e.target.closest("[data-stage]");
