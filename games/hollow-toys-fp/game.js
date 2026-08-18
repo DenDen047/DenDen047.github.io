@@ -7388,43 +7388,6 @@
     requestAnimationFrame(loop);
   }
 
-  // === TEMP DEBUG HOOK (removed after verification) ===
-  window.__dbg = {
-    get player() { return player; },
-    get enemies() { return enemies; },
-    get props() { return props; },
-    get items() { return items; },
-    get map() { return map; },
-    get stalker() { return stalker; },
-    get state() { return state; },
-    setState: (v) => setState(v),
-    startFloorIdx: (i) => { run.floorIdx = i; startFloor(); },
-    spawnBossNow: () => { run.floorIdx = FLOORS.length; startFloor(); },
-    place: (x, y, a) => { player.x = x; player.y = y; if (a !== undefined) { lookYaw = a; player.aim = a; } },
-    warpTo: (kind) => {
-      const r = map.rooms.find((rr) => rr.kind === kind) || map.rooms[0];
-      const p2 = findOpen(map, r, 20);
-      player.x = p2.x; player.y = p2.y;
-      return r.kind;
-    },
-    lureEnemy: () => {
-      let best = null, bd = 1e9;
-      for (const e of enemies) { if (e.dead) continue; const d = dist2(e.x, e.y, player.x, player.y); if (d < bd) { bd = d; best = e; } }
-      if (!best) return null;
-      const a = rnd(TAU);
-      best.x = player.x + Math.cos(a) * 130; best.y = player.y + Math.sin(a) * 130;
-      lookYaw = Math.atan2(best.y - player.y, best.x - player.x); player.aim = lookYaw;
-      best.state = 'chase'; best.lastSeen = { x: player.x, y: player.y };
-      return best.kind;
-    },
-    lureStalker: () => {
-      if (!stalker) return null;
-      stalker.x = player.x + 150; stalker.y = player.y;
-      lookYaw = 0; player.aim = 0;
-      return stalker.def.id;
-    },
-  };
-
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();
