@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>HOLLOW TOYS ― 廃墟のおもちゃ工場</title>
-  <meta name="description" content="懐中電灯ひとつで廃墟のおもちゃ工場に潜る2Dサバイバルホラー。壁で遮られる光、正気度、バッテリー管理。5人のキャラクターから選んで3フロアを踏破し、マザーを止める。">
+  <title>HOLLOW TOYS ― 閉店したピザ店の夜</title>
+  <meta name="description" content="懐中電灯ひとつで閉店したファミリーピザ店に忍び込む2Dサバイバルホラー。壁で遮られる光、正気度、バッテリー管理。動き出したアニマトロニクスから逃げ、7人のキャラクターから選んで3フロアを踏破する。着ぐるみのスプリングトラップとゴールドベアは、相手をクリックして威嚇し追い払う。">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -15,7 +15,7 @@
     <!-- ===== HUD ===== -->
     <div id="hud" class="hidden">
       <div class="hud-top">
-        <div class="floor-chip"><span id="hud-floor">B1 組立ライン</span></div>
+        <div class="floor-chip"><span id="hud-floor">1F ダイニングホール</span></div>
         <div class="objective" id="hud-objective">🔌 ヒューズ <b>0/3</b></div>
       </div>
 
@@ -95,13 +95,13 @@
       <div class="title-wrap">
         <div class="title-sub">SURVIVAL HORROR</div>
         <h1 class="title-main"><span class="flick">HOLLOW</span> TOYS</h1>
-        <div class="title-jp">廃墟のおもちゃ工場</div>
+        <div class="title-jp">閉店したピザ店の夜</div>
         <p class="title-lead">
-          十年前に止まったはずのラインが、また動いている。<br>
+          十年前に閉店したはずの店で、ステージの照明がまた点いている。<br>
           手にあるのは懐中電灯ひとつ。光の届かないところに、あれはいる。
         </p>
         <div class="title-btns">
-          <button id="btn-start" class="btn primary">工場へ入る</button>
+          <button id="btn-start" class="btn primary">店へ入る</button>
           <button id="btn-title-help" class="btn">あそびかた</button>
         </div>
         <div class="title-foot">推奨: PC (キーボード + マウス) ／ スマホはタッチ操作に自動対応</div>
@@ -112,7 +112,7 @@
     <div id="screen-select" class="screen">
       <div class="panel wide">
         <h2 class="panel-title">同行者を選ぶ</h2>
-        <p class="panel-lead">全員が懐中電灯を持っている。違うのは、その先で何ができるかだ。</p>
+        <p class="panel-lead">全員が懐中電灯を持っている。違うのは、その先で何ができるかだ。<br>着ぐるみのふたりは殴らない。相手をクリックして威嚇し、追い払う。</p>
         <div id="char-list" class="char-list"></div>
         <div class="select-footer">
           <div class="diff-block">
@@ -138,7 +138,7 @@
     <!-- ===== 休憩室(強化) ===== -->
     <div id="screen-safe" class="screen dark">
       <div class="panel wide">
-        <h2 class="panel-title">非常階段の踊り場</h2>
+        <h2 class="panel-title">従業員用の非常階段</h2>
         <p class="panel-lead">扉を閉めた。ここまでは、まだ来ない。ひとつだけ持ち出せる。</p>
         <div id="safe-info" class="safe-info"></div>
         <div id="upgrade-list" class="upgrade-list"></div>
@@ -156,7 +156,7 @@
     <!-- ===== 死亡 ===== -->
     <div id="screen-over" class="screen dark">
       <div class="panel">
-        <h2 class="panel-title dead">検 品 完 了</h2>
+        <h2 class="panel-title dead">閉 店 で す</h2>
         <div id="over-body"></div>
         <div class="panel-btns">
           <button id="btn-change" class="btn">キャラを変える</button>
@@ -186,16 +186,16 @@
             <ul class="keys">
               <li><b>WASD / ←↑↓→</b>移動</li>
               <li><b>マウス</b>懐中電灯を向ける</li>
-              <li><b>左クリック</b>近接攻撃</li>
+              <li><b>左クリック</b>近接攻撃（着ぐるみ勢は威嚇。狙った相手が逃げ出す）</li>
               <li><b>右クリック長押し</b>集束照射（敵をひるませる・電池を大量に食う）</li>
               <li><b>Shift</b>走る（足音が大きい）</li>
               <li><b>Ctrl / C</b>しゃがみ歩き（静か・見つかりにくい）</li>
               <li><b>F</b>ライト ON / OFF</li>
-              <li><b>E</b>調べる・拾う・ロッカーに隠れる</li>
+              <li><b>E</b>調べる・拾う・ロッカーやトイレの個室に隠れる</li>
               <li><b>Q</b>固有アビリティ</li>
               <li><b>Space / G</b>グラップパック（入手後）</li>
               <li><b>V 長押し</b>息を止める（足音・呼吸音が消える）</li>
-              <li><b>X</b>ぬいぐるみを脱ぐ</li>
+              <li><b>X</b>着ぐるみを脱ぐ</li>
               <li><b>Tab</b>ステージ全体マップ</li>
               <li><b>R</b>包帯を使う</li>
               <li><b>T</b>鎮静剤を使う</li>
@@ -213,17 +213,28 @@
             <h3>光は武器であり、旗でもある</h3>
             <ul class="tips">
               <li>光は壁でさえぎられる。角の向こうは本当に見えない。</li>
-              <li><b>躄り人形</b>は光を当てている間だけ止まる。目を離した分だけ近づく。</li>
+              <li><b>海賊ギツネ ラスティ</b>は光を当てている間だけ止まる。目を離した分だけ走って詰めてくる。</li>
               <li>ライトを点けていると、敵からも見つかりやすい。消して忍ぶ判断も要る。</li>
-              <li>追われたら<b>ロッカー</b>に隠れる。見失わせられる。</li>
+              <li>追われたら<b>ロッカー</b>や<b>トイレの個室</b>に隠れる。見失わせられる。</li>
               <li>章のボスは倒せない。<b>右クリックの集束光</b>を顔に当てれば数秒だけ足が止まる。</li>
+            </ul>
+            <h3>着ぐるみのふたり</h3>
+            <ul class="tips">
+              <li><b>スプリングトラップ</b>黄色いうさぎ。相手に向かって<b>クリック</b>すると威嚇し、同時に3体まで逃げ出させる。Q でその場の全員を散らす。</li>
+              <li><b>ゴールドベア</b>金のクマ。効くのは1体だけだが、逃げている時間がとても長い。Q の間は、正面で目が合った個体が片端から逃げていく。</li>
+              <li>どちらも着ぐるみ姿なので、遠目には仲間だと思われて見つかりにくい。代わりに、殴って倒す手段を持たない。</li>
             </ul>
             <h3>チャプター</h3>
             <ul class="tips">
-              <li><b>第1章 組立ライン</b>ヒューズ3本と<b>グラップパック</b>を集めて逃げる。ゼンマイ巡査が徘徊している。</li>
-              <li><b>第2章 塗装・検品室</b>検品長が言いつける3つの仕事をこなす。断る手段はない。</li>
-              <li><b>第3章 保管庫</b>再び逃走。ネムリネコは速く、赤い眠り煙を撒く。</li>
-              <li><b>最終章 焼却炉ホール</b>ここだけは戦う。ブレーカー4基で装甲をこじ開ける。</li>
+              <li><b>第1章 1F ダイニングホール</b>ヒューズ3本と<b>グラップパック</b>を集めて逃げる。夜警のベアが店内を巡回している。</li>
+              <li><b>第2章 2F パーティルーム</b>プライズ係のマリオネットが言いつける3つの仕事をこなす。断る手段はない。</li>
+              <li><b>第3章 B1 パーツ&amp;サービス</b>再び逃走。マングルドは速く、赤い静電ガスを撒く。</li>
+              <li><b>最終章 B2 ボイラー室</b>ここだけは戦う。ブレーカー4基で装甲をこじ開ける。</li>
+            </ul>
+            <h3>部屋</h3>
+            <ul class="tips">
+              <li>ショーステージ・海賊の入り江・厨房・ゲームコーナー・トイレ・パーティルーム・プライズコーナー・ボールピット・バックステージ・パーツ&amp;サービス・機械室・倉庫・事務室・ロッカー室・廊下。フロアごとに出てくる部屋が変わる。</li>
+              <li>床に残ったクレヨンの落書き、片方だけの運動靴、立ったままのろうそく。<b>子どもがいた痕跡</b>は、探すほど見つかる。</li>
             </ul>
             <h3>グラップパック</h3>
             <ul class="tips">
@@ -236,7 +247,7 @@
               <li><b>人型の表示</b>どこを痛めたかが分かる。脚は移動が遅くなり、腕は攻撃が鈍り、頭は正気度が削れやすくなる。包帯はいちばん深い傷から手当てする。</li>
               <li><b>肺の表示</b>走る・怖い・傷が深いほど息が上がる。息が荒いと近くの敵に聞こえる。</li>
               <li><b>V を長押し</b>で息を止められる。酸素が尽きると大きく喘いで居場所がばれる。</li>
-              <li><b>ぬいぐるみ</b>中身の抜けた玩具に潜り込むと、敵は仲間だと思う。ただし走ると見破られる。</li>
+              <li><b>空の着ぐるみ</b>中身の抜けた予備の着ぐるみに潜り込むと、敵は仲間だと思う。ただし走ると見破られる。</li>
             </ul>
           </div>
         </div>
