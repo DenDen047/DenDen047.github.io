@@ -690,3 +690,208 @@ body.touch-ui .vehicle-hint { bottom: 226px; }
 /* 観戦中は自分用の HUD を隠す */
 body.spectating .hud-bottom,
 body.spectating .weapon { display: none; }
+
+/* ===== 拠点（庭） ===== */
+.garden-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+}
+.garden-hud.hidden { display: none; }
+.garden-bar {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(10, 14, 8, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+.garden-bar .gb-title { color: var(--you); letter-spacing: 0.08em; }
+.garden-bar .gb-wallet { color: #d8dfbd; }
+.garden-bar .gb-wallet b { color: #fff; }
+.garden-bar .ui-btn { position: static; width: auto; height: auto; padding: 4px 10px; font-size: 11px; border-radius: 999px; }
+.garden-prompt {
+  position: absolute;
+  left: 50%;
+  bottom: 76px;
+  transform: translateX(-50%);
+  padding: 9px 18px;
+  border-radius: 12px;
+  background: rgba(10, 14, 8, 0.9);
+  border: 1px solid rgba(255, 210, 63, 0.5);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+.garden-prompt.hidden { display: none; }
+.garden-prompt em { display: block; margin-top: 2px; font-style: normal; font-size: 11px; font-weight: 600; color: #c6c9b6; }
+.garden-help {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  margin: 0;
+  font-size: 11px;
+  color: rgba(232, 232, 223, 0.6);
+  white-space: nowrap;
+}
+body.touch-ui .garden-help { display: none; }
+
+#garden-touch { position: absolute; inset: 0; z-index: 7; pointer-events: none; }
+#garden-touch.hidden { display: none; }
+#garden-touch #stick-garden { position: absolute; left: 20px; bottom: 20px; pointer-events: auto; }
+#garden-touch #g-enter {
+  position: absolute;
+  right: 24px;
+  bottom: 46px;
+  pointer-events: auto;
+  min-width: 96px;
+}
+
+/* ===== 拠点の各施設パネル ===== */
+.hub-panel { width: min(680px, 96vw); }
+.hub-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.hub-head h2 { margin: 0 0 8px; }
+.wallet-row { display: flex; gap: 12px; font-size: 12px; font-weight: 700; color: #d8dfbd; }
+.wallet-row b { color: var(--you); font-size: 15px; }
+
+.hub-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.hub-tabs button {
+  flex: 1 1 auto;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #d8dfbd;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.hub-tabs button.on { background: rgba(255, 210, 63, 0.14); border-color: var(--you); color: var(--you); }
+
+.shop-item.wide { grid-template-columns: 30px minmax(0, 1fr) auto; }
+.shop-item .tag {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 8px;
+  font-weight: 800;
+  vertical-align: middle;
+}
+.shop-item .tag.own { background: rgba(110, 220, 130, 0.2); color: #9fe78b; }
+.shop-item .tag.rar5 { background: rgba(255, 210, 63, 0.22); color: #ffd23f; }
+.shop-item .tag.rar4 { background: rgba(167, 107, 255, 0.22); color: #c79cff; }
+.shop-buy.owned { border-color: rgba(110, 220, 130, 0.4); color: #9fe78b; background: rgba(110, 220, 130, 0.08); }
+.swatch { display: inline-block; width: 22px; height: 12px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.35); vertical-align: middle; }
+
+/* 作業台 */
+.bench-weapons { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; margin-bottom: 10px; }
+.bench-weapons button {
+  padding: 8px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #e8e8df;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+.bench-weapons button.on { border-color: var(--you); background: rgba(255, 210, 63, 0.13); color: var(--you); }
+.bench-weapons button i { display: block; font-style: normal; font-size: 9px; opacity: 0.7; margin-top: 2px; }
+.bench-detail { text-align: left; }
+.bench-slot { margin-bottom: 10px; }
+.bench-slot > b { display: block; font-size: 11px; color: var(--you); margin-bottom: 4px; }
+.bench-opts { display: flex; flex-wrap: wrap; gap: 5px; }
+.bench-opts button {
+  padding: 6px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #d8dfbd;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.bench-opts button.on { border-color: var(--you); background: rgba(255, 210, 63, 0.14); color: var(--you); }
+.bench-opts button:disabled { opacity: 0.4; cursor: default; }
+.bench-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 4px 10px; margin: 8px 0 4px; font-size: 10px; color: #c6c9b6; }
+.bench-stats span b { color: #f2f2e8; }
+.bench-stats span.up b { color: #9fe78b; }
+.bench-stats span.down b { color: #ff9a8d; }
+
+/* 鍛冶場 */
+.forge-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 7px; }
+.forge-group { grid-column: 1 / -1; margin: 6px 0 0; font-size: 11px; font-weight: 800; color: var(--you); text-align: left; }
+
+/* ガチャ */
+.gacha-actions { display: flex; flex-direction: column; gap: 7px; margin: 10px 0 4px; }
+.gacha-result { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 7px; margin: 6px 0 4px; }
+.gacha-result.hidden { display: none; }
+.gacha-card {
+  padding: 9px 6px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  animation: gacha-pop 0.35s ease;
+}
+.gacha-card.r4 { border-color: rgba(167, 107, 255, 0.7); background: rgba(167, 107, 255, 0.12); }
+.gacha-card.r5 { border-color: var(--you); background: rgba(255, 210, 63, 0.14); box-shadow: 0 0 16px rgba(255, 210, 63, 0.3); }
+.gacha-card .gc-icon { display: block; font-size: 26px; }
+.gacha-card .gc-name { display: block; font-size: 10px; font-weight: 800; margin-top: 2px; }
+.gacha-card .gc-star { display: block; font-size: 9px; color: var(--you); }
+.gacha-card .gc-note { display: block; font-size: 9px; margin-top: 2px; color: #9fe78b; }
+.gacha-card .gc-note.dup { color: #c6c9b6; }
+@keyframes gacha-pop { from { transform: scale(0.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.gacha-roster { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 5px; margin: 10px 0; }
+.gacha-roster .gr {
+  padding: 6px 4px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 9px;
+  color: #c6c9b6;
+}
+.gacha-roster .gr.got { background: rgba(255, 210, 63, 0.1); color: #f2f2e8; }
+.gacha-roster .gr b { display: block; font-size: 18px; }
+
+/* 編成テント */
+.squad-chars { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin-bottom: 12px; }
+.squad-chars button {
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #e8e8df;
+  cursor: pointer;
+  text-align: left;
+}
+.squad-chars button.on { border-color: var(--you); background: rgba(255, 210, 63, 0.13); }
+.squad-chars button:disabled { opacity: 0.42; cursor: default; }
+.squad-chars .sc-head { display: block; font-size: 12px; font-weight: 800; }
+.squad-chars button.on .sc-head { color: var(--you); }
+.squad-chars .sc-star { font-size: 9px; color: var(--you); margin-left: 4px; }
+.squad-chars .sc-desc { display: block; margin-top: 3px; font-size: 9px; line-height: 1.3; color: #c6c9b6; }
+.squad-loadout { text-align: left; }
+.squad-slot { margin-bottom: 9px; }
+.squad-slot > b { display: block; font-size: 11px; color: var(--you); margin-bottom: 4px; }
+
+@media (max-width: 560px) {
+  .hub-panel { padding: 18px 14px 20px; }
+  .forge-items, .squad-chars { grid-template-columns: 1fr; }
+  .bench-weapons { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.swatch.big { width: 26px; height: 20px; border-radius: 5px; }

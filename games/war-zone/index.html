@@ -71,6 +71,25 @@
       <!-- 実績獲得の通知 -->
       <div id="medal-toast" class="medal-toast hidden"></div>
 
+      <!-- ===== 拠点（庭）のHUD ===== -->
+      <div id="garden-hud" class="garden-hud hidden">
+        <div class="garden-bar">
+          <span class="gb-title">🏕 拠点</span>
+          <span class="gb-wallet">💰 <b data-wallet-money>0</b> G</span>
+          <span class="gb-wallet">🔩 <b data-wallet-scrap>0</b></span>
+          <span class="gb-wallet">🎫 <b data-wallet-ticket>0</b></span>
+          <button id="btn-garden-menu" class="ui-btn">≡ メニュー</button>
+        </div>
+        <div id="garden-prompt" class="garden-prompt hidden"></div>
+        <p class="garden-help">WASD / 矢印キーで歩く　建物に近づいて E で入る</p>
+      </div>
+
+      <!-- ===== 拠点のタッチ操作 ===== -->
+      <div id="garden-touch" class="hidden">
+        <div id="stick-garden" class="stick"><div class="knob"></div></div>
+        <button id="g-enter" class="tbtn action">入る</button>
+      </div>
+
       <!-- ===== タッチ操作 (スマホ) ===== -->
       <div id="touch" class="hidden">
         <div id="stick-move" class="stick"><div class="knob"></div></div>
@@ -135,6 +154,7 @@
               <button data-diff="hard">むずかしい</button>
             </div>
           </div>
+          <button id="btn-garden" class="big-btn">🏕 拠点へ（ショップ・作業台・ガチャ）</button>
           <button id="btn-medals" class="big-btn">🎖 実績（メダル）</button>
           <button id="btn-controls" class="big-btn">🎮 操作方法</button>
         </div>
@@ -206,6 +226,7 @@
               <li><b>Q</b> … 攻撃直前に押してパリィ / 長押しで防御</li>
               <li><b>1〜3</b> / ホイール … 武器切替（持てる武器はキャラごとに固定）</li>
               <li><b>Shift</b> … ダッシュ</li>
+              <li><b>WASD / E</b> … 拠点（庭）を歩く / 建物に入る</li>
             </ul>
           </div>
           <div>
@@ -254,6 +275,30 @@
         <p class="help-rpg"><b>昼と夜</b>：時間が進むと朝→昼→夕方→夜と移り変わります。<b>朝のあいだは夜明けの光で戦場全体が見渡せ</b>、敵の位置がすべて分かります。昼は遠くまで見通せ、夜は視界がぐっと狭まるので奇襲のチャンスです。</p>
         <p class="help-rpg"><b>降下</b>：試合はソロ戦のとき、輸送機からのパラシュート降下で始まります。降りている間は攻撃も被弾もできませんが、移動キーで少しだけ流されるように動けます。着地したところが最初の位置になります。</p>
 
+        <h3 style="margin-top:6px">拠点（ショップ・作業台・鍛冶場・徴兵ガチャ）</h3>
+        <p class="help-rpg">メニューの<b>「🏕 拠点へ」</b>から、自分の陣地を歩き回れます。<b>WASD / 矢印キー</b>で歩き、建物の入口に近づいて <b>E キー</b>（スマホは「入る」ボタン）を押すと中に入れます。試合の結果画面からも直接行けます。</p>
+        <ul class="help-classes">
+          <li><b>🏪 補給ショップ</b> … 5つのタブに分かれています。<b>強化</b>は最大HPや装甲などの底上げ、<b>武器</b>は新しい銃・弓・近接武器、<b>部品</b>はアタッチメント、<b>塗装</b>は武器の色、<b>矢</b>は弓で撃つ矢です。お金（G）は試合に勝つとたまります。</li>
+          <li><b>🔧 作業台</b> … 買ったアタッチメントを武器に取り付け、好きな色に塗るところです。武器を選ぶと、取り付けで数値がどれだけ変わるかが緑（良くなる）と赤（悪くなる）で出ます。一度買った部品は、何度でもどの武器にも付け替えられます。</li>
+          <li><b>⚒ 鍛冶場</b> … <b>廃材</b>と所持金で鎧を作ります。廃材は試合で敵を倒すとたまります。兜・胴鎧・具足の3部位があり、それぞれ1つ装備できます。上の段の鎧は、下の段を作ってからでないと作れません。</li>
+          <li><b>🎲 徴兵所</b> … チケットで新しいキャラクターを引きます。チケットは試合に勝つともらえ、お金でも買えます。すでに仲間のキャラが出たら<b>練度</b>が上がり、そのキャラの最大HPと攻撃力が5%ずつ伸びます（最大5回）。仲間にしたキャラの装備武器は、買わなくても使えるようになります。</li>
+          <li><b>📋 編成テント</b> … 出撃するキャラクターと、持っていく3つの武器を決めます。数字キーの1〜3がこの並び順に対応します。侍のような近接専門のキャラは銃を選べません。</li>
+          <li><b>🚩 出撃ゲート</b> … メニューへ戻ります。</li>
+        </ul>
+
+        <h3 style="margin-top:6px">アタッチメント</h3>
+        <p class="help-rpg">銃と弓には<b>照準器・銃身・弾倉・下部レール</b>の4か所に部品を付けられます（近接武器には付きません）。同じ場所には1つだけです。</p>
+        <ul class="help-classes">
+          <li><b>🔴 ドットサイト / 🔭 倍率スコープ / 📡 レーダー</b>（照準器）… レーダーは半径620以内の敵を、<b>壁の裏にいてもミニマップに映します</b>。ミニマップに青い輪が出ているときは効いています。</li>
+          <li><b>🤫 サプレッサー / 🔩 ヘビーバレル / 🔥 マズルブレーキ</b>（銃身）… サプレッサーを付けると<b>銃声が消え、撃っても位置がバレません</b>。</li>
+          <li><b>📦 拡張マガジン / ⚡ クイックマグ / 🛡 徹甲弾</b>（弾倉）… 装弾数・リロードの速さ・貫通が変わります。</li>
+          <li><b>🔫 アンダーバレルSMG / 🔺 レーザーサイト / 🖐 フォアグリップ</b>（下部レール）… アンダーバレルSMGは<b>撃つたびに9mm弾をもう1発おまけで発射</b>します。弾も矢も減りません。</li>
+        </ul>
+
+        <h3 style="margin-top:6px">弓と矢</h3>
+        <p class="help-rpg"><b>軍用弓</b>と<b>クロスボウ</b>はショップで買えます。弾倉ではなく<b>矢</b>を消費し、<b>撃っても音がしない</b>ので位置がバレません。矢もショップで10本ずつ買い、出撃するときに<b>矢筒の容量ぶんだけ</b>持ち出します。撃たずに残った矢は帰ってくると戻ります。</p>
+        <p class="help-rpg">矢は3種類あります。<b>標準矢</b>は安く、<b>貫通矢</b>は敵を2体多く貫き、<b>爆裂矢</b>は当たると爆発して戦車や基地にも効きます。どれを持っていくかは編成テントで選びます。矢筒の容量はショップの<b>大型矢筒</b>で増やせます。試合中に矢が足りなくなったら、<b>自分の基地に戻ると残っている矢を補給</b>できます。試合が終わるたびに標準矢が8本支給されるので、矢が尽きて何もできなくなることはありません。</p>
+
         <h3 style="margin-top:6px">ミッションと実績（メダル）</h3>
         <p class="help-rpg">「1試合で20体倒す」「暗黒の森で勝つ」といった<b>ミッション</b>があり、達成すると<b>メダル</b>がもらえます。集めたメダルはメニューの<b>「🎖 実績（メダル）」</b>に貯まっていきます。まだ取っていないメダルも条件が見えるので、次の目標にしてください。練習場での戦果は数えません（訓練のメダルだけは練習場で取れます）。</p>
 
@@ -271,18 +316,99 @@
         <h2 id="result-title">勝利！</h2>
         <div id="reward-summary" class="reward-summary"></div>
         <div id="result-stats" class="result-stats"></div>
-        <section class="shop-panel" aria-labelledby="shop-title">
-          <div class="shop-head">
-            <h3 id="shop-title">補給ショップ</h3>
-            <span>所持金 <b id="shop-money">0</b> G</span>
-          </div>
-          <p class="shop-note">購入した強化は次の試合から適用されます。</p>
-          <div id="shop-items" class="shop-items"></div>
-          <p id="shop-message" class="shop-message" aria-live="polite"></p>
-        </section>
-        <button id="btn-again" class="big-btn primary">もう一度</button>
+        <button id="btn-result-garden" class="big-btn primary">🏕 拠点でそなえる（買い物・作業台・ガチャ）</button>
+        <button id="btn-again" class="big-btn">もう一度</button>
         <button id="btn-result-medals" class="big-btn">🎖 実績（メダル）を見る</button>
         <button id="btn-tomenu" class="big-btn">メニューへ</button>
+      </div>
+    </div>
+
+    <!-- ===== 補給ショップ ===== -->
+    <div id="shop" class="overlay hidden">
+      <div class="panel hub-panel">
+        <div class="hub-head">
+          <h2>🏪 補給ショップ</h2>
+          <div class="wallet-row">
+            <span>💰 <b data-wallet-money>0</b> G</span>
+            <span>🔩 <b data-wallet-scrap>0</b></span>
+            <span>🎫 <b data-wallet-ticket>0</b></span>
+          </div>
+        </div>
+        <div id="shop-tabs" class="hub-tabs"></div>
+        <p id="shop-note" class="shop-note"></p>
+        <div id="shop-items" class="shop-items"></div>
+        <p id="shop-message" class="shop-message" aria-live="polite"></p>
+        <button id="btn-shop-close" class="big-btn primary">とじる</button>
+      </div>
+    </div>
+
+    <!-- ===== 作業台（アタッチメント / 塗装） ===== -->
+    <div id="bench" class="overlay hidden">
+      <div class="panel hub-panel">
+        <div class="hub-head">
+          <h2>🔧 作業台</h2>
+          <div class="wallet-row"><span>💰 <b data-wallet-money>0</b> G</span></div>
+        </div>
+        <p class="shop-note">武器を選んでから、アタッチメントを取り付けたり色を塗ったりできます。持っていない部品はショップで買えます。</p>
+        <div id="bench-weapons" class="bench-weapons"></div>
+        <div id="bench-detail" class="bench-detail"></div>
+        <p id="bench-message" class="shop-message" aria-live="polite"></p>
+        <button id="btn-bench-close" class="big-btn primary">とじる</button>
+      </div>
+    </div>
+
+    <!-- ===== 鍛冶場（鎧づくり） ===== -->
+    <div id="forge" class="overlay hidden">
+      <div class="panel hub-panel">
+        <div class="hub-head">
+          <h2>⚒ 鍛冶場</h2>
+          <div class="wallet-row">
+            <span>💰 <b data-wallet-money>0</b> G</span>
+            <span>🔩 廃材 <b data-wallet-scrap>0</b></span>
+          </div>
+        </div>
+        <p class="shop-note">廃材と所持金で鎧を作れます。廃材は試合で敵を倒すとたまります。部位ごとに1つ装備できます。</p>
+        <div id="forge-items" class="forge-items"></div>
+        <p id="forge-message" class="shop-message" aria-live="polite"></p>
+        <button id="btn-forge-close" class="big-btn primary">とじる</button>
+      </div>
+    </div>
+
+    <!-- ===== 徴兵ガチャ ===== -->
+    <div id="gacha" class="overlay hidden">
+      <div class="panel hub-panel">
+        <div class="hub-head">
+          <h2>🎲 徴兵ガチャ</h2>
+          <div class="wallet-row">
+            <span>🎫 チケット <b data-wallet-ticket>0</b></span>
+            <span>💰 <b data-wallet-money>0</b> G</span>
+          </div>
+        </div>
+        <p class="shop-note">チケットを使って新しい仲間を集めます。すでに仲間のキャラが出たら「練度」が上がり、そのキャラが強くなります。</p>
+        <div id="gacha-result" class="gacha-result hidden"></div>
+        <div class="gacha-actions">
+          <button id="btn-gacha-one" class="big-btn primary">🎫 1回引く</button>
+          <button id="btn-gacha-ten" class="big-btn">🎫×10 まとめて引く（★4以上 確定）</button>
+          <button id="btn-gacha-buy" class="big-btn">チケットを買う（320 G）</button>
+        </div>
+        <p id="gacha-message" class="shop-message" aria-live="polite"></p>
+        <div id="gacha-roster" class="gacha-roster"></div>
+        <button id="btn-gacha-close" class="big-btn">とじる</button>
+      </div>
+    </div>
+
+    <!-- ===== 編成テント（キャラ / 装備） ===== -->
+    <div id="squad" class="overlay hidden">
+      <div class="panel hub-panel">
+        <div class="hub-head">
+          <h2>📋 編成テント</h2>
+          <div class="wallet-row"><span>仲間 <b id="squad-count">0</b> 人</span></div>
+        </div>
+        <p class="shop-note">出撃するキャラクターと、持っていく3つの武器を決めます。武器はショップで買うと増えます。</p>
+        <div id="squad-chars" class="squad-chars"></div>
+        <div id="squad-loadout" class="squad-loadout"></div>
+        <p id="squad-message" class="shop-message" aria-live="polite"></p>
+        <button id="btn-squad-close" class="big-btn primary">とじる</button>
       </div>
     </div>
 

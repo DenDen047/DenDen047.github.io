@@ -110,6 +110,7 @@
     { key: "damage", icon: "🎯", name: "武器改修", desc: "武器ダメージ +5%", max: 5, baseCost: 180, step: 110 },
     { key: "grenade", icon: "💣", name: "弾薬ポーチ", desc: "グレネード所持数 +1", max: 3, baseCost: 220, step: 160 },
     { key: "mine", icon: "🧨", name: "地雷ポーチ", desc: "地雷の所持数 +1", max: 3, baseCost: 240, step: 170 },
+    { key: "quiver", icon: "🎒", name: "大型矢筒", desc: "持ち出せる矢 +8本", max: 5, baseCost: 160, step: 110 },
   ];
 
   const WEAPONS = [
@@ -128,8 +129,153 @@
     { key: "rocket",  name: "ロケットランチャー", dmg: 130, interval: 1800, mag: 1, reload: 2600, spread: 0.02, pellets: 1, auto: false, speed: 640, range: 920, len: 34, kick: 7.0, rocket: true, snd: "sniper" },
     // 時の剣: 「時の森」の岩から抜いた者だけが持てる。拾えず、買えず、失われない。
     { key: "timesword", name: "時の剣", dmg: 132, interval: 520, mag: 1, reload: 0, spread: 0, pellets: 1, auto: false, speed: 0, range: 132, len: 34, kick: 4.2, melee: true, arc: 1.5, style: "timesword", snd: "melee" },
+    // 弓: 弾倉ではなく「矢」を消費する。矢はショップで買って矢筒に詰めておく。
+    // 弦の音しかしないので、撃っても敵に足音として気づかれない。
+    { key: "bow",      name: "軍用弓",     dmg: 76,  interval: 700,  mag: 1, reload: 0, spread: 0.028, pellets: 1, auto: false, speed: 920,  range: 880,  len: 22, kick: 2.6, bow: true, pierce: 1, quiet: true, snd: "bow" },
+    { key: "crossbow", name: "クロスボウ", dmg: 112, interval: 1250, mag: 1, reload: 0, spread: 0.010, pellets: 1, auto: false, speed: 1380, range: 1080, len: 26, kick: 4.2, bow: true, pierce: 2, quiet: true, snd: "bow" },
+    // ---- ここから下はショップで買う武器 ----
+    { key: "dmr",      name: "マークスマンライフル", dmg: 44, interval: 300, mag: 20, reload: 1800, spread: 0.018, pellets: 1, auto: false, speed: 1600, range: 980, len: 22, kick: 3.4, pierce: 1, snd: "rifle" },
+    { key: "minigun",  name: "ミニガン",       dmg: 12, interval: 46,  mag: 120, reload: 3800, spread: 0.125, pellets: 1, auto: true,  speed: 1100, range: 660, len: 21, kick: 1.1, heavy: true, snd: "smg" },
+    { key: "flamer",   name: "火炎放射器",     dmg: 8,  interval: 42,  mag: 100, reload: 2600, spread: 0.20,  pellets: 1, auto: true,  speed: 430,  range: 215, len: 19, kick: 0.5, flame: true, snd: "smg" },
+    { key: "glauncher", name: "グレネードランチャー", dmg: 92, interval: 1250, mag: 4, reload: 2600, spread: 0.03, pellets: 1, auto: false, speed: 700, range: 800, len: 20, kick: 5.2, rocket: true, snd: "sniper" },
+    { key: "railgun",  name: "レールガン",     dmg: 148, interval: 1650, mag: 3, reload: 2900, spread: 0.004, pellets: 1, auto: false, speed: 2600, range: 1400, len: 30, kick: 6.4, pierce: 4, rail: true, snd: "sniper" },
+    { key: "spear",    name: "長槍",           dmg: 72, interval: 520, mag: 1, reload: 0, spread: 0, pellets: 1, auto: false, speed: 0, range: 132, len: 34, kick: 3.0, melee: true, arc: 0.38, style: "spear",      snd: "melee" },
+    { key: "greatsword", name: "大剣",         dmg: 124, interval: 830, mag: 1, reload: 0, spread: 0, pellets: 1, auto: false, speed: 0, range: 112, len: 36, kick: 6.2, melee: true, arc: 1.30, style: "greatsword", snd: "melee" },
+    { key: "chainsaw", name: "チェーンソー",   dmg: 32, interval: 150, mag: 1, reload: 0, spread: 0, pellets: 1, auto: true,  speed: 0, range: 76,  len: 26, kick: 1.2, melee: true, arc: 0.85, style: "chainsaw",   snd: "melee" },
   ];
   const WKEY = {}; WEAPONS.forEach((w, i) => (WKEY[w.key] = i));
+
+  // ============================================================
+  //  矢 (弓の弾)
+  //  弓は弾倉ではなく矢筒から矢を引き抜いて撃つ。矢はショップで買って貯めておき、
+  //  出撃時に矢筒の容量ぶんだけ持ち出す。撃たずに残った矢は帰還時に戻ってくる。
+  // ============================================================
+  const ARROW_TYPES = [
+    { key: "normal", name: "標準矢", icon: "🏹", cost: 4,  desc: "ふつうの矢。安い。",
+      dmgMul: 1,    pierceAdd: 0, speedMul: 1 },
+    { key: "pierce", name: "貫通矢", icon: "🪶", cost: 9,  desc: "鏃が細く、敵を2体まで貫く。",
+      dmgMul: 0.95, pierceAdd: 2, speedMul: 1.15 },
+    { key: "blast",  name: "爆裂矢", icon: "💥", cost: 14, desc: "当たると爆発する。戦車や基地にも効く。",
+      dmgMul: 0.9,  pierceAdd: 0, speedMul: 0.85, blast: true },
+  ];
+  const ARROW_BY_KEY = {};
+  ARROW_TYPES.forEach((a) => (ARROW_BY_KEY[a.key] = a));
+  const ARROW_BUNDLE = 10;        // 1回の購入で買える本数
+  const ARROW_STOCK_MAX = 400;
+  const QUIVER_BASE = 24;         // 矢筒の基本容量
+  const ARROW_GIFT_PER_MATCH = 8; // 出撃するたびに支給される標準矢
+
+  // ============================================================
+  //  武器の塗装 (見た目だけ。性能は変わらない)
+  // ============================================================
+  const PAINTS = [
+    { key: "gunmetal", name: "ガンメタル",     icon: "⬛", cost: 0,   body: "#23231f", trim: "#4c4c45", tracer: "#ffe49a" },
+    { key: "olive",    name: "オリーブドラブ", icon: "🟩", cost: 120, body: "#3f4a2a", trim: "#6d7c45", tracer: "#dff0a8" },
+    { key: "desert",   name: "デザートタン",   icon: "🟨", cost: 120, body: "#9c7f4c", trim: "#d3b579", tracer: "#ffe9b0" },
+    { key: "arctic",   name: "アークティック", icon: "⬜", cost: 180, body: "#c3ccd4", trim: "#eef4fa", tracer: "#dff2ff" },
+    { key: "crimson",  name: "クリムゾン",     icon: "🟥", cost: 220, body: "#7a1f1a", trim: "#d24a38", tracer: "#ff9a7a" },
+    { key: "royal",    name: "ロイヤルブルー", icon: "🟦", cost: 220, body: "#1f3a76", trim: "#4f86e0", tracer: "#b6d8ff" },
+    { key: "violet",   name: "バイオレット",   icon: "🟪", cost: 260, body: "#4a2470", trim: "#9a6ce0", tracer: "#e0c4ff" },
+    { key: "toxic",    name: "トキシック",     icon: "☢", cost: 320, body: "#25381a", trim: "#8ff23a", tracer: "#c8ff6a", glow: "#8ff23a" },
+    { key: "neon",     name: "ネオンピンク",   icon: "💗", cost: 320, body: "#2a1030", trim: "#ff4fd8", tracer: "#ffb0ee", glow: "#ff4fd8" },
+    { key: "gold",     name: "ゴールド",       icon: "🏆", cost: 600, body: "#6d5312", trim: "#ffd23f", tracer: "#fff0a8", glow: "#ffd23f" },
+  ];
+  const PAINT_BY_KEY = {};
+  PAINTS.forEach((p) => (PAINT_BY_KEY[p.key] = p));
+
+  // ============================================================
+  //  アタッチメント (作業台で武器に取り付ける)
+  //  スロットは4つ。同じスロットには1つしか付けられない。
+  //  一度買えばどの武器にも付け替えられる。
+  // ============================================================
+  const ATTACH_SLOTS = [
+    { key: "optic",  name: "照準器",     icon: "🔭" },
+    { key: "barrel", name: "銃身",       icon: "🔩" },
+    { key: "mag",    name: "弾倉",       icon: "📦" },
+    { key: "under",  name: "下部レール", icon: "🔻" },
+  ];
+
+  const ATTACHMENTS = [
+    { key: "reddot", slot: "optic", name: "ドットサイト", icon: "🔴", cost: 260,
+      desc: "弾のばらつきが35%減る。", spreadMul: 0.65 },
+    { key: "scope", slot: "optic", name: "倍率スコープ", icon: "🔭", cost: 380,
+      desc: "射程 +25%・ばらつき -20%。そのぶん構えが重い。", rangeMul: 1.25, spreadMul: 0.8, intervalMul: 1.08 },
+    { key: "radar", slot: "optic", name: "レーダー", icon: "📡", cost: 640,
+      desc: "半径620の敵をミニマップに映す。壁の裏も見つけられる。", radar: 620 },
+    { key: "suppressor", slot: "barrel", name: "サプレッサー", icon: "🤫", cost: 340,
+      desc: "銃声が消え、撃っても位置がバレない。ダメージ -8%。", quiet: true, dmgMul: 0.92 },
+    { key: "heavybarrel", slot: "barrel", name: "ヘビーバレル", icon: "🔩", cost: 420,
+      desc: "ダメージ +14%。そのぶん連射が10%遅い。", dmgMul: 1.14, intervalMul: 1.1 },
+    { key: "brake", slot: "barrel", name: "マズルブレーキ", icon: "🔥", cost: 300,
+      desc: "反動が半分になり、弾速 +15%。", kickMul: 0.5, bulletSpeedMul: 1.15 },
+    { key: "extmag", slot: "mag", name: "拡張マガジン", icon: "📦", cost: 300,
+      desc: "装弾数 +60%。リロードは15%遅くなる。", magMul: 1.6, reloadMul: 1.15 },
+    { key: "quickmag", slot: "mag", name: "クイックマグ", icon: "⚡", cost: 320,
+      desc: "リロードが35%速い。", reloadMul: 0.65 },
+    { key: "apround", slot: "mag", name: "徹甲弾", icon: "🛡", cost: 480,
+      desc: "敵を1体多く貫き、ダメージ +8%。", pierceAdd: 1, dmgMul: 1.08 },
+    { key: "ubsmg", slot: "under", name: "アンダーバレルSMG", icon: "🔫", cost: 700,
+      desc: "撃つたびに9mm弾を1発おまけで発射する。矢や弾は減らない。", underSmg: true },
+    { key: "laser", slot: "under", name: "レーザーサイト", icon: "🔺", cost: 280,
+      desc: "ばらつき -25%。狙っている先に赤い線が出る。", spreadMul: 0.75, laser: true },
+    { key: "grip", slot: "under", name: "フォアグリップ", icon: "🖐", cost: 240,
+      desc: "反動 -40%・ばらつき -10%。", kickMul: 0.6, spreadMul: 0.9 },
+  ];
+  const ATTACH_BY_KEY = {};
+  ATTACHMENTS.forEach((a) => (ATTACH_BY_KEY[a.key] = a));
+
+  // ============================================================
+  //  ショップで買える武器
+  //  ここに無い武器 (兵科の初期装備) は最初から使える。
+  // ============================================================
+  const WEAPON_SHOP = [
+    { key: "bow",        cost: 460,  desc: "矢を撃つ。音がしないので位置がバレない。矢が要る。" },
+    { key: "crossbow",   cost: 820,  desc: "強力な弩。1発が重く、2体まで貫く。矢が要る。" },
+    { key: "dmr",        cost: 520,  desc: "半自動の精密射撃銃。遠距離を素早く撃ち抜く。" },
+    { key: "minigun",    cost: 940,  desc: "120発を撃ち切るまで止まらない多銃身機関砲。" },
+    { key: "flamer",     cost: 720,  desc: "至近距離を焼き払う。射程は短い。" },
+    { key: "glauncher",  cost: 880,  desc: "着弾で爆発する擲弾を撃つ。集団と基地に強い。" },
+    { key: "railgun",    cost: 1260, desc: "壁ごと貫く超高速の砲。4体まで貫通する。" },
+    { key: "spear",      cost: 500,  desc: "間合いの長い近接武器。踏み込んで突く。" },
+    { key: "greatsword", cost: 940,  desc: "一撃が非常に重い大剣。振りは遅い。" },
+    { key: "chainsaw",   cost: 860,  desc: "当て続けて削る近接武器。押し付けている間ずっと斬る。" },
+  ];
+  const WEAPON_SHOP_BY_KEY = {};
+  WEAPON_SHOP.forEach((w) => (WEAPON_SHOP_BY_KEY[w.key] = w));
+
+  // ============================================================
+  //  鎧のクラフト (鍛冶場)
+  //  廃材(スクラップ)と所持金で作る。作った鎧は部位ごとに1つ装備できる。
+  //  廃材は試合の戦果でたまる。
+  // ============================================================
+  const ARMOR_SLOTS = [
+    { key: "head",  name: "兜",   icon: "⛑" },
+    { key: "body",  name: "胴鎧", icon: "🦺" },
+    { key: "legs",  name: "具足", icon: "🥾" },
+  ];
+
+  const ARMOR_RECIPES = [
+    { key: "helm-steel",  slot: "head", tier: 1, name: "鋼の兜",       icon: "⛑", gold: 220, scrap: 6,
+      desc: "最大HP +18", hp: 18 },
+    { key: "helm-visor",  slot: "head", tier: 2, name: "防弾バイザー", icon: "🪖", gold: 480, scrap: 16, needs: "helm-steel",
+      desc: "最大HP +34・視界 +8%", hp: 34, vision: 1.08 },
+    { key: "helm-titan",  slot: "head", tier: 3, name: "チタン戦闘兜", icon: "👑", gold: 980, scrap: 34, needs: "helm-visor",
+      desc: "最大HP +60・視界 +14%・気絶しにくい", hp: 60, vision: 1.14, stunResist: 0.5 },
+    { key: "vest-flak",   slot: "body", tier: 1, name: "フラックベスト", icon: "🦺", gold: 260, scrap: 8,
+      desc: "鎧耐久 +45", armor: 45 },
+    { key: "vest-plate",  slot: "body", tier: 2, name: "セラミック装甲", icon: "🛡", gold: 560, scrap: 20, needs: "vest-flak",
+      desc: "鎧耐久 +90・受けるダメージ -6%", armor: 90, dr: 0.06 },
+    { key: "vest-exo",    slot: "body", tier: 3, name: "強化外骨格", icon: "🤖", gold: 1150, scrap: 40, needs: "vest-plate",
+      desc: "鎧耐久 +150・受けるダメージ -12%・最大HP +25", armor: 150, dr: 0.12, hp: 25 },
+    { key: "boots-pad",   slot: "legs", tier: 1, name: "緩衝ブーツ",   icon: "🥾", gold: 200, scrap: 5,
+      desc: "移動速度 +4%", speed: 1.04 },
+    { key: "boots-recon", slot: "legs", tier: 2, name: "偵察脚甲",     icon: "🦵", gold: 460, scrap: 15, needs: "boots-pad",
+      desc: "移動速度 +8%・足音が静かになる", speed: 1.08, noise: 0.72 },
+    { key: "boots-jet",   slot: "legs", tier: 3, name: "跳躍脚部",     icon: "🚀", gold: 1020, scrap: 32, needs: "boots-recon",
+      desc: "移動速度 +14%・足音が非常に静か・盾耐久 +40", speed: 1.14, noise: 0.5, shield: 40 },
+  ];
+  const ARMOR_BY_KEY = {};
+  ARMOR_RECIPES.forEach((a) => (ARMOR_BY_KEY[a.key] = a));
 
   // ============================================================
   //  キャラクター(兵科)
@@ -137,7 +283,7 @@
   // ============================================================
   const CLASSES = [
     {
-      key: "soldier", name: "兵士", icon: "🎖️",
+      key: "soldier", name: "兵士", icon: "🎖️", rarity: 3, starter: true,
       desc: "アサルトライフル・ハンドガン・銃剣。撃ち合いに強い標準型。",
       hpBonus: 0, speedMul: 1, gunMul: 1, meleeMul: 1,
       grenades: 3, mines: 2, wires: 0,
@@ -146,7 +292,7 @@
       weapons: ["rifle", "pistol", "bayonet"],
     },
     {
-      key: "samurai", name: "侍", icon: "⚔️",
+      key: "samurai", name: "侍", icon: "⚔️", rarity: 3, starter: true,
       desc: "打刀・戦斧・ナイフの近接専用。銃は持てないが体力と足が速い。打刀は足を止めて斬ると全方位攻撃になり、振っている間は銃弾を弾き返す。",
       hpBonus: 30, speedMul: 1.18, gunMul: 0.72, meleeMul: 1.12,
       grenades: 2, mines: 1, wires: 0,
@@ -155,7 +301,7 @@
       weapons: ["katana", "hatchet", "knife"],
     },
     {
-      key: "trapper", name: "罠師", icon: "🪤",
+      key: "trapper", name: "罠師", icon: "🪤", rarity: 3, starter: true,
       desc: "サブマシンガン・ショットガン・シャベル。地雷5個は敵から見えにくく、有刺鉄線(Cキー)も張れる。体力は低め。",
       hpBonus: -12, speedMul: 0.97, gunMul: 0.92, meleeMul: 0.9,
       grenades: 2, mines: 5, wires: 3,
@@ -164,7 +310,7 @@
       weapons: ["smg", "shotgun", "shovel"],
     },
     {
-      key: "heavy", name: "重火器兵", icon: "🚀",
+      key: "heavy", name: "重火器兵", icon: "🚀", rarity: 3, starter: true,
       desc: "ロケットランチャー・スナイパー・ハンドガン。戦車と基地に滅法強いが、足が遅く接近戦は苦手。",
       hpBonus: 10, speedMul: 0.86, gunMul: 1, meleeMul: 0.7,
       grenades: 3, mines: 1, wires: 0,
@@ -172,10 +318,125 @@
       mineArmMul: 1, mineBlastMul: 1, mineStealthMul: 1, seesEnemyMines: false,
       weapons: ["rocket", "sniper", "pistol"],
     },
+    // ---- ここから下は徴兵ガチャで仲間になるキャラクター ----
+    // 仲間にすると、そのキャラの装備している武器もいっしょに使えるようになる。
+    {
+      key: "engineer", name: "工兵 スパナ", icon: "🔧", rarity: 3,
+      desc: "サブマシンガン・ハンドガン・シャベル。地雷3個と有刺鉄線5本を持ち、陣地づくりが得意。",
+      hpBonus: 6, speedMul: 0.98, gunMul: 0.95, meleeMul: 0.95,
+      grenades: 2, mines: 3, wires: 5,
+      parryWindowMul: 1, parryCooldownMul: 1,
+      mineArmMul: 0.7, mineBlastMul: 1.1, mineStealthMul: 0.75, seesEnemyMines: true,
+      weapons: ["smg", "pistol", "shovel"],
+    },
+    {
+      key: "scout", name: "偵察兵 スカウト", icon: "🥾", rarity: 3,
+      desc: "サブマシンガン・ハンドガン・ナイフ。足がとても速く、足音も小さい。体力は低め。",
+      hpBonus: -10, speedMul: 1.24, gunMul: 0.94, meleeMul: 1,
+      grenades: 3, mines: 1, wires: 0,
+      parryWindowMul: 1.1, parryCooldownMul: 0.9,
+      mineArmMul: 1, mineBlastMul: 1, mineStealthMul: 1, seesEnemyMines: false,
+      noiseMul: 0.7, visionMul: 1.12,
+      weapons: ["smg", "pistol", "knife"],
+    },
+    {
+      key: "marksman", name: "狙撃手 エコー", icon: "🎯", rarity: 4,
+      desc: "マークスマンライフル・スナイパー・ナイフ。銃のダメージが12%高く、遠くから確実に落とす。",
+      hpBonus: -5, speedMul: 0.95, gunMul: 1.12, meleeMul: 0.85,
+      grenades: 2, mines: 1, wires: 0,
+      parryWindowMul: 0.9, parryCooldownMul: 1.1,
+      mineArmMul: 1, mineBlastMul: 1, mineStealthMul: 1, seesEnemyMines: false,
+      visionMul: 1.18,
+      weapons: ["dmr", "sniper", "knife"],
+    },
+    {
+      key: "medic", name: "衛生兵 リリィ", icon: "💊", rarity: 4,
+      desc: "サブマシンガン・ハンドガン・ナイフ。最大HPが40多く、自動回復が3倍速い粘り強さが持ち味。",
+      hpBonus: 40, speedMul: 1.03, gunMul: 0.95, meleeMul: 0.9,
+      grenades: 3, mines: 1, wires: 0,
+      parryWindowMul: 1.2, parryCooldownMul: 0.85,
+      mineArmMul: 1, mineBlastMul: 1, mineStealthMul: 1, seesEnemyMines: false,
+      healMul: 3,
+      weapons: ["smg", "pistol", "knife"],
+    },
+    {
+      key: "grenadier", name: "擲弾兵 ボマー", icon: "💣", rarity: 4,
+      desc: "グレネードランチャー・ショットガン・銃剣。グレネードを6個持ち、爆発の威力も高い。",
+      hpBonus: 15, speedMul: 0.93, gunMul: 1, meleeMul: 0.95,
+      grenades: 6, mines: 3, wires: 0,
+      parryWindowMul: 0.9, parryCooldownMul: 1.1,
+      mineArmMul: 1, mineBlastMul: 1.3, mineStealthMul: 1, seesEnemyMines: false,
+      weapons: ["glauncher", "shotgun", "bayonet"],
+    },
+    {
+      key: "ranger", name: "猟兵 ハンター", icon: "🏹", rarity: 4,
+      desc: "軍用弓・ショットガン・ナイフ。矢筒が12本大きく、弓の腕がいい。森での戦いに強い。",
+      hpBonus: 5, speedMul: 1.08, gunMul: 1, meleeMul: 1,
+      grenades: 2, mines: 2, wires: 1,
+      parryWindowMul: 1.1, parryCooldownMul: 0.95,
+      mineArmMul: 1, mineBlastMul: 1, mineStealthMul: 1, seesEnemyMines: false,
+      quiverBonus: 12, arrowMul: 1.1, noiseMul: 0.85,
+      weapons: ["bow", "shotgun", "knife"],
+    },
+    {
+      key: "archer", name: "弓聖 アルテミス", icon: "🌙", rarity: 5,
+      desc: "クロスボウ・軍用弓・打刀。矢のダメージが35%高く、矢筒も24本大きい。矢を扱わせたら右に出る者はいない。",
+      hpBonus: 10, speedMul: 1.12, gunMul: 1, meleeMul: 1.05,
+      grenades: 2, mines: 1, wires: 0,
+      parryWindowMul: 1.4, parryCooldownMul: 0.75,
+      mineArmMul: 1, mineBlastMul: 1, mineStealthMul: 1, seesEnemyMines: false,
+      quiverBonus: 24, arrowMul: 1.35, visionMul: 1.1,
+      weapons: ["crossbow", "bow", "katana"],
+    },
+    {
+      key: "juggernaut", name: "重装 ゴーレム", icon: "🛡️", rarity: 5,
+      desc: "ミニガン・ショットガン・シャベル。最大HP +90、鎧も分厚いが、足はとても遅い。動く要塞。",
+      hpBonus: 90, speedMul: 0.72, gunMul: 1.05, meleeMul: 1.1,
+      grenades: 2, mines: 1, wires: 0,
+      parryWindowMul: 0.7, parryCooldownMul: 1.3,
+      mineArmMul: 1, mineBlastMul: 1, mineStealthMul: 1, seesEnemyMines: false,
+      armorBonus: 80, damageTakenMul: 0.88, noiseMul: 1.3,
+      weapons: ["minigun", "shotgun", "shovel"],
+    },
+    {
+      key: "shinobi", name: "影 シノビ", icon: "🥷", rarity: 5,
+      desc: "軍用弓・打刀・ナイフ。足音がほとんどせず、移動速度は最速。パリィの受付も長い。",
+      hpBonus: 0, speedMul: 1.32, gunMul: 0.9, meleeMul: 1.2,
+      grenades: 3, mines: 2, wires: 0,
+      parryWindowMul: 1.9, parryCooldownMul: 0.55,
+      mineArmMul: 0.8, mineBlastMul: 1, mineStealthMul: 0.6, seesEnemyMines: true,
+      noiseMul: 0.35, quiverBonus: 8, visionMul: 1.06,
+      weapons: ["bow", "katana", "knife"],
+    },
   ];
   const CLASS_BY_KEY = {};
   CLASSES.forEach((c) => (CLASS_BY_KEY[c.key] = c));
   const classDef = (key) => CLASS_BY_KEY[key] || CLASSES[0];
+
+  // ============================================================
+  //  徴兵ガチャ
+  //  チケットを使って新しいキャラクターを仲間にする。すでに仲間のキャラが出たら
+  //  「練度」が1つ上がり、そのキャラのHPと攻撃力が伸びる (最大 練度5)。
+  // ============================================================
+  const GACHA_CHARS = CLASSES.filter((c) => !c.starter);
+  const GACHA_RATES = { 5: 0.06, 4: 0.28, 3: 0.66 };   // ★5 / ★4 / ★3 の出る割合
+  const GACHA_TICKET_COST = 320;      // チケット1枚を所持金で買うときの値段
+  const GACHA_TEN_TICKETS = 10;
+  const RANK_MAX = 5;
+  const RANK_HP_PER = 0.05;           // 練度1につき 最大HP +5%
+  const RANK_DMG_PER = 0.05;          // 練度1につき ダメージ +5%
+  const DUP_REFUND = { 3: 90, 4: 180, 5: 400 };   // 練度が上限のときの払い戻し
+  const rarityStars = (n) => "★".repeat(n || 3);
+
+  function rollGachaChar() {
+    const r = Math.random();
+    let rarity = r < GACHA_RATES[5] ? 5 : r < GACHA_RATES[5] + GACHA_RATES[4] ? 4 : 3;
+    let pool = GACHA_CHARS.filter((c) => c.rarity === rarity);
+    // その星のキャラが居なければ1つ下げる (データを足し引きしても壊れないように)
+    while (!pool.length && rarity > 3) { rarity--; pool = GACHA_CHARS.filter((c) => c.rarity === rarity); }
+    if (!pool.length) pool = GACHA_CHARS;
+    return pick(pool);
+  }
 
   // ============================================================
   //  スキン (自分の見た目だけを変える。性能はいっさい変わらない)
@@ -365,6 +626,29 @@
     shopItems: document.getElementById("shop-items"),
     shopMoney: document.getElementById("shop-money"),
     shopMessage: document.getElementById("shop-message"),
+    // 拠点(庭)とその施設
+    shop: document.getElementById("shop"),
+    shopTabs: document.getElementById("shop-tabs"),
+    shopNote: document.getElementById("shop-note"),
+    bench: document.getElementById("bench"),
+    benchWeapons: document.getElementById("bench-weapons"),
+    benchDetail: document.getElementById("bench-detail"),
+    benchMessage: document.getElementById("bench-message"),
+    forge: document.getElementById("forge"),
+    forgeItems: document.getElementById("forge-items"),
+    forgeMessage: document.getElementById("forge-message"),
+    gacha: document.getElementById("gacha"),
+    gachaResult: document.getElementById("gacha-result"),
+    gachaRoster: document.getElementById("gacha-roster"),
+    gachaMessage: document.getElementById("gacha-message"),
+    squad: document.getElementById("squad"),
+    squadChars: document.getElementById("squad-chars"),
+    squadLoadout: document.getElementById("squad-loadout"),
+    squadMessage: document.getElementById("squad-message"),
+    squadCount: document.getElementById("squad-count"),
+    gardenHud: document.getElementById("garden-hud"),
+    gardenPrompt: document.getElementById("garden-prompt"),
+    gardenTouch: document.getElementById("garden-touch"),
     menuMoney: document.getElementById("menu-money"),
     nameInput: document.getElementById("name-input"),
     armyInput: document.getElementById("army-input"),
@@ -407,6 +691,22 @@
       src.buffer = buf;
       return src;
     }
+    // 弓の弦をはじく音。銃声と違って遠くには届かない想定なので、撃った本人にだけ鳴らす。
+    function bowShot() {
+      if (!actx || muted) return;
+      const t = actx.currentTime;
+      const g = actx.createGain();
+      g.connect(master);
+      const osc = actx.createOscillator();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(320, t);
+      osc.frequency.exponentialRampToValueAtTime(90, t + 0.13);
+      osc.connect(g);
+      g.gain.setValueAtTime(0.22, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+      osc.start(t); osc.stop(t + 0.18);
+    }
+
     function shot(kind) {
       if (!actx || muted) return;
       const t = actx.currentTime;
@@ -599,7 +899,7 @@
         if (actx && actx.state === "suspended") actx.resume();
         // 曲はステージが決まってから読む(暗黒の森は別の曲)
       },
-      shot, boom, hurt, levelup, heal, melee, footstep, parry, roar,
+      shot, bowShot, boom, hurt, levelup, heal, melee, footstep, parry, roar,
       startBgm(track) {
         if (track && track !== bgmTrack) {
           // ステージが変わったら曲も差し替える
@@ -634,6 +934,8 @@
   const mouse = { x: 0, y: 0, down: false, over: false };
   const stickMove = { x: 0, y: 0, active: false };
   const stickAim = { x: 0, y: 0, active: false };
+  const stickGarden = { x: 0, y: 0, active: false };
+  let gardenEnterEdge = false;   // 拠点で「入る」を押した瞬間
   let touchShield = false;
   let touchInteract = false;   // 「戦車」ボタンを押しっぱなしにしているか
 
@@ -709,6 +1011,8 @@
   }
   bindStick(document.getElementById("stick-move"), stickMove);
   bindStick(document.getElementById("stick-aim"), stickAim);
+  bindStick(document.getElementById("stick-garden"), stickGarden);
+  document.getElementById("g-enter").addEventListener("pointerdown", (e) => { e.preventDefault(); gardenEnterEdge = true; });
   document.getElementById("t-reload").addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.reloadEdge = true; });
   document.getElementById("t-grenade").addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.grenadeEdge = true; });
   document.getElementById("t-mine").addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.mineEdge = true; });
@@ -790,7 +1094,7 @@
   const AIM_ASSIST_PULL = 0.55;   // どれだけ引き寄せるか
   function assistAim(me, angle) {
     if (!isTouch || !me || me.dead) return angle;
-    const range = me.vehicleId >= 0 ? 900 : WEAPONS[me.weapon].range;
+    const range = me.vehicleId >= 0 ? 900 : wstat(me).range;
     let bestAngle = null, bestGap = AIM_ASSIST_CONE;
     const consider = (e, radius) => {
       const d2 = dist2(me.x, me.y, e.x, e.y);
@@ -818,6 +1122,7 @@
   let camX = 0, camY = 0;
   let shake = 0;
   let mode = "sp";          // 'sp' | 'host' | 'client'
+  let scene = "menu";       // 'menu' | 'garden' | 試合中(G.running)
   let difficulty = "normal";
   let playerName = "Soldier";
   let playerTeam = 0;
@@ -834,7 +1139,23 @@
   let pauseStartedAt = 0;
   let helpOrigin = "menu";
   let money = 0;
+  // メニューのキャラクター選択ボタンの見た目を合わせる。setupMenu で中身が入る。
+  let syncMenuClassButtons = () => {};
   let shopLevels = Object.fromEntries(SHOP_ITEMS.map((item) => [item.key, 0]));
+  // ---- 拠点(庭)で育てる持ち物 ----
+  let scrap = 0;                 // 鍛冶に使う廃材
+  let tickets = 0;               // 徴兵ガチャのチケット
+  let ownedWeapons = {};         // 武器key → true (ショップで買った武器)
+  let ownedAttachments = {};     // アタッチメントkey → true
+  let ownedPaints = {};          // 塗装key → true
+  let ownedArmor = {};           // 鎧key → true (鍛冶場で作った鎧)
+  let charRanks = {};            // キャラkey → 練度(0..RANK_MAX)。存在すれば仲間。
+  let weaponAttach = {};         // 武器key → { optic, barrel, mag, under }
+  let weaponPaint = {};          // 武器key → 塗装key
+  let charLoadout = {};          // キャラkey → 武器keyの配列(最大3)
+  let equippedArmor = { head: "", body: "", legs: "" };
+  let arrowStock = { normal: 0, pierce: 0, blast: 0 };
+  let arrowType = "normal";
 
   function emptyState() {
     return {
@@ -1007,6 +1328,9 @@
 
   // 試合が終わった(またはメニューへ戻った)ときに、その試合の成績を通算へ足す。
   function commitRun(won) {
+    // 矢は成績と関係なく、試合から帰ってきた時点でストックへ戻す
+    const meNow = localSoldier();
+    if (meNow) { returnArrows(meNow); saveProgress(); }
     if (!runStats || runStats.committed) return;
     runStats.committed = true;
     if (isTraining()) return;   // 練習場は成績に数えない
@@ -1112,6 +1436,95 @@
     }
     if (!lifeStats.winClasses) lifeStats.winClasses = {};
     if (!lifeStats.winStages) lifeStats.winStages = {};
+    loadInventory();
+  }
+
+  // localStorage から読むときは、後からデータを足しても壊れないよう
+  // 「知らないキーは捨てる・足りないキーは既定値」で必ず作り直す。
+  function readJSON(key, fallback) {
+    try {
+      const v = JSON.parse(localStorage.getItem(key) || "null");
+      return v && typeof v === "object" ? v : fallback;
+    } catch (e) { return fallback; }
+  }
+
+  function loadInventory() {
+    const inv = readJSON("wz-inventory", {});
+    scrap = Math.max(0, Math.floor(Number(inv.scrap) || 0));
+    tickets = Math.max(0, Math.floor(Number(inv.tickets) || 0));
+
+    const keep = (obj, valid) => {
+      const out = {};
+      if (obj && typeof obj === "object") {
+        for (const k of Object.keys(obj)) if (valid(k) && obj[k]) out[k] = true;
+      }
+      return out;
+    };
+    ownedWeapons = keep(inv.weapons, (k) => !!WEAPON_SHOP_BY_KEY[k]);
+    ownedAttachments = keep(inv.attachments, (k) => !!ATTACH_BY_KEY[k]);
+    ownedPaints = keep(inv.paints, (k) => !!PAINT_BY_KEY[k]);
+    ownedArmor = keep(inv.armor, (k) => !!ARMOR_BY_KEY[k]);
+    // 無料の塗装は最初から持っている
+    for (const paint of PAINTS) if (!paint.cost) ownedPaints[paint.key] = true;
+
+    // キャラクター。最初の4兵科はいつでも使える。
+    charRanks = {};
+    for (const c of CLASSES) if (c.starter) charRanks[c.key] = 0;
+    if (inv.chars && typeof inv.chars === "object") {
+      for (const k of Object.keys(inv.chars)) {
+        if (!CLASS_BY_KEY[k]) continue;
+        charRanks[k] = clamp(Math.floor(Number(inv.chars[k]) || 0), 0, RANK_MAX);
+      }
+    }
+    // 仲間になっているキャラの装備武器は、そのまま使えるようにする
+    for (const key of Object.keys(charRanks)) grantCharWeapons(key);
+
+    weaponAttach = {};
+    if (inv.attach && typeof inv.attach === "object") {
+      for (const wk of Object.keys(inv.attach)) {
+        if (WKEY[wk] == null) continue;
+        const slots = {};
+        for (const slot of ATTACH_SLOTS) {
+          const val = inv.attach[wk] && inv.attach[wk][slot.key];
+          const def = ATTACH_BY_KEY[val];
+          if (def && def.slot === slot.key && ownedAttachments[val]) slots[slot.key] = val;
+        }
+        weaponAttach[wk] = slots;
+      }
+    }
+
+    weaponPaint = {};
+    if (inv.paint && typeof inv.paint === "object") {
+      for (const wk of Object.keys(inv.paint)) {
+        const val = inv.paint[wk];
+        if (WKEY[wk] != null && PAINT_BY_KEY[val] && ownedPaints[val]) weaponPaint[wk] = val;
+      }
+    }
+
+    charLoadout = {};
+    if (inv.loadout && typeof inv.loadout === "object") {
+      for (const ck of Object.keys(inv.loadout)) {
+        if (!CLASS_BY_KEY[ck] || !Array.isArray(inv.loadout[ck])) continue;
+        const list = inv.loadout[ck].filter((wk) => WKEY[wk] != null && canUseWeapon(ck, wk)).slice(0, 3);
+        if (list.length) charLoadout[ck] = list;
+      }
+    }
+
+    equippedArmor = { head: "", body: "", legs: "" };
+    if (inv.wearing && typeof inv.wearing === "object") {
+      for (const slot of ARMOR_SLOTS) {
+        const val = inv.wearing[slot.key];
+        if (ARMOR_BY_KEY[val] && ARMOR_BY_KEY[val].slot === slot.key && ownedArmor[val]) equippedArmor[slot.key] = val;
+      }
+    }
+
+    arrowStock = { normal: 0, pierce: 0, blast: 0 };
+    if (inv.arrows && typeof inv.arrows === "object") {
+      for (const a of ARROW_TYPES) {
+        arrowStock[a.key] = clamp(Math.floor(Number(inv.arrows[a.key]) || 0), 0, ARROW_STOCK_MAX);
+      }
+    }
+    arrowType = ARROW_BY_KEY[inv.arrowType] ? inv.arrowType : "normal";
   }
 
   function saveProgress() {
@@ -1119,7 +1532,90 @@
     localStorage.setItem("wz-shop", JSON.stringify(shopLevels));
     localStorage.setItem("wz-medals", JSON.stringify(medals));
     localStorage.setItem("wz-stats", JSON.stringify(lifeStats));
+    localStorage.setItem("wz-inventory", JSON.stringify({
+      scrap, tickets,
+      weapons: ownedWeapons, attachments: ownedAttachments, paints: ownedPaints,
+      armor: ownedArmor, chars: charRanks, attach: weaponAttach, paint: weaponPaint,
+      loadout: charLoadout, wearing: equippedArmor, arrows: arrowStock, arrowType,
+    }));
+    refreshWallets();
+  }
+
+  // 所持金・廃材・チケットを出しているところをまとめて書き換える
+  function refreshWallets() {
     if (el.menuMoney) el.menuMoney.textContent = money;
+    if (el.shopMoney) el.shopMoney.textContent = money;
+    document.querySelectorAll("[data-wallet-money]").forEach((n) => (n.textContent = money));
+    document.querySelectorAll("[data-wallet-scrap]").forEach((n) => (n.textContent = scrap));
+    document.querySelectorAll("[data-wallet-ticket]").forEach((n) => (n.textContent = tickets));
+  }
+
+  // ---- 持ち物のたずね方 ----
+  const weaponDef = (key) => WEAPONS[WKEY[key]] || null;
+  const hasChar = (key) => charRanks[key] != null;
+  const charRank = (key) => charRanks[key] || 0;
+
+  // ショップに並んでいない武器 = 兵科の初期装備なので、最初から使える。
+  function weaponUnlocked(key) {
+    if (WKEY[key] == null) return false;
+    if (key === "timesword") return false;          // 時の剣は岩から抜くしかない
+    if (!WEAPON_SHOP_BY_KEY[key]) return true;
+    return !!ownedWeapons[key];
+  }
+
+  // 仲間にしたキャラの装備武器は、買っていなくても使えるようにする。
+  function grantCharWeapons(charKey) {
+    const c = CLASS_BY_KEY[charKey];
+    if (!c) return;
+    for (const wk of c.weapons) if (WEAPON_SHOP_BY_KEY[wk]) ownedWeapons[wk] = true;
+  }
+
+  // 侍のような近接専門のキャラは銃を持てない。判定はキャラの初期装備から決める。
+  function meleeOnlyChar(charKey) {
+    const c = CLASS_BY_KEY[charKey];
+    if (!c) return false;
+    return c.weapons.every((wk) => { const w = weaponDef(wk); return w && w.melee; });
+  }
+
+  function canUseWeapon(charKey, weaponKey) {
+    const w = weaponDef(weaponKey);
+    if (!w) return false;
+    if (!weaponUnlocked(weaponKey)) return false;
+    if (meleeOnlyChar(charKey) && !w.melee) return false;
+    return true;
+  }
+
+  // そのキャラが実際に持っていく3つの武器。編成していなければ初期装備のまま。
+  function loadoutFor(charKey) {
+    const c = CLASS_BY_KEY[charKey] || CLASSES[0];
+    const chosen = (charLoadout[charKey] || []).filter((wk) => canUseWeapon(charKey, wk));
+    const list = chosen.length ? chosen.slice(0, 3) : c.weapons.slice();
+    return list.filter((wk) => WKEY[wk] != null);
+  }
+
+  // 矢筒の容量。ショップの強化とキャラの得意分野で増える。
+  function quiverCap(charKey) {
+    const c = CLASS_BY_KEY[charKey || playerClass];
+    const bonus = c && c.quiverBonus ? c.quiverBonus : 0;
+    return QUIVER_BASE + (shopLevels.quiver || 0) * 8 + bonus;
+  }
+
+  // 装備している鎧の効果を1つにまとめる
+  function armorBonuses() {
+    const out = { hp: 0, armor: 0, shield: 0, speed: 1, vision: 1, noise: 1, dr: 0, stunResist: 0 };
+    for (const slot of ARMOR_SLOTS) {
+      const item = ARMOR_BY_KEY[equippedArmor[slot.key]];
+      if (!item) continue;
+      out.hp += item.hp || 0;
+      out.armor += item.armor || 0;
+      out.shield += item.shield || 0;
+      out.speed *= item.speed || 1;
+      out.vision *= item.vision || 1;
+      out.noise *= item.noise || 1;
+      out.dr = 1 - (1 - out.dr) * (1 - (item.dr || 0));
+      out.stunResist = Math.max(out.stunResist, item.stunResist || 0);
+    }
+    return out;
   }
 
   function applyShopUpgrades(s, levels) {
@@ -1144,39 +1640,650 @@
     return item.baseCost + item.step * level;
   }
 
+  // ============================================================
+  //  武器の実効性能
+  //  アタッチメント・塗装・矢の種類を掛け合わせた「実際に効いている数値」を作る。
+  //  ボットは素の WEAPONS をそのまま使う (アタッチメントは自分だけの装備)。
+  // ============================================================
+  function attachmentsFor(weaponKey) {
+    const w = weaponDef(weaponKey);
+    if (!w || w.melee) return [];        // 近接武器には付けられない
+    const slots = weaponAttach[weaponKey] || {};
+    const out = [];
+    for (const slot of ATTACH_SLOTS) {
+      const def = ATTACH_BY_KEY[slots[slot.key]];
+      if (def && ownedAttachments[def.key]) out.push(def);
+    }
+    return out;
+  }
+
+  const paintFor = (weaponKey) => PAINT_BY_KEY[weaponPaint[weaponKey]] || PAINTS[0];
+
+  // index の武器に、いま自分が付けている装備の効果を乗せた性能表を作る。
+  function weaponStatsFor(index, charKey) {
+    const base = WEAPONS[index];
+    if (!base) return null;
+    const st = Object.assign({}, base);
+    st.paint = paintFor(base.key);
+    st.attachments = attachmentsFor(base.key);
+    st.radar = 0; st.quiet = !!base.quiet; st.laser = false; st.underSmg = false;
+    for (const a of st.attachments) {
+      if (a.dmgMul) st.dmg *= a.dmgMul;
+      if (a.intervalMul) st.interval *= a.intervalMul;
+      if (a.spreadMul) st.spread *= a.spreadMul;
+      if (a.rangeMul) st.range *= a.rangeMul;
+      if (a.magMul) st.mag = Math.max(1, Math.round(st.mag * a.magMul));
+      if (a.reloadMul) st.reload *= a.reloadMul;
+      if (a.kickMul) st.kick *= a.kickMul;
+      if (a.bulletSpeedMul) st.speed *= a.bulletSpeedMul;
+      if (a.pierceAdd) st.pierce = (st.pierce || 0) + a.pierceAdd;
+      if (a.radar) st.radar = Math.max(st.radar, a.radar);
+      if (a.quiet) st.quiet = true;
+      if (a.laser) st.laser = true;
+      if (a.underSmg) st.underSmg = true;
+    }
+    // 弓は矢の種類で性質が変わる
+    if (st.bow) {
+      const arrow = ARROW_BY_KEY[arrowType] || ARROW_TYPES[0];
+      const c = CLASS_BY_KEY[charKey];
+      st.arrow = arrow;
+      st.dmg *= arrow.dmgMul * ((c && c.arrowMul) || 1);
+      st.pierce = (st.pierce || 0) + arrow.pierceAdd;
+      st.speed *= arrow.speedMul;
+      st.blast = !!arrow.blast;
+    }
+    st.dmg = Math.round(st.dmg * 10) / 10;
+    st.interval = Math.round(st.interval);
+    st.reload = Math.round(st.reload);
+    return st;
+  }
+
+  // 兵士の「今かまえている武器」の実効性能。ボットなら素の値。
+  const wstat = (s) => (s && s.wstats && s.wstats[s.weapon]) || WEAPONS[s.weapon];
+
+  // レーダーを付けているか (ミニマップで敵を映す判定に使う)
+  function radarRange(s) {
+    if (!s || !s.wstats) return 0;
+    let best = 0;
+    for (const idx of s.loadout || []) {
+      const st = s.wstats[idx];
+      if (st && st.radar) best = Math.max(best, st.radar);
+    }
+    return best;
+  }
+
+  // 自分だけに乗る装備一式 (ショップ強化・鎧・練度・編成・矢) をまとめて適用する。
+  // applyClass のあとに1回だけ呼ぶ。
+  function applyPlayerGear(s, charKey) {
+    applyShopUpgrades(s, shopLevels);
+    const c = CLASS_BY_KEY[charKey] || CLASSES[0];
+    // 練度 (ガチャの重複で上がる)
+    const rank = charRank(charKey);
+    if (rank > 0) {
+      s.maxHp = Math.round(s.maxHp * (1 + rank * RANK_HP_PER));
+      s.dmgMul *= 1 + rank * RANK_DMG_PER;
+    }
+    // キャラ固有の特性
+    if (c.armorBonus) s.maxArmor += c.armorBonus;
+    s.damageTakenMul = c.damageTakenMul || 1;
+    s.healMul = c.healMul || 1;
+    s.noiseMul = c.noiseMul || 1;
+    s.visionMul = c.visionMul || 1;
+    // 鍛冶場で作った鎧
+    const gear = armorBonuses();
+    s.maxHp += gear.hp;
+    s.maxArmor += gear.armor;
+    s.maxShield += gear.shield;
+    s.speed *= gear.speed;
+    s.visionMul *= gear.vision;
+    s.noiseMul *= gear.noise;
+    s.damageTakenMul *= 1 - gear.dr;
+    s.stunResist = gear.stunResist;
+    s.hp = s.maxHp; s.armor = s.maxArmor; s.shield = s.maxShield;
+    // 編成テントで組んだ武器
+    const list = loadoutFor(charKey);
+    if (list.length) {
+      s.loadout = list.map((wk) => WKEY[wk]).filter((i) => i != null);
+      s.weapon = s.loadout[0];
+    }
+    // 実効性能表を先に作っておく (毎フレーム計算しないため)
+    s.wstats = {};
+    for (const idx of s.loadout) s.wstats[idx] = weaponStatsFor(idx, charKey);
+    s.ammo = wstat(s).mag;
+    // 矢筒: ストックから持ち出せるだけ持つ
+    s.quiverCap = quiverCap(charKey);
+    s.arrowType = arrowType;
+    s.arrows = withdrawArrows(s.quiverCap);
+    s.arrowsAtStart = s.arrows;
+  }
+
+  // 矢のストックから n 本まで引き出す。戻り値は実際に持ち出せた本数。
+  function withdrawArrows(n) {
+    const key = ARROW_BY_KEY[arrowType] ? arrowType : "normal";
+    const take = Math.max(0, Math.min(Math.floor(n), arrowStock[key] || 0));
+    arrowStock[key] -= take;
+    return take;
+  }
+
+  // 撃たずに残った矢をストックへ戻す (試合が終わったとき / メニューへ戻ったとき)。
+  function returnArrows(s) {
+    if (!s || s.arrowsAtStart == null) return;
+    const key = ARROW_BY_KEY[s.arrowType] ? s.arrowType : "normal";
+    arrowStock[key] = clamp((arrowStock[key] || 0) + Math.max(0, s.arrows | 0), 0, ARROW_STOCK_MAX);
+    s.arrowsAtStart = null;
+    s.arrows = 0;
+  }
+
+  // ============================================================
+  //  補給ショップ
+  //  タブで「強化 / 武器 / 部品 / 塗装 / 矢」を切り替える。
+  // ============================================================
+  const SHOP_TABS = [
+    { key: "upgrade", label: "🎖 強化",   note: "買った強化は次の試合から効きます。" },
+    { key: "weapon",  label: "🔫 武器",   note: "買った武器は編成テントで持ち出す3つに入れられます。" },
+    { key: "attach",  label: "🔩 部品",   note: "アタッチメントは一度買えば、作業台でどの武器にも付け替えられます。" },
+    { key: "paint",   label: "🎨 塗装",   note: "武器の色を変える塗料です。強さは変わりません。作業台で塗ります。" },
+    { key: "arrow",   label: "🏹 矢",     note: `弓で撃つ矢です。${ARROW_BUNDLE}本ずつ買えます。出撃するときに矢筒の容量ぶんだけ持ち出します。` },
+  ];
+  let shopTab = "upgrade";
+
+  function openShop() {
+    shopTab = "upgrade";
+    renderShop();
+    el.shop.classList.remove("hidden");
+  }
+
+  function shopCard(icon, title, desc, buttonHtml) {
+    return `<article class="shop-item wide"><span class="shop-icon">${icon}</span>` +
+      `<span class="shop-info"><b>${title}</b><span>${desc}</span></span>${buttonHtml}</article>`;
+  }
+
+  const buyBtn = (attr, value, label, disabled, cls) =>
+    `<button class="shop-buy${cls ? " " + cls : ""}" data-${attr}="${value}"${disabled ? " disabled" : ""}>${label}</button>`;
+
   function renderShop(message = "", isError = false) {
-    el.shopMoney.textContent = money;
-    if (el.menuMoney) el.menuMoney.textContent = money;
-    el.shopItems.innerHTML = SHOP_ITEMS.map((item) => {
+    refreshWallets();
+    el.shopTabs.innerHTML = SHOP_TABS.map((t) =>
+      `<button data-shop-tab="${t.key}" class="${t.key === shopTab ? "on" : ""}">${t.label}</button>`).join("");
+    const tab = SHOP_TABS.find((t) => t.key === shopTab) || SHOP_TABS[0];
+    el.shopNote.textContent = tab.note;
+    el.shopItems.innerHTML = renderShopTab(shopTab);
+    el.shopMessage.textContent = message;
+    el.shopMessage.classList.toggle("err", isError);
+  }
+
+  function renderShopTab(key) {
+    if (key === "weapon") {
+      return WEAPON_SHOP.map((entry) => {
+        const w = weaponDef(entry.key);
+        if (!w) return "";
+        const owned = !!ownedWeapons[entry.key];
+        const kind = w.melee ? "近接" : w.bow ? "弓" : "銃";
+        const stat = w.melee
+          ? `威力 ${w.dmg} / 間合い ${w.range}`
+          : w.bow ? `威力 ${w.dmg} / 射程 ${w.range} / 貫通 ${w.pierce || 0}`
+          : `威力 ${w.dmg} / 装弾 ${w.mag} / 射程 ${w.range}`;
+        return shopCard(w.melee ? "🗡" : w.bow ? "🏹" : "🔫",
+          `${esc(w.name)}<span class="tag">${kind}</span>${owned ? '<span class="tag own">所持</span>' : ""}`,
+          `${esc(entry.desc)}<br>${stat}`,
+          buyBtn("buy-weapon", entry.key, owned ? "所持ずみ" : `${entry.cost} G`, owned, owned ? "owned" : ""));
+      }).join("");
+    }
+    if (key === "attach") {
+      return ATTACH_SLOTS.map((slot) => {
+        const rows = ATTACHMENTS.filter((a) => a.slot === slot.key).map((a) => {
+          const owned = !!ownedAttachments[a.key];
+          return shopCard(a.icon,
+            `${esc(a.name)}${owned ? '<span class="tag own">所持</span>' : ""}`,
+            esc(a.desc),
+            buyBtn("buy-attach", a.key, owned ? "所持ずみ" : `${a.cost} G`, owned, owned ? "owned" : ""));
+        }).join("");
+        return `<p class="forge-group">${slot.icon} ${slot.name}</p>` + rows;
+      }).join("");
+    }
+    if (key === "paint") {
+      return PAINTS.map((p) => {
+        const owned = !!ownedPaints[p.key];
+        // 色そのものを見せたいので、アイコンの代わりに色見本を置く
+        const chip = `<span class="swatch big" style="background:${p.body};border-color:${p.trim}"></span>`;
+        return shopCard(chip,
+          `${esc(p.name)}${owned ? '<span class="tag own">所持</span>' : ""}`,
+          p.cost ? "作業台で好きな武器に塗れます。" : "はじめから持っている色です。",
+          buyBtn("buy-paint", p.key, owned ? "所持ずみ" : `${p.cost} G`, owned, owned ? "owned" : ""));
+      }).join("");
+    }
+    if (key === "arrow") {
+      const cap = quiverCap(playerClass);
+      const head = `<p class="forge-group">いまの矢筒: ${cap} 本まで持ち出せます（「強化」タブの大型矢筒で増やせます）</p>`;
+      return head + ARROW_TYPES.map((a) => {
+        const have = arrowStock[a.key] || 0;
+        const cost = a.cost * ARROW_BUNDLE;
+        const full = have >= ARROW_STOCK_MAX;
+        return shopCard(a.icon,
+          `${esc(a.name)}<span class="tag">${have} 本</span>`,
+          esc(a.desc),
+          buyBtn("buy-arrow", a.key, full ? "満杯" : `${ARROW_BUNDLE}本 ${cost} G`, full, ""));
+      }).join("");
+    }
+    // 強化
+    return SHOP_ITEMS.map((item) => {
       const level = shopLevels[item.key] || 0;
       const maxed = level >= item.max;
       const cost = maxed ? 0 : shopCost(item, level);
-      return `<article class="shop-item"><span class="shop-icon">${item.icon}</span>` +
-        `<span class="shop-info"><b>${esc(item.name)} Lv.${level}/${item.max}</b><span>${esc(item.desc)}</span></span>` +
-        `<button class="shop-buy" data-shop-buy="${item.key}"${maxed ? " disabled" : ""}>${maxed ? "強化済" : `${cost} G`}</button></article>`;
+      return shopCard(item.icon,
+        `${esc(item.name)} Lv.${level}/${item.max}`,
+        esc(item.desc),
+        buyBtn("shop-buy", item.key, maxed ? "強化済" : `${cost} G`, maxed, ""));
     }).join("");
-    el.shopMessage.textContent = message;
-    el.shopMessage.classList.toggle("err", isError);
+  }
+
+  // 所持金が足りるかを確かめて引き落とす。足りなければ false。
+  function spendMoney(cost, render) {
+    if (money < cost) {
+      render(`所持金が足りません（あと ${cost - money} G）。`, true);
+      return false;
+    }
+    money -= cost;
+    return true;
   }
 
   function buyShopItem(key) {
     const item = SHOP_ITEMS.find((entry) => entry.key === key);
     if (!item) return;
     const level = shopLevels[item.key] || 0;
-    if (level >= item.max) {
-      renderShop("この装備は最大まで強化済みです。", true);
-      return;
-    }
-    const cost = shopCost(item, level);
-    if (money < cost) {
-      renderShop(`所持金が足りません（あと ${cost - money} G）。`, true);
-      return;
-    }
-    money -= cost;
+    if (level >= item.max) { renderShop("この装備は最大まで強化済みです。", true); return; }
+    if (!spendMoney(shopCost(item, level), renderShop)) return;
     shopLevels[item.key] = level + 1;
     saveProgress();
     renderShop(`${item.name}をLv.${level + 1}へ強化しました。`);
   }
+
+  function buyWeapon(key) {
+    const entry = WEAPON_SHOP_BY_KEY[key];
+    if (!entry || ownedWeapons[key]) return;
+    if (!spendMoney(entry.cost, renderShop)) return;
+    ownedWeapons[key] = true;
+    const w = weaponDef(key);
+    // 弓を買ったら、すぐ撃てるように標準矢を20本つけてあげる
+    let bonus = "";
+    if (w.bow) {
+      arrowStock.normal = clamp((arrowStock.normal || 0) + 20, 0, ARROW_STOCK_MAX);
+      bonus = " 標準矢を20本サービスしました。";
+    }
+    saveProgress();
+    renderShop(`${w.name}を手に入れました。編成テントで持ち出す武器に入れられます。${bonus}`);
+  }
+
+  function buyAttachment(key) {
+    const a = ATTACH_BY_KEY[key];
+    if (!a || ownedAttachments[key]) return;
+    if (!spendMoney(a.cost, renderShop)) return;
+    ownedAttachments[key] = true;
+    saveProgress();
+    renderShop(`${a.name}を手に入れました。作業台で武器に取り付けてください。`);
+  }
+
+  function buyPaint(key) {
+    const p = PAINT_BY_KEY[key];
+    if (!p || ownedPaints[key]) return;
+    if (!spendMoney(p.cost, renderShop)) return;
+    ownedPaints[key] = true;
+    saveProgress();
+    renderShop(`${p.name}を手に入れました。作業台で武器に塗れます。`);
+  }
+
+  function buyArrows(key) {
+    const a = ARROW_BY_KEY[key];
+    if (!a) return;
+    if ((arrowStock[key] || 0) >= ARROW_STOCK_MAX) { renderShop("これ以上は持てません。", true); return; }
+    if (!spendMoney(a.cost * ARROW_BUNDLE, renderShop)) return;
+    arrowStock[key] = clamp((arrowStock[key] || 0) + ARROW_BUNDLE, 0, ARROW_STOCK_MAX);
+    saveProgress();
+    renderShop(`${a.name}を${ARROW_BUNDLE}本買いました（いま ${arrowStock[key]} 本）。`);
+  }
+
+  // ============================================================
+  //  作業台 (アタッチメントの取り付けと塗装)
+  // ============================================================
+  let benchWeapon = "rifle";
+
+  function benchWeaponList() {
+    // 使える武器 = ショップに無い初期装備 + 買った武器
+    return WEAPONS.map((w, i) => ({ w, i }))
+      .filter(({ w }) => weaponUnlocked(w.key))
+      .map(({ w }) => w.key);
+  }
+
+  function openBench() {
+    const list = benchWeaponList();
+    if (!list.includes(benchWeapon)) benchWeapon = list[0] || "rifle";
+    renderBench();
+    el.bench.classList.remove("hidden");
+  }
+
+  function renderBench(message = "", isError = false) {
+    refreshWallets();
+    const list = benchWeaponList();
+    el.benchWeapons.innerHTML = list.map((key) => {
+      const w = weaponDef(key);
+      const mods = attachmentsFor(key);
+      const paint = paintFor(key);
+      const tag = w.melee ? "近接" : `${w.bow ? "弓 " : ""}${mods.length}/${ATTACH_SLOTS.length} 装着`;
+      return `<button data-bench-weapon="${key}" class="${key === benchWeapon ? "on" : ""}">` +
+        `${esc(w.name)}<i><span class="swatch" style="background:${paint.body};border-color:${paint.trim}"></span> ${tag}</i></button>`;
+    }).join("");
+    el.benchDetail.innerHTML = renderBenchDetail(benchWeapon);
+    el.benchMessage.textContent = message;
+    el.benchMessage.classList.toggle("err", isError);
+  }
+
+  function renderBenchDetail(key) {
+    const w = weaponDef(key);
+    if (!w) return "";
+    const base = WEAPONS[WKEY[key]];
+    const st = weaponStatsFor(WKEY[key], playerClass);
+    let html = "";
+    if (w.melee) {
+      html += `<p class="shop-note">近接武器にはアタッチメントを付けられません。色だけ塗れます。</p>`;
+    } else {
+      for (const slot of ATTACH_SLOTS) {
+        const current = (weaponAttach[key] || {})[slot.key] || "";
+        const opts = ATTACHMENTS.filter((a) => a.slot === slot.key).map((a) => {
+          const owned = !!ownedAttachments[a.key];
+          const on = current === a.key;
+          return `<button data-bench-attach="${a.key}" class="${on ? "on" : ""}"${owned ? "" : " disabled"}` +
+            ` title="${esc(a.desc)}">${a.icon} ${esc(a.name)}${owned ? "" : "（未所持）"}</button>`;
+        }).join("");
+        html += `<div class="bench-slot"><b>${slot.icon} ${slot.name}</b><div class="bench-opts">` +
+          `<button data-bench-clear="${slot.key}" class="${current ? "" : "on"}">なし</button>${opts}</div></div>`;
+      }
+      // 素の値からどれだけ変わったかを見せる
+      const rows = [
+        ["ダメージ", st.dmg, base.dmg, true],
+        ["連射間隔", st.interval, base.interval, false],
+        ["装弾数", st.mag, base.mag, true],
+        ["リロード", st.reload, base.reload, false],
+        ["ばらつき", Math.round(st.spread * 1000) / 1000, Math.round(base.spread * 1000) / 1000, false],
+        ["射程", Math.round(st.range), base.range, true],
+        ["貫通", st.pierce || 0, base.pierce || 0, true],
+        ["反動", Math.round(st.kick * 10) / 10, Math.round(base.kick * 10) / 10, false],
+      ];
+      html += `<div class="bench-stats">` + rows.map(([label, now, was, higherBetter]) => {
+        const diff = now - was;
+        const good = diff === 0 ? "" : (diff > 0) === higherBetter ? "up" : "down";
+        const sign = diff > 0 ? "+" : "";
+        return `<span class="${good}">${label} <b>${now}</b>${diff ? `（${sign}${Math.round(diff * 100) / 100}）` : ""}</span>`;
+      }).join("") + `</div>`;
+      const extras = [];
+      if (st.radar) extras.push(`📡 レーダー 半径${st.radar}`);
+      if (st.quiet) extras.push("🤫 発砲音なし");
+      if (st.laser) extras.push("🔺 照準線");
+      if (st.underSmg) extras.push("🔫 追加射撃");
+      if (extras.length) html += `<p class="shop-note">${extras.join("　/　")}</p>`;
+    }
+    // 塗装
+    const cur = weaponPaint[key] || "gunmetal";
+    const paintOpts = PAINTS.map((p) => {
+      const owned = !!ownedPaints[p.key];
+      return `<button data-bench-paint="${p.key}" class="${cur === p.key ? "on" : ""}"${owned ? "" : " disabled"}>` +
+        `<span class="swatch" style="background:${p.body};border-color:${p.trim}"></span> ${esc(p.name)}${owned ? "" : "（未所持）"}</button>`;
+    }).join("");
+    html += `<div class="bench-slot"><b>🎨 塗装</b><div class="bench-opts">${paintOpts}</div></div>`;
+    return html;
+  }
+
+  function setBenchAttach(attachKey) {
+    const w = weaponDef(benchWeapon);
+    if (!w || w.melee) return;
+    if (!weaponAttach[benchWeapon]) weaponAttach[benchWeapon] = {};
+    const a = ATTACH_BY_KEY[attachKey];
+    if (!a || !ownedAttachments[attachKey]) return;
+    const slots = weaponAttach[benchWeapon];
+    slots[a.slot] = slots[a.slot] === attachKey ? "" : attachKey;
+    saveProgress();
+    renderBench(slots[a.slot] ? `${w.name}に${a.name}を取り付けました。` : `${a.name}を外しました。`);
+  }
+
+  function clearBenchSlot(slotKey) {
+    if (!weaponAttach[benchWeapon]) weaponAttach[benchWeapon] = {};
+    weaponAttach[benchWeapon][slotKey] = "";
+    saveProgress();
+    renderBench("取り外しました。");
+  }
+
+  function setBenchPaint(paintKey) {
+    const p = PAINT_BY_KEY[paintKey];
+    if (!p || !ownedPaints[paintKey]) return;
+    weaponPaint[benchWeapon] = paintKey;
+    saveProgress();
+    renderBench(`${weaponDef(benchWeapon).name}を${p.name}に塗りました。`);
+  }
+
+  // ============================================================
+  //  鍛冶場 (鎧づくり)
+  // ============================================================
+  function openForge() {
+    renderForge();
+    el.forge.classList.remove("hidden");
+  }
+
+  function renderForge(message = "", isError = false) {
+    refreshWallets();
+    el.forgeItems.innerHTML = ARMOR_SLOTS.map((slot) => {
+      const rows = ARMOR_RECIPES.filter((r) => r.slot === slot.key).map((r) => {
+        const owned = !!ownedArmor[r.key];
+        const worn = equippedArmor[slot.key] === r.key;
+        const needOk = !r.needs || ownedArmor[r.needs];
+        let label, disabled = false, cls = "";
+        if (worn) { label = "装備中"; disabled = true; cls = "owned"; }
+        else if (owned) { label = "装備する"; }
+        else if (!needOk) { label = "🔒"; disabled = true; }
+        else { label = `${r.gold} G<br>🔩 ${r.scrap}`; }
+        const tag = worn ? '<span class="tag own">装備中</span>' : owned ? '<span class="tag own">作成ずみ</span>' : "";
+        // 前提の鎧はボタンではなく説明に書く (ボタンが長いと名前が潰れるため)
+        const need = !needOk ? `<br>先に「${esc(ARMOR_BY_KEY[r.needs].name)}」を作ってください` : "";
+        const mat = owned ? "" : `<br>材料: ${r.gold} G ・ 廃材 ${r.scrap}`;
+        return shopCard(r.icon, `${esc(r.name)}${tag}`, `${esc(r.desc)}${mat}${need}`,
+          buyBtn("forge", r.key, label, disabled, cls));
+      }).join("");
+      const wornName = ARMOR_BY_KEY[equippedArmor[slot.key]];
+      return `<p class="forge-group">${slot.icon} ${slot.name}　<span style="opacity:.7;font-weight:600">` +
+        `${wornName ? esc(wornName.name) : "なにも装備していません"}</span></p>` + rows;
+    }).join("");
+    el.forgeMessage.textContent = message;
+    el.forgeMessage.classList.toggle("err", isError);
+  }
+
+  function forgeAction(key) {
+    const r = ARMOR_BY_KEY[key];
+    if (!r) return;
+    if (ownedArmor[key]) {
+      // 作ってあるなら装備の切り替え
+      equippedArmor[r.slot] = equippedArmor[r.slot] === key ? "" : key;
+      saveProgress();
+      renderForge(equippedArmor[r.slot] ? `${r.name}を装備しました。` : `${r.name}を外しました。`);
+      return;
+    }
+    if (r.needs && !ownedArmor[r.needs]) {
+      renderForge(`先に「${ARMOR_BY_KEY[r.needs].name}」を作る必要があります。`, true);
+      return;
+    }
+    if (scrap < r.scrap) {
+      renderForge(`廃材が足りません（あと ${r.scrap - scrap}）。試合で敵を倒すとたまります。`, true);
+      return;
+    }
+    if (!spendMoney(r.gold, renderForge)) return;
+    scrap -= r.scrap;
+    ownedArmor[key] = true;
+    equippedArmor[r.slot] = key;      // 作ったらそのまま装備する
+    saveProgress();
+    Audio.levelup();
+    renderForge(`${r.name}を作って装備しました。`);
+  }
+
+  // ============================================================
+  //  徴兵ガチャ
+  // ============================================================
+  function openGacha() {
+    el.gachaResult.classList.add("hidden");
+    el.gachaResult.innerHTML = "";
+    renderGacha();
+    el.gacha.classList.remove("hidden");
+  }
+
+  function renderGacha(message = "", isError = false) {
+    refreshWallets();
+    el.gachaRoster.innerHTML = CLASSES.map((c) => {
+      const got = hasChar(c.key);
+      const rank = charRank(c.key);
+      return `<div class="gr${got ? " got" : ""}"><b>${got ? c.icon : "❔"}</b>` +
+        `${got ? esc(c.name) : "？？？"}<br>${rarityStars(c.rarity)}` +
+        `${got && rank ? `<br>練度 +${rank}` : ""}</div>`;
+    }).join("");
+    el.gachaMessage.textContent = message;
+    el.gachaMessage.classList.toggle("err", isError);
+  }
+
+  // 1回ぶんの抽選をして、結果カードのもとになるデータを返す。
+  function pullOnce(minRarity) {
+    let c = rollGachaChar();
+    if (minRarity) { let guard = 0; while (c.rarity < minRarity && guard++ < 40) c = rollGachaChar(); }
+    if (!hasChar(c.key)) {
+      charRanks[c.key] = 0;
+      grantCharWeapons(c.key);
+      // 弓使いが仲間になったら矢も少し持たせる
+      if (c.weapons.some((wk) => (weaponDef(wk) || {}).bow)) {
+        arrowStock.normal = clamp((arrowStock.normal || 0) + 20, 0, ARROW_STOCK_MAX);
+      }
+      return { char: c, isNew: true, note: "仲間になった！" };
+    }
+    const rank = charRank(c.key);
+    if (rank < RANK_MAX) {
+      charRanks[c.key] = rank + 1;
+      return { char: c, isNew: false, note: `練度 +1（${rank + 1}）` };
+    }
+    const refund = DUP_REFUND[c.rarity] || 90;
+    money += refund;
+    return { char: c, isNew: false, note: `練度が上限　+${refund} G` };
+  }
+
+  function doGacha(count) {
+    if (tickets < count) {
+      renderGacha(`チケットが足りません（あと ${count - tickets} 枚）。試合に勝つともらえます。`, true);
+      return;
+    }
+    tickets -= count;
+    const results = [];
+    for (let i = 0; i < count; i++) {
+      // 10連は最後の1回で★4以上を保証する
+      const guarantee = count >= GACHA_TEN_TICKETS && i === count - 1 && !results.some((r) => r.char.rarity >= 4);
+      results.push(pullOnce(guarantee ? 4 : 0));
+    }
+    saveProgress();
+    Garden.syncNpcs();
+    el.gachaResult.innerHTML = results.map((r) =>
+      `<div class="gacha-card r${r.char.rarity}"><span class="gc-icon">${r.char.icon}</span>` +
+      `<span class="gc-name">${esc(r.char.name)}</span>` +
+      `<span class="gc-star">${rarityStars(r.char.rarity)}</span>` +
+      `<span class="gc-note${r.isNew ? "" : " dup"}">${esc(r.note)}</span></div>`).join("");
+    el.gachaResult.classList.remove("hidden");
+    const newOnes = results.filter((r) => r.isNew);
+    if (newOnes.length) Audio.levelup();
+    renderGacha(newOnes.length
+      ? `${newOnes.map((r) => r.char.name).join("・")} が仲間になりました！ 編成テントで出撃メンバーに選べます。`
+      : "練度が上がりました。同じキャラでも引くほど強くなります。");
+  }
+
+  function buyTicket() {
+    if (!spendMoney(GACHA_TICKET_COST, renderGacha)) return;
+    tickets++;
+    saveProgress();
+    renderGacha(`徴兵チケットを1枚買いました（いま ${tickets} 枚）。`);
+  }
+
+  // ============================================================
+  //  編成テント (キャラクターと持ち出す武器)
+  // ============================================================
+  function openSquad() {
+    renderSquad();
+    el.squad.classList.remove("hidden");
+  }
+
+  function renderSquad(message = "", isError = false) {
+    refreshWallets();
+    const owned = CLASSES.filter((c) => hasChar(c.key));
+    el.squadCount.textContent = owned.length;
+    el.squadChars.innerHTML = CLASSES.map((c) => {
+      const got = hasChar(c.key);
+      const rank = charRank(c.key);
+      const on = playerClass === c.key;
+      return `<button data-squad-char="${c.key}" class="${on ? "on" : ""}"${got ? "" : " disabled"}>` +
+        `<span class="sc-head">${got ? c.icon : "❔"} ${got ? esc(c.name) : "？？？"}` +
+        `<span class="sc-star">${rarityStars(c.rarity)}${rank ? ` 練度+${rank}` : ""}</span></span>` +
+        `<span class="sc-desc">${got ? esc(c.desc) : "徴兵ガチャで仲間になります。"}</span></button>`;
+    }).join("");
+    el.squadLoadout.innerHTML = renderSquadLoadout(playerClass);
+    el.squadMessage.textContent = message;
+    el.squadMessage.classList.toggle("err", isError);
+  }
+
+  function renderSquadLoadout(charKey) {
+    const c = CLASS_BY_KEY[charKey];
+    if (!c) return "";
+    const current = loadoutFor(charKey);
+    const usable = WEAPONS.filter((w) => canUseWeapon(charKey, w.key)).map((w) => w.key);
+    let html = `<p class="shop-note">${esc(c.name)}が持ち出す武器（数字キーの1〜3に対応）。` +
+      `${meleeOnlyChar(charKey) ? "このキャラは銃を持てません。" : ""}</p>`;
+    for (let slot = 0; slot < 3; slot++) {
+      const cur = current[slot] || "";
+      const opts = usable.map((key) => {
+        const w = weaponDef(key);
+        const on = cur === key;
+        const paint = paintFor(key);
+        const used = current.indexOf(key) >= 0 && current.indexOf(key) !== slot;
+        return `<button data-squad-slot="${slot}" data-squad-weapon="${key}" class="${on ? "on" : ""}"${used ? " disabled" : ""}>` +
+          `<span class="swatch" style="background:${paint.body};border-color:${paint.trim}"></span> ${esc(w.name)}</button>`;
+      }).join("");
+      html += `<div class="squad-slot"><b>${slot + 1} 番目：${cur ? esc(weaponDef(cur).name) : "なし"}</b>` +
+        `<div class="bench-opts">${opts}</div></div>`;
+    }
+    // 矢を使うキャラなら、どの矢を持っていくかもここで選ぶ
+    if (current.some((k) => (weaponDef(k) || {}).bow)) {
+      const opts = ARROW_TYPES.map((a) =>
+        `<button data-squad-arrow="${a.key}" class="${arrowType === a.key ? "on" : ""}">` +
+        `${a.icon} ${esc(a.name)}（${arrowStock[a.key] || 0} 本）</button>`).join("");
+      html += `<div class="squad-slot"><b>🏹 持ち出す矢　矢筒 ${quiverCap(charKey)} 本</b><div class="bench-opts">${opts}</div></div>`;
+    }
+    return html;
+  }
+
+  function setSquadChar(key) {
+    if (!hasChar(key)) return;
+    playerClass = key;
+    localStorage.setItem("wz-class", playerClass);
+    syncMenuClassButtons();
+    Garden.syncNpcs();
+    renderSquad(`${CLASS_BY_KEY[key].name}で出撃します。`);
+  }
+
+  function setSquadWeapon(slot, weaponKey) {
+    if (!canUseWeapon(playerClass, weaponKey)) return;
+    const list = loadoutFor(playerClass).slice(0, 3);
+    while (list.length < 3) list.push("");
+    if (list.indexOf(weaponKey) >= 0 && list.indexOf(weaponKey) !== slot) return;   // 同じ武器は2つ持てない
+    list[slot] = weaponKey;
+    charLoadout[playerClass] = list.filter(Boolean);
+    saveProgress();
+    renderSquad(`${slot + 1}番目を${weaponDef(weaponKey).name}にしました。`);
+  }
+
+  function setArrowType(key) {
+    if (!ARROW_BY_KEY[key]) return;
+    arrowType = key;
+    saveProgress();
+    renderSquad(`${ARROW_BY_KEY[key].name}を持ち出します。`);
+  }
+
 
   // ---- 障害物の種類 ----
   // solid: 通り抜けられない / opaque: 視線を遮る / stopsBullets: 弾を止める
@@ -1417,6 +2524,12 @@
     s.loadout = c.weapons.map((key) => WKEY[key]).filter((i) => i != null);
     s.weapon = s.loadout[0];
     s.ammo = WEAPONS[s.weapon].mag;
+    // 弓を持つなら矢も渡す。自分の矢筒は applyPlayerGear であとから上書きされる。
+    if (s.loadout.some((i) => WEAPONS[i].bow)) {
+      s.quiverCap = QUIVER_BASE + (c.quiverBonus || 0);
+      s.arrows = s.quiverCap;
+      s.arrowType = "normal";
+    }
   }
 
   // 装備している武器の中で next 方向へ1つずらす
@@ -1436,6 +2549,9 @@
       name: opt.name,
       classKey: "soldier",
       gunMul: 1, meleeMul: 1,
+      // 装備で変わる倍率。ボットは1のまま(素の性能)。
+      damageTakenMul: 1, healMul: 1, noiseMul: 1, visionMul: 1, stunResist: 0,
+      wstats: null, arrows: 0, arrowsAtStart: null, arrowType: "normal", quiverCap: 0,
       parryWindowMul: 1, parryCooldownMul: 1,
       mineArmMul: 1, mineBlastMul: 1, mineStealthMul: 1, seesEnemyMines: false,
       wires: 0, maxWires: 0, lastWire: -99999,
@@ -1472,7 +2588,7 @@
     // ローカルプレイヤーは選択したチームへ
     const me = makeSoldier({ id: id++, team: playerTeam, name: playerName || "あなた", isHuman: true, controller: "local" });
     applyClass(me, playerClass);
-    applyShopUpgrades(me, shopLevels);
+    applyPlayerGear(me, playerClass);
     G.localId = me.id;
     G.soldiers.push(me);
     // タッチ操作は照準を保持するので、開始時から敵陣を向かせておく
@@ -1911,7 +3027,7 @@
       // 走っている(足音が大きい)相手が最優先
       const running = s.moving && (s.noiseRadius || 0) > 500;
       const heardRun = running && d2 < CREATURE_HEAR_R ** 2;
-      const heardShot = t - (s.lastShot || -99999) < 900 && d2 < CREATURE_SHOT_HEAR_R ** 2 && !WEAPONS[s.weapon].melee;
+      const heardShot = t - (s.lastShot || -99999) < 900 && d2 < CREATURE_SHOT_HEAR_R ** 2 && !wstat(s).melee && !wstat(s).quiet;
       const seen = d2 < CREATURE_SIGHT_R ** 2 && lineClear(cr.x, cr.y, s.x, s.y);
       if (!heardRun && !heardShot && !seen) continue;
       // 近いほど、そして走っている相手ほど狙われやすい
@@ -2149,38 +3265,73 @@
   // ============================================================
   function tryShoot(s, t) {
     if (s.dead || s.reloading || s.shieldRaised || t < s.stunnedUntil) return;
-    const w = WEAPONS[s.weapon];
+    const w = wstat(s);
     if (t - s.lastShot < w.interval) return;
     if (w.melee) { tryMelee(s, t, w); return; }
-    if (s.ammo <= 0) { startReload(s, t); return; }
+    // 弓は弾倉ではなく矢筒から引き抜く。矢が尽きたら撃てない。
+    if (w.bow) {
+      if ((s.arrows | 0) <= 0) {
+        if (s.id === G.localId && t - (s.lastEmptyNotice || -99999) > 1200) {
+          s.lastEmptyNotice = t;
+          banner("矢が尽きた！　拠点のショップで矢を買おう");
+        }
+        return;
+      }
+      s.arrows--;
+    } else {
+      if (s.ammo <= 0) { startReload(s, t); return; }
+      s.ammo--;
+    }
     s.lastShot = t;
-    s.ammo--;
     s.recoil = Math.min(8, s.recoil + w.kick);
     s.muzzle = t;
     const mx = s.x + Math.cos(s.aimAngle) * (SOLDIER_R + 14);
     const my = s.y + Math.sin(s.aimAngle) * (SOLDIER_R + 14);
+    const paintTracer = w.paint && w.paint.tracer;
     for (let p = 0; p < w.pellets; p++) {
       const a = s.aimAngle + (Math.random() - 0.5) * w.spread * 2;
       if (G.bullets.length < MAX_BULLETS) {
         G.bullets.push({
-          // ロケット弾は戦車砲と同じ「着弾して爆発する」弾種として扱う
-          kind: w.rocket ? "shell" : "bullet",
+          // ロケット弾・爆裂矢は戦車砲と同じ「着弾して爆発する」弾種として扱う
+          kind: (w.rocket || w.blast) ? "shell" : "bullet",
           rocket: !!w.rocket,
+          arrow: !!w.bow,
+          flame: !!w.flame,
+          rail: !!w.rail,
           x: mx, y: my,
           vx: Math.cos(a) * w.speed, vy: Math.sin(a) * w.speed,
           dmg: w.dmg * s.dmgMul * (s.gunMul || 1), team: s.team, owner: s.id,
           range: w.range, traveled: 0, pierce: w.pierce || 0,
-          col: w.key === "sniper" ? "#bfe6ff" : "#ffe49a",
-          len: w.len,
+          col: w.bow ? "#e6d4a8" : w.flame ? "#ff9a3c" : w.rail ? "#c8b0ff"
+            : w.key === "sniper" ? "#bfe6ff" : (paintTracer || "#ffe49a"),
+          len: w.bow ? 16 : w.len,
         });
       }
     }
-    // マズルフラッシュ & 薬莢
-    addParticle(mx, my, { kind: "flash", life: 60, size: w.key === "shotgun" ? 16 : 11, a: s.aimAngle });
-    const ca = s.aimAngle + Math.PI / 2 + rand(-0.3, 0.3);
-    addParticle(s.x, s.y, { kind: "casing", vx: Math.cos(ca) * rand(40, 90), vy: Math.sin(ca) * rand(40, 90), life: 600, size: 2.2 });
+    // アンダーバレルSMG: 本来の弾に加えて9mm弾を1発おまけで撃つ
+    if (w.underSmg && G.bullets.length < MAX_BULLETS) {
+      const ua = s.aimAngle + rand(-0.12, 0.12);
+      G.bullets.push({
+        kind: "bullet", x: s.x + Math.cos(s.aimAngle) * (SOLDIER_R + 8) + Math.cos(s.aimAngle + 1.6) * 5,
+        y: s.y + Math.sin(s.aimAngle) * (SOLDIER_R + 8) + Math.sin(s.aimAngle + 1.6) * 5,
+        vx: Math.cos(ua) * 1050, vy: Math.sin(ua) * 1050,
+        dmg: 13 * s.dmgMul * (s.gunMul || 1), team: s.team, owner: s.id,
+        range: 520, traveled: 0, pierce: 0, col: "#ffd07a", len: 11,
+      });
+    }
+    // マズルフラッシュ & 薬莢 (弓は火も薬莢も出ない)
+    if (!w.bow) {
+      addParticle(mx, my, { kind: "flash", life: 60, size: w.key === "shotgun" ? 16 : 11, a: s.aimAngle });
+      const ca = s.aimAngle + Math.PI / 2 + rand(-0.3, 0.3);
+      addParticle(s.x, s.y, { kind: "casing", vx: Math.cos(ca) * rand(40, 90), vy: Math.sin(ca) * rand(40, 90), life: 600, size: 2.2 });
+    }
     shake = Math.min(9, shake + (s.id === G.localId ? w.kick * 0.5 : 0));
-    if (s.id === G.localId || dist2(s.x, s.y, camX + viewW() / 2, camY + viewH() / 2) < 700 * 700) Audio.shot(w.snd);
+    // 弓とサプレッサーは音がしない = 撃っても位置が伝わらない。
+    // 弓だけは、撃った本人に手ごたえが要るので弦の音を鳴らす。
+    if (w.bow) { if (s.id === G.localId) Audio.bowShot(); }
+    else if (!w.quiet && (s.id === G.localId || dist2(s.x, s.y, camX + viewW() / 2, camY + viewH() / 2) < 700 * 700)) {
+      Audio.shot(w.snd);
+    }
   }
 
   // 刀は足を止めて斬ると全方位の範囲攻撃(円月斬り)、走りながらだと通常の単体攻撃。
@@ -2410,8 +3561,9 @@
 
   function startReload(s, t) {
     if (s.reloading || s.shieldRaised || t < s.stunnedUntil) return;
-    const w = WEAPONS[s.weapon];
+    const w = wstat(s);
     if (w.melee) return;
+    if (w.bow) return;   // 弓は矢筒から引き抜くだけなのでリロードしない
     if (s.ammo >= w.mag) return;
     s.reloading = true;
     s.reloadUntil = t + w.reload;
@@ -2426,7 +3578,8 @@
     Audio.parry();
     if (target.id === G.localId) { shake = Math.min(11, shake + 5); banner("PARRY!  攻撃を弾き返した"); noteStat("parries"); }
     if (hit.type === "melee" && attacker && attacker.kind !== "tank") {
-      attacker.stunnedUntil = now() + 650;
+      // チタン戦闘兜のような装備があると、気絶する時間が短くなる
+      attacker.stunnedUntil = now() + 650 * (1 - (attacker.stunResist || 0));
       addParticle(attacker.x, attacker.y - 18, { kind: "stun", life: 650, size: 12, a: 0 });
       const a = Math.atan2(attacker.y - target.y, attacker.x - target.x);
       if (attacker.kind === "dog") {
@@ -2480,6 +3633,8 @@
     }
     // 銃座の防盾に守られている射手は被弾が軽い
     if (target.turretId >= 0) dmg *= TURRET_DAMAGE_TAKEN;
+    // 分厚い鎧と重装キャラは、抜けてきたダメージそのものを減らす
+    if (target.damageTakenMul) dmg *= target.damageTakenMul;
     if (dmg <= 0.01) { target.hitFlash = Math.max(target.hitFlash, 0.25); return "blocked"; }
     // 実績の集計で「何で倒したか」を見るために覚えておく
     target.lastHitType = hit && hit.type ? hit.type : "bullet";
@@ -2689,7 +3844,10 @@
     s.lastDamagedAt = -99999;
     s.armor = s.maxArmor; s.shield = s.maxShield; s.shieldRaised = false;
     s.parryUntil = 0; s.parryCooldownUntil = 0; s.stunnedUntil = 0;
-    s.ammo = WEAPONS[s.weapon].mag; s.reloading = false;
+    s.ammo = wstat(s).mag; s.reloading = false;
+    // 自分の矢は買ったぶんしか無いので復活では戻らない (基地で補給する)。
+    // ボットやオンラインの参加者は矢筒いっぱいで復活する。
+    if (s.id !== G.localId && s.quiverCap) s.arrows = s.quiverCap;
     s.grenades = s.maxGrenades || 3; s.vehicleId = -1; s.turretId = -1;
     s.mines = s.maxMines || 2;
     s.wires = s.maxWires || 0;
@@ -2855,7 +4013,7 @@
   function updateHealthRecovery(dt, t) {
     for (const s of G.soldiers) {
       if (s.dead || s.hp >= s.maxHp || t - s.lastDamagedAt < AUTO_HEAL_DELAY_MS) continue;
-      s.hp = Math.min(s.maxHp, s.hp + AUTO_HEAL_PER_SEC * dt);
+      s.hp = Math.min(s.maxHp, s.hp + AUTO_HEAL_PER_SEC * (s.healMul || 1) * dt);
     }
   }
 
@@ -3015,7 +4173,7 @@
       if (t > a.strafeUntil) { a.strafe = Math.random() < 0.5 ? 1 : -1; a.strafeUntil = t + rand(500, 1100); }
     }
 
-    const w = WEAPONS[s.weapon];
+    const w = wstat(s);
     const soldierTarget = a.targetId >= 0 ? G.soldiers.find((x) => x.id === a.targetId) : null;
     const baseTarget = nearestEnemyBase(s.x, s.y, s.team);
     const target = soldierTarget && !soldierTarget.dead ? soldierTarget : baseTarget;
@@ -3098,7 +4256,7 @@
     if (now() < s.stunnedUntil) { s.moving = false; s.noiseRadius = 0; return; }
     const m = Math.hypot(mvx, mvy);
     s.moving = m > 0.05;
-    s.noiseRadius = s.moving ? (dash ? 680 : 430) : 0;
+    s.noiseRadius = s.moving ? (dash ? 680 : 430) * (s.noiseMul || 1) : 0;
     if (m > 1) { mvx /= m; mvy /= m; }
     const sp = s.speed * (dash ? 1.55 : 1) * (s.shieldRaised ? 0.62 : 1) * (s.snared ? WIRE_SLOW : 1);
     const nx = s.x + mvx * sp * dt;
@@ -3400,15 +4558,24 @@
       if (s.hp < s.maxHp) s.hp = Math.min(s.maxHp, s.hp + BASE_HEAL_PER_SEC * dt);
       if (s.armor < s.maxArmor) s.armor = Math.min(s.maxArmor, s.armor + 18 * dt);
       if (s.shield < s.maxShield) s.shield = Math.min(s.maxShield, s.shield + 24 * dt);
-      const w = WEAPONS[s.weapon];
+      const w = wstat(s);
       const maxGrenades = s.maxGrenades || 3;
       const maxMines = s.maxMines || 2;
       const maxWires = s.maxWires || 0;
-      const needsSupply = (!w.melee && s.ammo < w.mag) || s.grenades < maxGrenades || s.mines < maxMines || s.wires < maxWires;
+      // 矢は基地に置いてあるわけではないので、自分の矢筒に残っているぶんだけ補える
+      const arrowRoom = s.quiverCap ? s.quiverCap - (s.arrows | 0) : 0;
+      const canRestock = s.id === G.localId && arrowRoom > 0 && (arrowStock[s.arrowType] || 0) > 0;
+      const needsSupply = (!w.melee && !w.bow && s.ammo < w.mag) || s.grenades < maxGrenades ||
+        s.mines < maxMines || s.wires < maxWires || canRestock;
       if (needsSupply && t - s.lastBaseSupplyAt >= 3000) {
-        if (!w.melee) s.ammo = w.mag;
+        if (!w.melee && !w.bow) s.ammo = w.mag;
         s.grenades = maxGrenades; s.mines = maxMines; s.wires = maxWires; s.reloading = false; s.lastBaseSupplyAt = t;
-        if (s.id === G.localId) { Audio.heal(); banner("基地で弾薬・グレネード・地雷を補給"); }
+        let gotArrows = 0;
+        if (canRestock) { gotArrows = withdrawArrows(arrowRoom); s.arrows += gotArrows; }
+        if (s.id === G.localId) {
+          Audio.heal();
+          banner(gotArrows > 0 ? `基地で補給　矢を ${gotArrows} 本受け取った` : "基地で弾薬・グレネード・地雷を補給");
+        }
       }
     }
     for (const dog of G.dogs) {
@@ -3486,7 +4653,7 @@
     for (const s of G.soldiers) {
       if (s.reloading && t >= s.reloadUntil) {
         s.reloading = false;
-        s.ammo = WEAPONS[s.weapon].mag;
+        s.ammo = wstat(s).mag;
       }
       if (s.hitFlash > 0) s.hitFlash = Math.max(0, s.hitFlash - dt * 4);
       if (s.recoil > 0) s.recoil = Math.max(0, s.recoil - dt * 26);
@@ -3570,13 +4737,15 @@
     if (inp.weaponWanted != null && inp.weaponWanted >= 0 && inp.weaponWanted !== s.weapon) {
       // 兵科の装備に無い武器は選べない
       if (s.loadout && s.loadout.indexOf(inp.weaponWanted) >= 0) {
-        const oldWeapon = WEAPONS[s.weapon];
+        const oldWeapon = wstat(s);
         s.weapon = inp.weaponWanted;
-        const newWeapon = WEAPONS[s.weapon];
-        if (newWeapon.melee) s.ammo = 1;
-        else if (oldWeapon.melee) s.ammo = newWeapon.mag;
+        const newWeapon = wstat(s);
+        // 近接武器と弓は弾倉を使わないので、持ち替えの前後で弾数を引き継がない
+        const pouch = (x) => x.melee || x.bow;
+        if (pouch(newWeapon)) s.ammo = 1;
+        else if (pouch(oldWeapon)) s.ammo = newWeapon.mag;
         else s.ammo = Math.min(s.ammo, newWeapon.mag);
-        if (s.ammo <= 0) s.ammo = WEAPONS[s.weapon].mag;
+        if (s.ammo <= 0) s.ammo = newWeapon.mag;
         s.reloading = false;
       }
       inp.weaponWanted = -1;
@@ -3916,7 +5085,7 @@
     const base = me && me.vehicleId >= 0
       ? Math.min(TANK_VISION_R, Math.max(300, shortSide * 0.78))
       : Math.min(PLAYER_VISION_R, Math.max(210, shortSide * 0.6));
-    return base * daylightVisionMul();
+    return base * daylightVisionMul() * ((me && me.visionMul) || 1);
   }
 
   function isEntityVisible(entity) {
@@ -4348,8 +5517,46 @@
   }
 
   // 近接武器の見た目。原点は握り手、+X が刃先の向き。
-  function drawMeleeWeapon(style) {
-    if (style === "bayonet") {
+  // paint = 塗装(なければ既定のガンメタル)。刃ではなく柄・金具の色として使う。
+  function drawMeleeWeapon(style, paint) {
+    const grip = paint && paint.cost ? paint.body : null;
+    const trim = paint && paint.cost ? paint.trim : null;
+    if (paint && paint.glow) { ctx.shadowColor = paint.glow; ctx.shadowBlur = 8; }
+    if (style === "spear") {
+      // 長い柄の先に細い穂先。突きの間合いが一番長い。
+      ctx.fillStyle = grip || "#6b4423"; ctx.fillRect(-6, -2.5, 36, 5);
+      ctx.fillStyle = trim || "#8a6a3a"; ctx.fillRect(24, -3.5, 5, 7);
+      ctx.fillStyle = "#e6ecee";
+      ctx.beginPath(); ctx.moveTo(29, -4.5); ctx.lineTo(50, 0); ctx.lineTo(29, 4.5); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "#8b9599"; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = trim || "#c9a227";
+      ctx.beginPath(); ctx.moveTo(29, -4.5); ctx.lineTo(33, 0); ctx.lineTo(29, 4.5); ctx.closePath(); ctx.fill();
+    } else if (style === "greatsword") {
+      // 幅の広い両手剣。柄も刀身も大きい。
+      ctx.fillStyle = grip || "#3a2a1c"; ctx.fillRect(-8, -3, 16, 6);
+      ctx.fillStyle = trim || "#b08a3a"; ctx.fillRect(7, -9, 4, 18);
+      ctx.fillStyle = "#dee6ea";
+      ctx.beginPath();
+      ctx.moveTo(11, -7); ctx.lineTo(40, -5); ctx.lineTo(48, 0); ctx.lineTo(40, 5); ctx.lineTo(11, 7);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "#8d979b"; ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(13, 0); ctx.lineTo(42, 0); ctx.stroke();
+    } else if (style === "chainsaw") {
+      // エンジン部 + 回転するチェーン。刃が動いて見えるようにコマを流す。
+      ctx.fillStyle = grip || "#3b3b40"; ctx.fillRect(-6, -7, 16, 14);
+      ctx.fillStyle = trim || "#d24a38"; ctx.fillRect(-4, -5, 7, 10);
+      ctx.fillStyle = "#9aa3a6";
+      ctx.beginPath();
+      ctx.moveTo(9, -5); ctx.lineTo(36, -3.5); ctx.lineTo(38, 0); ctx.lineTo(36, 3.5); ctx.lineTo(9, 5);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#e8eef2";
+      const off = (now() / 26) % 6;
+      for (let x = 10 + off; x < 36; x += 6) {
+        ctx.fillRect(x, -6.4, 2.6, 2.2);
+        ctx.fillRect(x - 3, 4.2, 2.6, 2.2);
+      }
+    } else if (style === "bayonet") {
       // 銃身に着剣した細身の刺突武器
       ctx.fillStyle = "#23231f"; ctx.fillRect(-2, -2.5, 20, 5);
       ctx.fillStyle = "#e6ecee";
@@ -4460,7 +5667,7 @@
       ctx.strokeStyle = "rgba(220,238,248,0.42)"; ctx.lineWidth = 1; ctx.strokeRect(-10 - recoilBack, -12, 13, 24);
     }
     // 武器
-    const w = WEAPONS[s.weapon];
+    const w = wstat(s);
     if (s.shieldRaised && s.shield > 0) {
       const sr = clamp(s.shield / s.maxShield, 0, 1);
       const parrying = s.parryUntil > 0 && now() <= s.parryUntil;
@@ -4484,22 +5691,18 @@
       const thrust = w.style === "bayonet" && attackAge < swingMs ? 10 * (1 - attackAge / swingMs) : 0;
       ctx.save();
       ctx.translate(SOLDIER_R - 4 - recoilBack + thrust, 0); ctx.rotate(swing);
-      drawMeleeWeapon(w.style);
+      drawMeleeWeapon(w.style, w.paint);
       ctx.fillStyle = "#caa06b"; ctx.beginPath(); ctx.arc(1, 1, 3.5, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
+    } else if (w.bow) {
+      drawBow(s, w, recoilBack);
     } else {
-      ctx.fillStyle = "#23231f";
-      ctx.fillRect(SOLDIER_R - 4 - recoilBack, -3, w.len, 5);
-      if (w.key === "sniper") ctx.fillRect(SOLDIER_R + 2 - recoilBack, -5, 8, 3);
-      // 手
-      ctx.fillStyle = "#caa06b";
-      ctx.beginPath(); ctx.arc(SOLDIER_R - 2 - recoilBack, 2, 3.4, 0, 6.283); ctx.fill();
-      ctx.beginPath(); ctx.arc(SOLDIER_R + w.len * 0.55 - recoilBack, 1, 3.2, 0, 6.283); ctx.fill();
+      drawGun(s, w, recoilBack);
     }
     // 頭(ヘルメット)
     drawSkinHead(style, skin, c);
     // マズルフラッシュ
-    if (!s.shieldRaised && !w.melee && now() - s.muzzle < 55) {
+    if (!s.shieldRaised && !w.melee && !w.bow && now() - s.muzzle < 55) {
       const ml = SOLDIER_R + w.len - recoilBack;
       ctx.fillStyle = "rgba(255,220,120,0.95)";
       ctx.beginPath();
@@ -4515,6 +5718,148 @@
       ctx.beginPath(); ctx.arc(0, 0, SOLDIER_R + 2, 0, 6.283); ctx.fill();
     }
     ctx.restore();
+  }
+
+
+  // 銃の描画。塗装で色が変わり、付けたアタッチメントが実際に生えて見える。
+  // ctx は照準方向へ回転済み (+x が銃口の向き)。
+  function drawGun(s, w, recoilBack) {
+    const paint = w.paint || PAINTS[0];
+    const x0 = SOLDIER_R - 4 - recoilBack;
+    const len = w.len;
+    // 銃本体
+    ctx.fillStyle = paint.body;
+    ctx.fillRect(x0, -3, len, 5);
+    // 塗装の差し色 (機関部の帯)
+    ctx.fillStyle = paint.trim;
+    ctx.fillRect(x0 + 1, -2.4, Math.min(7, len * 0.35), 1.6);
+    if (w.key === "sniper" || w.key === "dmr" || w.key === "railgun") ctx.fillRect(x0 + 6, -5, 8, 3);
+    if (w.key === "minigun") {
+      // 多銃身: 束ねた砲身を縞で表す
+      ctx.fillStyle = paint.body; ctx.fillRect(x0 + 6, -6, len - 6, 11);
+      ctx.fillStyle = "rgba(255,255,255,0.16)";
+      for (let i = -4; i <= 4; i += 4) ctx.fillRect(x0 + 8, i - 0.7, len - 9, 1.4);
+    }
+    if (w.key === "flamer") {
+      // 燃料タンクとノズル
+      ctx.fillStyle = "#7a3a22";
+      ctx.beginPath(); ctx.arc(x0 + 2, 6, 4.6, 0, 6.283); ctx.fill();
+      ctx.fillStyle = paint.trim; ctx.fillRect(x0 + len - 3, -3.6, 4, 7);
+    }
+    // ---- アタッチメント ----
+    for (const a of w.attachments || []) {
+      if (a.key === "reddot") {
+        ctx.fillStyle = "#2c2f33"; ctx.fillRect(x0 + 7, -6.5, 6, 3.5);
+        ctx.fillStyle = "#ff5544"; ctx.fillRect(x0 + 9, -5.6, 1.8, 1.8);
+      } else if (a.key === "scope") {
+        ctx.fillStyle = "#1e2126"; ctx.fillRect(x0 + 5, -7.5, 13, 4.5);
+        ctx.fillStyle = "#8fd7ff"; ctx.fillRect(x0 + 16, -7, 2, 3.5);
+      } else if (a.key === "radar") {
+        // 回るパラボラ。動いていることが分かるよう傾きを時間で変える。
+        const spin = Math.sin(now() / 420) * 0.9;
+        ctx.save();
+        ctx.translate(x0 + 8, -7); ctx.rotate(spin);
+        ctx.fillStyle = "#2f3a44"; ctx.fillRect(-1, 0, 2, 5);
+        ctx.strokeStyle = "#7fe6ff"; ctx.lineWidth = 1.6;
+        ctx.beginPath(); ctx.arc(0, -1, 4.2, Math.PI * 0.15, Math.PI * 0.85, true); ctx.stroke();
+        ctx.restore();
+      } else if (a.key === "suppressor") {
+        ctx.fillStyle = "#1b1b18";
+        ctx.fillRect(x0 + len, -3.6, 11, 7);
+        ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.fillRect(x0 + len + 2, -2.6, 7, 1.4);
+      } else if (a.key === "heavybarrel") {
+        ctx.fillStyle = paint.trim; ctx.fillRect(x0 + len - 6, -4.4, 9, 9);
+      } else if (a.key === "brake") {
+        ctx.fillStyle = "#43464a";
+        ctx.fillRect(x0 + len - 1, -4.6, 6, 9);
+        ctx.fillStyle = paint.body; ctx.fillRect(x0 + len + 1, -1.2, 4, 2.4);
+      } else if (a.key === "extmag") {
+        ctx.fillStyle = paint.trim; ctx.fillRect(x0 + 6, 2, 5, 11);
+      } else if (a.key === "quickmag") {
+        ctx.fillStyle = "#d9a441"; ctx.fillRect(x0 + 6, 2, 5, 7);
+      } else if (a.key === "apround") {
+        ctx.fillStyle = "#b7c4cc"; ctx.fillRect(x0 + 6, 2, 5, 8);
+        ctx.fillStyle = "#ffd23f"; ctx.fillRect(x0 + 7, 3, 3, 2);
+      } else if (a.key === "ubsmg") {
+        // 下部に短い銃身をもう1本
+        ctx.fillStyle = "#26262a"; ctx.fillRect(x0 + 5, 4, len * 0.7, 4);
+        ctx.fillStyle = paint.trim; ctx.fillRect(x0 + 6, 7, 4, 6);
+      } else if (a.key === "grip") {
+        ctx.fillStyle = "#2b2b2b"; ctx.fillRect(x0 + len * 0.62, 3, 3.4, 8);
+      } else if (a.key === "laser") {
+        ctx.fillStyle = "#2b2b2b"; ctx.fillRect(x0 + len * 0.6, 3.2, 5, 3);
+        ctx.fillStyle = "#ff4a3a"; ctx.fillRect(x0 + len * 0.6 + 4.4, 3.8, 1.6, 1.6);
+      }
+    }
+    // レーザーの光線は、狙っている先まで細く伸ばす
+    if (w.laser && s.id === G.localId && !s.dead) {
+      ctx.strokeStyle = "rgba(255,74,58,0.5)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x0 + len, 0); ctx.lineTo(x0 + len + Math.min(w.range, 420), 0); ctx.stroke();
+      ctx.fillStyle = "rgba(255,120,100,0.85)";
+      ctx.beginPath(); ctx.arc(x0 + len + Math.min(w.range, 420), 0, 2, 0, 6.283); ctx.fill();
+    }
+    // 手
+    ctx.fillStyle = "#caa06b";
+    ctx.beginPath(); ctx.arc(x0 + 2, 2, 3.4, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.arc(x0 + len * 0.55 + 4, 1, 3.2, 0, 6.283); ctx.fill();
+  }
+
+  // 弓の描画。引き絞り → 放ちを、弦のたわみと番えた矢で見せる。
+  function drawBow(s, w, recoilBack) {
+    const paint = w.paint || PAINTS[0];
+    const x0 = SOLDIER_R - 2 - recoilBack;
+    const cross = w.key === "crossbow";
+    const empty = (s.arrows | 0) <= 0;
+    // 放った直後は弦が戻る。それ以外は次の矢を番えている。
+    const since = now() - s.muzzle;
+    const draw = since < 180 ? 1 - since / 180 : 1;
+    const pull = empty ? 0 : draw * (cross ? 4 : 9);
+    if (paint.glow) { ctx.shadowColor = paint.glow; ctx.shadowBlur = 8; }
+    if (cross) {
+      // クロスボウ: 銃床 + 横棒
+      ctx.fillStyle = paint.body; ctx.fillRect(x0 - 6, -2.5, 26, 5);
+      ctx.fillStyle = paint.trim; ctx.fillRect(x0 + 12, -13, 3.5, 26);
+      ctx.strokeStyle = "#e8e2cf"; ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(x0 + 13, -12); ctx.lineTo(x0 + 13 - pull, 0); ctx.lineTo(x0 + 13, 12);
+      ctx.stroke();
+    } else {
+      // 弓: 上下にしなる弓幹と弦
+      ctx.strokeStyle = paint.body; ctx.lineWidth = 3.2; ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(x0 + 4, -15);
+      ctx.quadraticCurveTo(x0 + 13, 0, x0 + 4, 15);
+      ctx.stroke();
+      ctx.strokeStyle = paint.trim; ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(x0 + 4, -15);
+      ctx.quadraticCurveTo(x0 + 12, 0, x0 + 4, 15);
+      ctx.stroke();
+      ctx.strokeStyle = "#efe8d2"; ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(x0 + 4, -15); ctx.lineTo(x0 + 4 - pull, 0); ctx.lineTo(x0 + 4, 15);
+      ctx.stroke();
+    }
+    // 番えた矢
+    if (!empty) {
+      const tipX = cross ? x0 + 22 : x0 + 16;
+      const tailX = tipX - 22 - pull;
+      ctx.strokeStyle = "#c9b184"; ctx.lineWidth = 1.8;
+      ctx.beginPath(); ctx.moveTo(tailX, 0); ctx.lineTo(tipX, 0); ctx.stroke();
+      ctx.fillStyle = "#e8eef4";
+      ctx.beginPath(); ctx.moveTo(tipX + 5, 0); ctx.lineTo(tipX, -2.6); ctx.lineTo(tipX, 2.6); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "#d8564a"; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(tailX, -2.6); ctx.lineTo(tailX + 4, 0); ctx.lineTo(tailX, 2.6); ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+    if (w.laser && s.id === G.localId && !s.dead) {
+      ctx.strokeStyle = "rgba(255,74,58,0.5)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x0 + 18, 0); ctx.lineTo(x0 + 18 + Math.min(w.range, 420), 0); ctx.stroke();
+    }
+    // 手
+    ctx.fillStyle = "#caa06b";
+    ctx.beginPath(); ctx.arc(x0 + 2, 1, 3.4, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.arc(x0 - 3 - pull * 0.5, 0, 3.2, 0, 6.283); ctx.fill();
   }
 
   // 練習用の的。台に的の輪を描いた板。兵士とはひと目で見分けられるようにする。
@@ -4972,7 +6317,8 @@
   function drawBullets() {
     ctx.lineCap = "round";
     for (const b of G.bullets) {
-      if (b.kind === "shell") {
+      // 爆裂矢は「着弾で爆発する弾」だが、見た目は矢のままにする
+      if (b.kind === "shell" && !b.arrow) {
         ctx.fillStyle = "#ffb83e";
         ctx.strokeStyle = "rgba(255,238,170,0.8)";
         ctx.lineWidth = 2;
@@ -4981,14 +6327,54 @@
       }
       const m = Math.hypot(b.vx, b.vy) || 1;
       const ux = b.vx / m, uy = b.vy / m;
+      // 矢は棒に矢羽根を付けて描く。弾より太く、飛んでいるのがはっきり見える。
+      if (b.arrow) {
+        const len = b.slowed ? 10 : 16;
+        const nx = -uy, ny = ux;
+        // 爆裂矢は鏃が赤く光る
+        if (b.kind === "shell") {
+          ctx.fillStyle = "rgba(255,140,50,0.35)";
+          ctx.beginPath(); ctx.arc(b.x, b.y, 7, 0, 6.283); ctx.fill();
+        }
+        ctx.strokeStyle = b.slowed ? "#cdf3a8" : "#c9b184";
+        ctx.lineWidth = 2.6;
+        ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x - ux * len, b.y - uy * len); ctx.stroke();
+        // 鏃
+        ctx.fillStyle = b.kind === "shell" ? "#ff8a3c" : "#e8eef4";
+        ctx.beginPath();
+        ctx.moveTo(b.x + ux * 4, b.y + uy * 4);
+        ctx.lineTo(b.x - ux * 3 + nx * 3, b.y - uy * 3 + ny * 3);
+        ctx.lineTo(b.x - ux * 3 - nx * 3, b.y - uy * 3 - ny * 3);
+        ctx.closePath(); ctx.fill();
+        // 矢羽根
+        ctx.strokeStyle = "#d8564a"; ctx.lineWidth = 1.6;
+        const fx = b.x - ux * len, fy = b.y - uy * len;
+        ctx.beginPath();
+        ctx.moveTo(fx + nx * 3.4, fy + ny * 3.4); ctx.lineTo(fx + ux * 5, fy + uy * 5);
+        ctx.moveTo(fx - nx * 3.4, fy - ny * 3.4); ctx.lineTo(fx + ux * 5, fy + uy * 5);
+        ctx.stroke();
+        continue;
+      }
+      // 火炎放射器の火の玉は、進むほど大きく薄くなる
+      if (b.flame) {
+        const life = clamp(b.traveled / Math.max(1, b.range), 0, 1);
+        const r = 5 + life * 9;
+        ctx.fillStyle = `rgba(255,${Math.round(150 - life * 70)},60,${0.75 - life * 0.5})`;
+        ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, 6.283); ctx.fill();
+        ctx.fillStyle = `rgba(255,240,190,${0.6 - life * 0.5})`;
+        ctx.beginPath(); ctx.arc(b.x, b.y, r * 0.45, 0, 6.283); ctx.fill();
+        continue;
+      }
       // 時が遅くなっている弾は、尾を縮めて緑がかった残光をまとう
-      const len = b.slowed ? b.len * 0.35 : b.len;
+      const len = b.slowed ? b.len * 0.35 : (b.rail ? b.len * 2.4 : b.len);
       ctx.strokeStyle = b.slowed ? "#cdf3a8" : b.col;
-      ctx.lineWidth = b.slowed ? 3.2 : 2.4;
+      ctx.lineWidth = b.slowed ? 3.2 : b.rail ? 4.2 : 2.4;
+      if (b.rail) { ctx.shadowColor = b.col; ctx.shadowBlur = 10; }
       ctx.beginPath();
       ctx.moveTo(b.x, b.y);
       ctx.lineTo(b.x - ux * len, b.y - uy * len);
       ctx.stroke();
+      if (b.rail) ctx.shadowBlur = 0;
       if (b.slowed) {
         ctx.fillStyle = "rgba(205,243,168,0.28)";
         ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, 6.283); ctx.fill();
@@ -5384,12 +6770,28 @@
       mctx.fillStyle = kit.kind === "medkit" ? "#62df7a" : kit.kind === "armor" ? "#65aaf0" : "#74e9e2";
       mctx.fillRect(kit.x * sx - 1, kit.y * sy - 1, 2, 2);
     }
+    // レーダー(アタッチメント)。届く範囲の敵は、壁の裏でもミニマップに出る。
+    const me = localSoldier();
+    const radar = me && !me.dead ? radarRange(me) : 0;
+    if (radar > 0) {
+      const sweep = (now() / 2200) % 1;
+      mctx.strokeStyle = "rgba(127,230,255,0.30)"; mctx.lineWidth = 1;
+      mctx.beginPath(); mctx.arc(me.x * sx, me.y * sy, radar * sx, 0, 6.283); mctx.stroke();
+      mctx.strokeStyle = "rgba(127,230,255,0.55)";
+      mctx.beginPath(); mctx.arc(me.x * sx, me.y * sy, radar * sx * sweep, 0, 6.283); mctx.stroke();
+    }
+    const onRadar = (e) => radar > 0 && me && dist2(me.x, me.y, e.x, e.y) < radar * radar;
     // 兵士
     for (const s of G.soldiers) {
-      if (s.dead || s.vehicleId >= 0 || !isEntityVisible(s)) continue;
+      if (s.dead || s.vehicleId >= 0) continue;
+      const seen = isEntityVisible(s);
+      if (!seen && !onRadar(s)) continue;
       mctx.fillStyle = s.id === G.localId ? YOU_ACCENT : s.dummy ? "#d9c98f" : teamDef(s.team).flag;
       const r = s.id === G.localId ? 3 : 2;
+      mctx.globalAlpha = seen ? 1 : 0.6;   // レーダーだけで見えている敵は薄く出す
       mctx.beginPath(); mctx.arc(s.x * sx, s.y * sy, r, 0, 6.283); mctx.fill();
+      if (!seen) { mctx.strokeStyle = "rgba(127,230,255,0.8)"; mctx.lineWidth = 1; mctx.stroke(); }
+      mctx.globalAlpha = 1;
     }
     for (const dog of G.dogs) {
       if (dog.dead || !isEntityVisible(dog)) continue;
@@ -5560,14 +6962,25 @@
         el.ammo.classList.remove("low");
         el.grenade.textContent = `銃座 耐久 ${Math.ceil(turret.hp)} / ${turret.maxHp}`;
       } else {
-        const w = WEAPONS[me.weapon];
+        const w = wstat(me);
         const slot = me.loadout ? me.loadout.indexOf(me.weapon) : -1;
-        el.wName.textContent = slot >= 0 ? `${slot + 1}. ${w.name}` : w.name;
-        el.ammo.textContent = w.melee ? "近接 / ∞" : (me.reloading ? "リロード" : me.ammo) + " / " + w.mag;
-        el.ammo.classList.toggle("low", !w.melee && !me.reloading && me.ammo <= Math.ceil(w.mag * 0.25));
+        const attachTag = (w.attachments && w.attachments.length)
+          ? "  " + w.attachments.map((a) => a.icon).join("") : "";
+        el.wName.textContent = (slot >= 0 ? `${slot + 1}. ${w.name}` : w.name) + attachTag;
+        if (w.bow) {
+          const arrow = w.arrow || ARROW_TYPES[0];
+          el.ammo.textContent = `${arrow.icon} ${me.arrows | 0} / ${me.quiverCap || 0}`;
+          el.ammo.classList.toggle("low", (me.arrows | 0) <= Math.ceil((me.quiverCap || 1) * 0.25));
+        } else {
+          el.ammo.textContent = w.melee ? "近接 / ∞" : (me.reloading ? "リロード" : me.ammo) + " / " + w.mag;
+          el.ammo.classList.toggle("low", !w.melee && !me.reloading && me.ammo <= Math.ceil(w.mag * 0.25));
+        }
         const hasWires = (me.maxWires || 0) > 0;
         const wireText = hasWires ? `　🪤 ${me.wires == null ? 0 : me.wires}` : "";
-        el.grenade.textContent = `💣 ${me.grenades == null ? 0 : me.grenades}　🧨 ${me.mines == null ? 0 : me.mines}${wireText}`;
+        // 弓を持っていなくても矢を持っているなら残数を出しておく
+        const hasBow = (me.loadout || []).some((i) => WEAPONS[i] && WEAPONS[i].bow);
+        const arrowText = hasBow && !w.bow ? `　🏹 ${me.arrows | 0}` : "";
+        el.grenade.textContent = `💣 ${me.grenades == null ? 0 : me.grenades}　🧨 ${me.mines == null ? 0 : me.mines}${wireText}${arrowText}`;
         // 鉄線ボタンは罠師のときだけ出す
         wireBtn.classList.toggle("hidden", !hasWires);
       }
@@ -5667,7 +7080,8 @@
       key: "reload", label: "弾を入れかえる（リロード）",
       hint: "R キーでリロードします。撃ち切ったときも自動で始まります。",
       hintTouch: "右下の「リロード」ボタンを押します。",
-      applies: (me) => me.loadout.some((i) => !WEAPONS[i].melee),
+      // 近接武器と弓は弾倉を使わないので、それしか持っていないならこの項目は出さない
+      applies: (me) => me.loadout.some((i) => !WEAPONS[i].melee && !WEAPONS[i].bow),
       reset: (c) => { c.reloaded = false; },
       done: (c) => c.reloaded,
     },
@@ -5848,6 +7262,489 @@
     el.tpSkip.classList.remove("hidden");
   }
 
+
+  // ============================================================
+  //  拠点 (庭)
+  //  試合の外で歩きまわれる自分の陣地。テントに入るとショップや作業台が開く。
+  //  試合とは完全に別のループで動く (G には触らない)。
+  // ============================================================
+  const GARDEN_W = 1480, GARDEN_H = 1000;
+
+  const Garden = {
+    ready: false,
+    t: 0,
+    player: { x: GARDEN_W / 2, y: GARDEN_H - 180, vx: 0, vy: 0, angle: -Math.PI / 2, legPhase: 0, moving: false },
+    cam: { x: 0, y: 0 },
+    facilities: [],
+    props: [],
+    npcs: [],
+    near: null,
+
+    init() {
+      if (this.ready) { this.syncNpcs(); return; }
+      this.ready = true;
+      this.facilities = [
+        { id: "shop",  icon: "🏪", label: "補給ショップ", sub: "武器・部品・矢・強化を買う",
+          x: 150, y: 130, w: 260, h: 150, roof: "#7a4a2a", wall: "#a8763f", open: () => openShop() },
+        { id: "bench", icon: "🔧", label: "作業台",       sub: "アタッチメントを付ける・色を塗る",
+          x: 1070, y: 130, w: 250, h: 150, roof: "#3f5a70", wall: "#5b7e96", open: () => openBench() },
+        { id: "forge", icon: "⚒",  label: "鍛冶場",       sub: "廃材で鎧を作る",
+          x: 120, y: 520, w: 250, h: 150, roof: "#5c3030", wall: "#8a4a3c", open: () => openForge() },
+        { id: "gacha", icon: "🎲", label: "徴兵所",       sub: "ガチャで新しい仲間を集める",
+          x: 1100, y: 520, w: 250, h: 150, roof: "#4a3068", wall: "#6f4a9c", open: () => openGacha() },
+        { id: "squad", icon: "📋", label: "編成テント",   sub: "キャラクターと武器を決める",
+          x: 300, y: 800, w: 230, h: 130, roof: "#2f5a3c", wall: "#3f7d53", open: () => openSquad() },
+        { id: "sortie", icon: "🚩", label: "出撃ゲート",  sub: "メニューへ戻って戦いに行く",
+          x: 950, y: 800, w: 230, h: 130, roof: "#5a5320", wall: "#8a7c30", open: () => { leaveGarden(); openMenu(); } },
+      ];
+      // 飾りは固定の並びにして、毎回おなじ拠点が出るようにする
+      const seedRand = mulberry32(20260818);
+      this.props = [];
+      for (let i = 0; i < 54; i++) {
+        const x = 70 + seedRand() * (GARDEN_W - 140);
+        const y = 90 + seedRand() * (GARDEN_H - 150);
+        if (this.overlaps(x, y, 80)) continue;
+        if (Math.abs(x - GARDEN_W / 2) < 120 && y > 560) continue;   // 中央の広場は空けておく
+        const r = seedRand();
+        const kind = r < 0.34 ? "tree" : r < 0.58 ? "bush" : r < 0.76 ? "crate" : r < 0.9 ? "sandbag" : "barrel";
+        this.props.push({ kind, x, y, s: 0.82 + seedRand() * 0.5 });
+      }
+      this.props.push({ kind: "fire", x: GARDEN_W / 2, y: GARDEN_H - 330, s: 1 });
+      this.props.push({ kind: "flag", x: GARDEN_W / 2 - 150, y: GARDEN_H - 330, s: 1 });
+      this.props.push({ kind: "target", x: GARDEN_W / 2 + 160, y: GARDEN_H - 330, s: 1 });
+      this.props.sort((a, b) => a.y - b.y);
+      this.syncNpcs();
+    },
+
+    overlaps(x, y, pad) {
+      return this.facilities.some((f) =>
+        x > f.x - pad && x < f.x + f.w + pad && y > f.y - pad && y < f.y + f.h + pad + 50);
+    },
+
+    // 仲間になっているキャラを拠点に立たせる (選んでいるキャラ以外)
+    syncNpcs() {
+      const spots = [
+        { x: 520, y: 660 }, { x: 640, y: 720 }, { x: 840, y: 700 }, { x: 950, y: 640 },
+        { x: 470, y: 420 }, { x: 1010, y: 400 }, { x: 700, y: 480 }, { x: 780, y: 360 },
+        { x: 380, y: 260 }, { x: 1150, y: 300 },
+      ];
+      const keys = CLASSES.map((c) => c.key).filter((k) => hasChar(k) && k !== playerClass);
+      this.npcs = keys.map((key, i) => {
+        const old = this.npcs.find((n) => n.key === key);
+        const spot = spots[i % spots.length];
+        return old || {
+          key, char: CLASS_BY_KEY[key],
+          x: spot.x, y: spot.y, hx: spot.x, hy: spot.y,
+          tx: null, ty: null, angle: rand(0, 6.283), legPhase: 0, moving: false, wait: rand(0.5, 3.5),
+        };
+      });
+    },
+
+    update(dt) {
+      this.t += dt;
+      const p = this.player;
+      let mvx = 0, mvy = 0;
+      if (keys["w"] || keys["arrowup"]) mvy -= 1;
+      if (keys["s"] || keys["arrowdown"]) mvy += 1;
+      if (keys["a"] || keys["arrowleft"]) mvx -= 1;
+      if (keys["d"] || keys["arrowright"]) mvx += 1;
+      if (stickGarden.active) { mvx = stickGarden.x; mvy = stickGarden.y; }
+      const m = Math.hypot(mvx, mvy);
+      if (m > 1) { mvx /= m; mvy /= m; }
+      p.moving = m > 0.05;
+      const speed = 235 * (keys["shift"] ? 1.5 : 1);
+      let nx = clamp(p.x + mvx * speed * dt, 42, GARDEN_W - 42);
+      let ny = clamp(p.y + mvy * speed * dt, 96, GARDEN_H - 42);
+      // 建物の中には入り込めない (入口の前で止まる)
+      for (const f of this.facilities) {
+        if (nx > f.x - 16 && nx < f.x + f.w + 16 && ny > f.y + 34 && ny < f.y + f.h + 16) {
+          const cx = f.x + f.w / 2, cy = f.y + f.h / 2 + 22;
+          if (Math.abs(nx - cx) / (f.w / 2) > Math.abs(ny - cy) / (f.h / 2)) {
+            nx = nx < cx ? f.x - 16 : f.x + f.w + 16;
+          } else {
+            ny = ny < cy ? f.y + 32 : f.y + f.h + 16;
+          }
+        }
+      }
+      p.x = nx; p.y = ny;
+      if (p.moving) { p.angle = angLerp(p.angle, Math.atan2(mvy, mvx), clamp(dt * 12, 0, 1)); p.legPhase += dt * 12; }
+
+      // NPC はゆっくり歩き回る
+      for (const n of this.npcs) {
+        n.wait -= dt;
+        if (n.wait <= 0) {
+          n.wait = rand(2.5, 6);
+          const a = rand(0, 6.283), r = rand(20, 90);
+          n.tx = clamp(n.hx + Math.cos(a) * r, 70, GARDEN_W - 70);
+          n.ty = clamp(n.hy + Math.sin(a) * r, 140, GARDEN_H - 70);
+        }
+        if (n.tx != null) {
+          const dx = n.tx - n.x, dy = n.ty - n.y, d = Math.hypot(dx, dy);
+          if (d > 5) {
+            n.x += (dx / d) * 62 * dt; n.y += (dy / d) * 62 * dt;
+            n.angle = angLerp(n.angle, Math.atan2(dy, dx), clamp(dt * 8, 0, 1));
+            n.legPhase += dt * 9; n.moving = true;
+          } else { n.moving = false; }
+        }
+      }
+
+      // 近くの施設をさがす (入口の前に立つと入れる)
+      let near = null, bestD = 130 * 130;
+      for (const f of this.facilities) {
+        const dx = p.x - (f.x + f.w / 2), dy = p.y - (f.y + f.h + 26);
+        const d = dx * dx + dy * dy;
+        if (d < bestD) { bestD = d; near = f; }
+      }
+      this.near = near;
+      if (near) {
+        el.gardenPrompt.innerHTML =
+          `${near.icon} ${esc(near.label)}　<span class="key">${isTouch ? "「入る」" : "E"}</span>で入る<em>${esc(near.sub)}</em>`;
+        el.gardenPrompt.classList.remove("hidden");
+      } else {
+        el.gardenPrompt.classList.add("hidden");
+      }
+
+      // 決定入力 (E キー / 「入る」ボタン)
+      const pressed = localInput.interactEdge || gardenEnterEdge;
+      localInput.interactEdge = false;
+      gardenEnterEdge = false;
+      if (pressed && near) { Audio.heal(); near.open(); }
+
+      // カメラ
+      this.cam.x = clamp(p.x - viewW() / 2, 0, Math.max(0, GARDEN_W - viewW()));
+      this.cam.y = clamp(p.y - viewH() / 2, 0, Math.max(0, GARDEN_H - viewH()));
+    },
+
+    render() {
+      const vw = viewW(), vh = viewH();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = "#20301a";
+      ctx.fillRect(0, 0, vw, vh);
+      ctx.save();
+      ctx.translate(-this.cam.x, -this.cam.y);
+      this.drawGround(vw, vh);
+      this.drawFence();
+      // 手前ほど後に描く (重なりが自然に見えるように)
+      const drawables = [];
+      for (const f of this.facilities) drawables.push({ y: f.y + f.h, draw: () => this.drawFacility(f) });
+      for (const pr of this.props) drawables.push({ y: pr.y, draw: () => this.drawProp(pr) });
+      for (const n of this.npcs) drawables.push({ y: n.y, draw: () => this.drawPerson(n.x, n.y, n.angle, n.legPhase, n.moving, CLASS_BY_KEY[n.key], false) });
+      const p = this.player;
+      drawables.push({ y: p.y, draw: () => this.drawPerson(p.x, p.y, p.angle, p.legPhase, p.moving, CLASS_BY_KEY[playerClass], true) });
+      drawables.sort((a, b) => a.y - b.y);
+      for (const d of drawables) d.draw();
+      ctx.restore();
+    },
+
+    drawGround(vw, vh) {
+      const TS = 72;
+      const x0 = Math.floor(this.cam.x / TS) * TS, y0 = Math.floor(this.cam.y / TS) * TS;
+      const tones = ["#3b4a2a", "#41522e", "#374527"];
+      for (let x = x0; x < this.cam.x + vw + TS; x += TS) {
+        for (let y = y0; y < this.cam.y + vh + TS; y += TS) {
+          ctx.fillStyle = tones[(((x / TS) | 0) * 7 + ((y / TS) | 0) * 13) % 3];
+          ctx.fillRect(x, y, TS, TS);
+        }
+      }
+      // 施設をつなぐ土の道
+      ctx.strokeStyle = "rgba(140,116,74,0.5)";
+      ctx.lineWidth = 38; ctx.lineCap = "round"; ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(GARDEN_W / 2, GARDEN_H - 120);
+      ctx.lineTo(GARDEN_W / 2, 330);
+      ctx.moveTo(280, 330); ctx.lineTo(GARDEN_W - 280, 330);
+      ctx.moveTo(245, 330); ctx.lineTo(245, 720);
+      ctx.moveTo(GARDEN_W - 225, 330); ctx.lineTo(GARDEN_W - 225, 720);
+      ctx.moveTo(415, 900); ctx.lineTo(GARDEN_W - 415, 900);
+      ctx.moveTo(GARDEN_W / 2, GARDEN_H - 120); ctx.lineTo(GARDEN_W / 2, 900);
+      ctx.stroke();
+      ctx.lineWidth = 1; ctx.lineCap = "butt"; ctx.lineJoin = "miter";
+    },
+
+    drawFence() {
+      // 拠点をぐるりと囲む土嚢の壁
+      ctx.fillStyle = "#6f6244";
+      ctx.strokeStyle = "rgba(0,0,0,0.28)";
+      const step = 34;
+      const bag = (x, y) => {
+        ctx.beginPath(); ctx.ellipse(x, y, 17, 11, 0, 0, 6.283); ctx.fill(); ctx.stroke();
+      };
+      for (let x = 30; x < GARDEN_W; x += step) { bag(x, 78); bag(x, GARDEN_H - 20); }
+      for (let y = 78; y < GARDEN_H; y += step) { bag(24, y); bag(GARDEN_W - 24, y); }
+    },
+
+    drawFacility(f) {
+      const cx = f.x + f.w / 2;
+      // 影
+      ctx.fillStyle = "rgba(0,0,0,0.28)";
+      ctx.beginPath(); ctx.ellipse(cx, f.y + f.h + 12, f.w * 0.52, 20, 0, 0, 6.283); ctx.fill();
+      // 壁
+      ctx.fillStyle = f.wall;
+      ctx.fillRect(f.x, f.y + 40, f.w, f.h - 40);
+      ctx.fillStyle = "rgba(0,0,0,0.18)";
+      ctx.fillRect(f.x, f.y + f.h - 14, f.w, 14);
+      // 屋根 (テント型)
+      ctx.fillStyle = f.roof;
+      ctx.beginPath();
+      ctx.moveTo(f.x - 16, f.y + 46);
+      ctx.lineTo(cx, f.y - 10);
+      ctx.lineTo(f.x + f.w + 16, f.y + 46);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,0.3)"; ctx.lineWidth = 2; ctx.stroke();
+      // 屋根の縞
+      ctx.fillStyle = "rgba(255,255,255,0.09)";
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath();
+        ctx.moveTo(cx + i * 46 - 9, f.y + 46);
+        ctx.lineTo(cx + i * 16, f.y - 4);
+        ctx.lineTo(cx + i * 16 + 8, f.y - 4);
+        ctx.lineTo(cx + i * 46 + 5, f.y + 46);
+        ctx.closePath(); ctx.fill();
+      }
+      // 入口
+      const doorW = 54;
+      ctx.fillStyle = "#1a1a14";
+      ctx.fillRect(cx - doorW / 2, f.y + f.h - 56, doorW, 56);
+      ctx.fillStyle = "rgba(255,220,140,0.18)";
+      ctx.fillRect(cx - doorW / 2 + 4, f.y + f.h - 50, doorW - 8, 44);
+      // 看板
+      ctx.fillStyle = "#2a2418";
+      ctx.fillRect(cx - 74, f.y + 52, 148, 30);
+      ctx.strokeStyle = "rgba(255,210,63,0.5)"; ctx.lineWidth = 2;
+      ctx.strokeRect(cx - 74, f.y + 52, 148, 30);
+      ctx.fillStyle = "#ffe9a8";
+      ctx.font = "bold 17px -apple-system, 'Hiragino Sans', system-ui, sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(`${f.icon} ${f.label}`, cx, f.y + 68);
+      // 近づいているときは入口を光らせる
+      if (this.near === f) {
+        ctx.strokeStyle = "rgba(255,210,63,0.85)"; ctx.lineWidth = 3;
+        ctx.strokeRect(cx - doorW / 2 - 3, f.y + f.h - 59, doorW + 6, 59);
+      }
+      ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    },
+
+    drawProp(pr) {
+      const s = pr.s;
+      ctx.save();
+      ctx.translate(pr.x, pr.y);
+      ctx.scale(s, s);
+      if (pr.kind === "tree") {
+        ctx.fillStyle = "rgba(0,0,0,0.25)";
+        ctx.beginPath(); ctx.ellipse(0, 6, 22, 9, 0, 0, 6.283); ctx.fill();
+        ctx.fillStyle = "#4a3520"; ctx.fillRect(-4, -14, 8, 20);
+        ctx.fillStyle = "#33612f";
+        ctx.beginPath(); ctx.arc(0, -26, 22, 0, 6.283); ctx.fill();
+        ctx.fillStyle = "#3f7538";
+        ctx.beginPath(); ctx.arc(-7, -31, 13, 0, 6.283); ctx.fill();
+      } else if (pr.kind === "bush") {
+        ctx.fillStyle = "#2f5a2c";
+        ctx.beginPath(); ctx.arc(0, 0, 15, 0, 6.283); ctx.fill();
+        ctx.beginPath(); ctx.arc(11, 4, 10, 0, 6.283); ctx.fill();
+        ctx.beginPath(); ctx.arc(-10, 3, 9, 0, 6.283); ctx.fill();
+      } else if (pr.kind === "crate") {
+        ctx.fillStyle = "rgba(0,0,0,0.24)";
+        ctx.beginPath(); ctx.ellipse(0, 12, 20, 7, 0, 0, 6.283); ctx.fill();
+        ctx.fillStyle = "#8a6a3c"; ctx.fillRect(-17, -14, 34, 26);
+        ctx.strokeStyle = "#5d4527"; ctx.lineWidth = 2;
+        ctx.strokeRect(-17, -14, 34, 26);
+        ctx.beginPath(); ctx.moveTo(-17, -14); ctx.lineTo(17, 12); ctx.moveTo(17, -14); ctx.lineTo(-17, 12); ctx.stroke();
+      } else if (pr.kind === "sandbag") {
+        ctx.fillStyle = "#6f6244"; ctx.strokeStyle = "rgba(0,0,0,0.28)";
+        for (let i = 0; i < 3; i++) {
+          ctx.beginPath(); ctx.ellipse(-14 + i * 14, 4 - (i % 2) * 8, 15, 10, 0, 0, 6.283); ctx.fill(); ctx.stroke();
+        }
+      } else if (pr.kind === "barrel") {
+        ctx.fillStyle = "rgba(0,0,0,0.24)";
+        ctx.beginPath(); ctx.ellipse(0, 10, 13, 6, 0, 0, 6.283); ctx.fill();
+        ctx.fillStyle = "#5a6b3a"; ctx.fillRect(-11, -14, 22, 24);
+        ctx.fillStyle = "rgba(255,255,255,0.14)"; ctx.fillRect(-11, -8, 22, 3); ctx.fillRect(-11, 2, 22, 3);
+      } else if (pr.kind === "fire") {
+        // 焚き火。ゆらぐ炎で拠点に生活感を出す。
+        ctx.fillStyle = "#3a3128";
+        ctx.beginPath(); ctx.ellipse(0, 8, 30, 13, 0, 0, 6.283); ctx.fill();
+        ctx.fillStyle = "#5a4630";
+        for (let i = 0; i < 5; i++) {
+          const a = (i / 5) * 6.283;
+          ctx.save(); ctx.rotate(a); ctx.fillRect(-4, -20, 8, 22); ctx.restore();
+        }
+        const flick = 0.7 + 0.3 * Math.sin(this.t * 9);
+        ctx.fillStyle = `rgba(255,150,40,${0.85 * flick})`;
+        ctx.beginPath(); ctx.moveTo(0, -34 * flick); ctx.quadraticCurveTo(15, -6, 0, 4); ctx.quadraticCurveTo(-15, -6, 0, -34 * flick); ctx.fill();
+        ctx.fillStyle = `rgba(255,232,150,${0.9 * flick})`;
+        ctx.beginPath(); ctx.moveTo(0, -20 * flick); ctx.quadraticCurveTo(8, -4, 0, 2); ctx.quadraticCurveTo(-8, -4, 0, -20 * flick); ctx.fill();
+      } else if (pr.kind === "flag") {
+        // 自分の軍旗。メニューで選んだチームの色になる。
+        const def = teamDef(playerTeam);
+        ctx.fillStyle = "rgba(0,0,0,0.25)";
+        ctx.beginPath(); ctx.ellipse(0, 8, 14, 6, 0, 0, 6.283); ctx.fill();
+        ctx.fillStyle = "#8a8a80"; ctx.fillRect(-2, -74, 4, 82);
+        const wave = Math.sin(this.t * 3) * 5;
+        ctx.fillStyle = def.flag;
+        ctx.beginPath();
+        ctx.moveTo(2, -72);
+        ctx.quadraticCurveTo(28, -66 + wave, 52, -70);
+        ctx.lineTo(52, -44);
+        ctx.quadraticCurveTo(28, -40 + wave, 2, -46);
+        ctx.closePath(); ctx.fill();
+      } else if (pr.kind === "target") {
+        // 練習用の的。拠点らしさのための飾り。
+        ctx.fillStyle = "rgba(0,0,0,0.25)";
+        ctx.beginPath(); ctx.ellipse(0, 10, 18, 7, 0, 0, 6.283); ctx.fill();
+        ctx.fillStyle = "#6a5636"; ctx.fillRect(-3, -10, 6, 20);
+        ctx.fillStyle = "#e8e2d0";
+        ctx.beginPath(); ctx.arc(0, -26, 18, 0, 6.283); ctx.fill();
+        ctx.fillStyle = "#c8443a";
+        ctx.beginPath(); ctx.arc(0, -26, 12, 0, 6.283); ctx.fill();
+        ctx.fillStyle = "#e8e2d0";
+        ctx.beginPath(); ctx.arc(0, -26, 6, 0, 6.283); ctx.fill();
+      }
+      ctx.restore();
+    },
+
+    // 拠点に立っている人。戦場の兵士と同じ作りで、拠点では少し大きめに描く。
+    drawPerson(x, y, angle, legPhase, moving, char, isYou) {
+      const def = teamDef(playerTeam);
+      const uniform = isYou ? YOU_UNIFORM : def.uniform;
+      const accent = isYou ? YOU_ACCENT : def.accent;
+      const R = 19;
+      ctx.save();
+      ctx.translate(x, y);
+      // 影
+      ctx.fillStyle = "rgba(0,0,0,0.32)";
+      ctx.beginPath(); ctx.ellipse(0, R * 0.55, R * 0.95, R * 0.42, 0, 0, 6.283); ctx.fill();
+      ctx.rotate(angle);
+      const swing = moving ? Math.sin(legPhase) * 7 : 0;
+      // 脚 (胴の後ろから前後に出る)
+      ctx.fillStyle = "#2b3320";
+      ctx.fillRect(-R * 0.5, -R * 0.72 + swing, R * 0.95, R * 0.42);
+      ctx.fillRect(-R * 0.5, R * 0.3 - swing, R * 0.95, R * 0.42);
+      ctx.fillStyle = "#1c2116";
+      ctx.fillRect(R * 0.25, -R * 0.72 + swing, R * 0.2, R * 0.42);
+      ctx.fillRect(R * 0.25, R * 0.3 - swing, R * 0.2, R * 0.42);
+      // 胴
+      ctx.fillStyle = uniform;
+      ctx.beginPath(); ctx.ellipse(0, 0, R * 0.92, R * 0.76, 0, 0, 6.283); ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,0.32)"; ctx.lineWidth = 1.6; ctx.stroke();
+      // 胸のベルトと肩章
+      ctx.fillStyle = accent;
+      ctx.fillRect(-R * 0.2, -R * 0.66, R * 0.34, R * 1.32);
+      ctx.fillStyle = "rgba(0,0,0,0.2)";
+      ctx.fillRect(-R * 0.62, -R * 0.62, R * 0.28, R * 0.3);
+      ctx.fillRect(-R * 0.62, R * 0.32, R * 0.28, R * 0.3);
+      // 武器 (そのキャラの1番目の装備)
+      const first = char ? loadoutFor(char.key)[0] : null;
+      const w = first ? weaponDef(first) : null;
+      if (w) {
+        const paint = paintFor(w.key);
+        if (w.melee) {
+          ctx.fillStyle = paint.cost ? paint.body : "#5b3a22";
+          ctx.fillRect(R * 0.7, -R * 0.14, R * 0.5, R * 0.26);
+          ctx.fillStyle = "#dfe5e7";
+          ctx.beginPath();
+          ctx.moveTo(R * 1.2, -R * 0.24); ctx.lineTo(R * 1.9, 0); ctx.lineTo(R * 1.2, R * 0.24);
+          ctx.closePath(); ctx.fill();
+        } else if (w.bow) {
+          ctx.strokeStyle = paint.body; ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(R * 0.85, -R * 0.8); ctx.quadraticCurveTo(R * 1.35, 0, R * 0.85, R * 0.8);
+          ctx.stroke();
+          ctx.strokeStyle = "#efe8d2"; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(R * 0.85, -R * 0.8); ctx.lineTo(R * 0.85, R * 0.8); ctx.stroke();
+        } else {
+          ctx.fillStyle = paint.body;
+          ctx.fillRect(R * 0.7, -R * 0.16, R * 1.05, R * 0.28);
+          ctx.fillStyle = paint.trim;
+          ctx.fillRect(R * 0.78, -R * 0.12, R * 0.34, R * 0.14);
+        }
+        // 手
+        ctx.fillStyle = "#caa06b";
+        ctx.beginPath(); ctx.arc(R * 0.82, R * 0.14, R * 0.19, 0, 6.283); ctx.fill();
+      }
+      // 頭 (ヘルメット)
+      ctx.fillStyle = accent;
+      ctx.beginPath(); ctx.arc(R * 0.1, 0, R * 0.46, 0, 6.283); ctx.fill();
+      ctx.fillStyle = "rgba(0,0,0,0.28)";
+      ctx.beginPath(); ctx.arc(R * 0.1, 0, R * 0.46, -0.75, 0.75); ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,0.35)"; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(R * 0.1, 0, R * 0.46, 0, 6.283); ctx.stroke();
+      ctx.restore();
+      // 名札
+      ctx.font = `bold ${isYou ? 14 : 12}px -apple-system, 'Hiragino Sans', system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      const label = isYou
+        ? `${(char && char.icon) || "🎖️"} あなた（${(char && char.name) || ""}）`
+        : `${(char && char.icon) || "🎖️"} ${(char && char.name) || ""}`;
+      // 読みやすいように黒フチを付ける
+      ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.75)";
+      ctx.strokeText(label, x, y - R - 8);
+      ctx.fillStyle = isYou ? YOU_ACCENT : "#e8e8df";
+      ctx.fillText(label, x, y - R - 8);
+      ctx.textAlign = "left";
+    },
+  };
+
+  // 固定シードの乱数。拠点の飾りを毎回おなじ配置にするために使う。
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function enterGarden() {
+    commitRun(false);          // 途中でやめた試合の戦果を確定させる
+    if (G) G.running = false;
+    Net.shutdown();
+    Audio.stopBgm();
+    scene = "garden";
+    matchPaused = false;
+    spectating = false;
+    Garden.init();
+    Garden.syncNpcs();
+    clearGameInput();
+    localInput.interactEdge = false;
+    gardenEnterEdge = false;
+    resize();
+    el.menu.classList.add("hidden");
+    el.result.classList.add("hidden");
+    el.pause.classList.add("hidden");
+    el.eliminated.classList.add("hidden");
+    el.medals.classList.add("hidden");
+    el.touch.classList.add("hidden");
+    document.getElementById("hud").style.display = "none";
+    mini.style.display = "none";
+    el.gardenHud.classList.remove("hidden");
+    if (isTouch) el.gardenTouch.classList.remove("hidden");
+    refreshWallets();
+  }
+
+  function leaveGarden() {
+    scene = "menu";
+    el.gardenHud.classList.add("hidden");
+    el.gardenTouch.classList.add("hidden");
+    el.gardenPrompt.classList.add("hidden");
+    document.getElementById("hud").style.display = "";
+    mini.style.display = "";
+    closeHubPanels();
+  }
+
+  function closeHubPanels() {
+    el.shop.classList.add("hidden");
+    el.bench.classList.add("hidden");
+    el.forge.classList.add("hidden");
+    el.gacha.classList.add("hidden");
+    el.squad.classList.add("hidden");
+  }
+
+  const hubPanelOpen = () =>
+    !el.shop.classList.contains("hidden") || !el.bench.classList.contains("hidden") ||
+    !el.forge.classList.contains("hidden") || !el.gacha.classList.contains("hidden") ||
+    !el.squad.classList.contains("hidden");
+
   // ============================================================
   //  ゲームループ
   // ============================================================
@@ -5859,6 +7756,14 @@
     lastT = ts;
     if (dt > 0.05) dt = 0.05;
     dtGlobal = dt;
+
+    // 拠点(庭)を歩いている間は、試合とは別のループで動かす
+    if (scene === "garden") {
+      if (!hubPanelOpen()) Garden.update(dt);
+      else { localInput.interactEdge = false; gardenEnterEdge = false; }
+      Garden.render();
+      return;
+    }
 
     if (G && G.running) {
       const t = now();
@@ -5924,6 +7829,8 @@
   //  マッチ制御
   // ============================================================
   function startSoloMatch() {
+    if (scene === "garden") leaveGarden();
+    scene = "match";
     mode = "sp";
     G = emptyState();
     G.obstacles = genMap();
@@ -5959,18 +7866,33 @@
     const me = localSoldier();
     const win = !!me && winnerTeam === me.team;
     commitRun(win);
-    let reward = 0;
-    if (!G.rewardClaimed) {
+    let reward = 0, gotScrap = 0, gotTicket = 0, gotArrows = 0;
+    if (!G.rewardClaimed && !isTraining()) {
       G.rewardClaimed = true;
       if (win) {
         reward = WIN_REWARD;
         money += reward;
-        saveProgress();
       }
+      // 廃材は鍛冶場で鎧を作る材料。倒した数に応じてたまる。
+      gotScrap = (me ? me.kills : 0) + (win ? 8 : 2);
+      scrap += gotScrap;
+      // 徴兵チケットは勝つともらえる (負けても3回に1回くらいは出る)
+      gotTicket = win ? 1 : (Math.random() < 0.34 ? 1 : 0);
+      tickets += gotTicket;
+      // 標準矢の支給。矢が尽きて何もできなくなるのを防ぐ。
+      gotArrows = ARROW_GIFT_PER_MATCH;
+      arrowStock.normal = clamp(arrowStock.normal + gotArrows, 0, ARROW_STOCK_MAX);
+      saveProgress();
     }
     el.resultTitle.textContent = win ? "勝利！ 🎖" : "敗北…";
     el.resultTitle.style.color = win ? "#8cf06a" : "#ff7a6a";
-    el.rewardSummary.textContent = win ? `勝利報酬 +${reward || WIN_REWARD} G` : `勝利すると ${WIN_REWARD} G 獲得できます`;
+    const bits = [];
+    if (win) bits.push(`勝利報酬 +${reward || WIN_REWARD} G`);
+    else bits.push(`勝利すると ${WIN_REWARD} G`);
+    if (gotScrap) bits.push(`廃材 +${gotScrap}`);
+    if (gotTicket) bits.push(`徴兵チケット +${gotTicket}`);
+    if (gotArrows) bits.push(`標準矢 +${gotArrows}`);
+    el.rewardSummary.textContent = bits.join("　/　");
     el.rewardSummary.classList.toggle("win", win);
 
     // 4軍の順位表: 基地が健在な軍が上、あとは撃破数順。
@@ -5996,7 +7918,7 @@
       ["最終レベル", me ? me.level : 1],
     ].map(r => `<div class="row"><span>${r[0]}</span><b>${esc(String(r[1]))}</b></div>`).join("");
     el.resultStats.innerHTML = table + `<div class="result-divider"></div>` + personal;
-    renderShop();
+    refreshWallets();
     el.eliminated.classList.add("hidden");
     el.trainingPanel.classList.add("hidden");
     Audio.stopBgm();
@@ -6005,6 +7927,10 @@
   }
 
   function hideOverlays() {
+    // 拠点から直接オンライン戦が始まることもあるので、ここで確実に戦場へ切り替える
+    if (scene === "garden") leaveGarden();
+    scene = "match";
+    closeHubPanels();
     el.menu.classList.add("hidden");
     el.pause.classList.add("hidden");
     el.help.classList.add("hidden");
@@ -6123,11 +8049,14 @@
   }
 
   function restoreTouchControls() {
-    if (isTouch && el.menu.classList.contains("hidden") && el.help.classList.contains("hidden") &&
-        el.pause.classList.contains("hidden") && el.result.classList.contains("hidden") &&
-        el.eliminated.classList.contains("hidden") && !spectating) {
-      el.touch.classList.remove("hidden");
-    }
+    if (!isTouch) return;
+    const clear = el.menu.classList.contains("hidden") && el.help.classList.contains("hidden") &&
+      el.pause.classList.contains("hidden") && el.result.classList.contains("hidden") &&
+      el.eliminated.classList.contains("hidden") && !spectating;
+    if (!clear) return;
+    // 拠点では戦闘用のボタンではなく、拠点用のスティックを出す
+    if (scene === "garden") el.gardenTouch.classList.remove("hidden");
+    else el.touch.classList.remove("hidden");
   }
 
   function openPauseMenu() {
@@ -6149,6 +8078,7 @@
     if (origin === "game" && isMatchActive()) setMatchPaused(true);
     el.help.classList.remove("hidden");
     el.touch.classList.add("hidden");
+    el.gardenTouch.classList.add("hidden");
   }
 
   function closeHelp() {
@@ -6520,6 +8450,7 @@
         s.hp = ns.hp; s.maxHp = ns.mh; s.dead = ns.d ? true : false;
         s.weapon = ns.w; s.aimAngle = ns.a;
         s.xp = ns.xp; s.ammo = ns.am; s.reloading = ns.rl ? true : false;
+        if (ns.ar != null) { s.arrows = ns.ar; s.quiverCap = ns.qc || s.quiverCap; }
         s.grenades = ns.gr; s.maxGrenades = ns.mg || 3; s.vehicleId = ns.v == null ? -1 : ns.v; s.turretId = ns.tr == null ? -1 : ns.tr;
         s.mines = ns.mn == null ? 0 : ns.mn; s.maxMines = ns.mm || 2;
         s.wires = ns.wi || 0; s.maxWires = ns.mw || 0;
@@ -6630,6 +8561,7 @@
         x: Math.round(o.x), y: Math.round(o.y), a: +o.aimAngle.toFixed(2),
         hp: Math.round(o.hp), mh: o.maxHp, d: o.dead ? 1 : 0, w: o.weapon,
         xp: o.xp, am: o.ammo, rl: o.reloading ? 1 : 0, gr: o.grenades, mg: o.maxGrenades || 3, v: o.vehicleId, tr: o.turretId,
+        ar: o.quiverCap ? (o.arrows | 0) : null, qc: o.quiverCap || 0,
         mn: o.mines, mm: o.maxMines || 2, wi: o.wires || 0, mw: o.maxWires || 0, cl: o.classKey,
         ar: Math.round(o.armor), ma: o.maxArmor, sh: Math.round(o.shield), ms: o.maxShield, sr: o.shieldRaised ? 1 : 0,
         pr: Math.max(0, o.parryUntil - stamp), pc: Math.max(0, o.parryCooldownUntil - stamp), st: Math.max(0, o.stunnedUntil - stamp),
@@ -6831,25 +8763,33 @@
     syncStageButtons();
     syncOnlineAvailability();
 
-    // キャラクター(兵科)
+    // キャラクター(兵科)。ガチャで仲間にしたキャラもここに並ぶ。
     const savedClass = localStorage.getItem("wz-class");
-    playerClass = CLASS_BY_KEY[savedClass] ? savedClass : "soldier";
-    el.classSeg.innerHTML = CLASSES.map((c) =>
-      `<button data-class="${c.key}"><span class="class-head">${c.icon} ${esc(c.name)}</span>` +
-      `<span class="class-desc">${esc(c.desc)}</span></button>`).join("");
-    function syncClassButtons() {
+    playerClass = CLASS_BY_KEY[savedClass] && hasChar(savedClass) ? savedClass : "soldier";
+    function renderClassButtons() {
+      el.classSeg.innerHTML = CLASSES.map((c) => {
+        const got = hasChar(c.key);
+        const rank = charRank(c.key);
+        return `<button data-class="${c.key}"${got ? "" : " disabled"}>` +
+          `<span class="class-head">${got ? c.icon : "❔"} ${got ? esc(c.name) : "？？？"}` +
+          ` <span class="sc-star">${rarityStars(c.rarity)}${rank ? ` 練度+${rank}` : ""}</span></span>` +
+          `<span class="class-desc">${got ? esc(c.desc) : "拠点の徴兵ガチャで仲間になります。"}</span></button>`;
+      }).join("");
+    }
+    syncMenuClassButtons = function () {
+      renderClassButtons();
       el.classSeg.querySelectorAll("button").forEach((b) => {
         b.classList.toggle("on", b.dataset.class === playerClass);
       });
-    }
+    };
     el.classSeg.addEventListener("click", (e) => {
       const b = e.target.closest && e.target.closest("[data-class]");
-      if (!b) return;
+      if (!b || b.disabled) return;
       playerClass = b.dataset.class;
       localStorage.setItem("wz-class", playerClass);
-      syncClassButtons();
+      syncMenuClassButtons();
     });
-    syncClassButtons();
+    syncMenuClassButtons();
 
     // スキン(見た目だけ)
     const savedSkin = localStorage.getItem("wz-skin");
@@ -6928,7 +8868,10 @@
     document.getElementById("btn-help-close").addEventListener("click", closeHelp);
 
     // 一時停止 / メニュー / 結果
-    document.getElementById("btn-menu").addEventListener("click", openPauseMenu);
+    document.getElementById("btn-menu").addEventListener("click", () => {
+      if (scene === "garden") { leaveGarden(); openMenu(); return; }
+      openPauseMenu();
+    });
     document.getElementById("btn-resume").addEventListener("click", resumeMatch);
     document.getElementById("btn-pause-help").addEventListener("click", () => openHelp("pause"));
     document.getElementById("btn-pause-quit").addEventListener("click", () => {
@@ -6945,15 +8888,78 @@
     document.getElementById("btn-give-up").addEventListener("click", openMenu);
     // どうしてもできない項目は飛ばせるようにしておく
     el.tpSkip.addEventListener("click", () => { if (training && !training.done) training.skip = true; });
+    // ---- 拠点(庭) ----
+    document.getElementById("btn-garden").addEventListener("click", () => { Audio.unlock(); enterGarden(); });
+    document.getElementById("btn-result-garden").addEventListener("click", () => { Audio.unlock(); enterGarden(); });
+    document.getElementById("btn-garden-menu").addEventListener("click", () => { leaveGarden(); openMenu(); });
+
+    // ---- 補給ショップ ----
+    document.getElementById("btn-shop-close").addEventListener("click", () => el.shop.classList.add("hidden"));
+    el.shopTabs.addEventListener("click", (e) => {
+      const b = e.target.closest && e.target.closest("[data-shop-tab]");
+      if (!b) return;
+      shopTab = b.dataset.shopTab;
+      renderShop();
+    });
     el.shopItems.addEventListener("click", (e) => {
-      const button = e.target.closest && e.target.closest("[data-shop-buy]");
-      if (button && !button.disabled) buyShopItem(button.dataset.shopBuy);
+      const t = e.target.closest && e.target.closest("button[data-shop-buy],button[data-buy-weapon],button[data-buy-attach],button[data-buy-paint],button[data-buy-arrow]");
+      if (!t || t.disabled) return;
+      if (t.dataset.shopBuy) buyShopItem(t.dataset.shopBuy);
+      else if (t.dataset.buyWeapon) buyWeapon(t.dataset.buyWeapon);
+      else if (t.dataset.buyAttach) buyAttachment(t.dataset.buyAttach);
+      else if (t.dataset.buyPaint) buyPaint(t.dataset.buyPaint);
+      else if (t.dataset.buyArrow) buyArrows(t.dataset.buyArrow);
+    });
+
+    // ---- 作業台 ----
+    document.getElementById("btn-bench-close").addEventListener("click", () => el.bench.classList.add("hidden"));
+    el.benchWeapons.addEventListener("click", (e) => {
+      const b = e.target.closest && e.target.closest("[data-bench-weapon]");
+      if (!b) return;
+      benchWeapon = b.dataset.benchWeapon;
+      renderBench();
+    });
+    el.benchDetail.addEventListener("click", (e) => {
+      const b = e.target.closest && e.target.closest("button");
+      if (!b || b.disabled) return;
+      if (b.dataset.benchClear != null) clearBenchSlot(b.dataset.benchClear);
+      else if (b.dataset.benchAttach) setBenchAttach(b.dataset.benchAttach);
+      else if (b.dataset.benchPaint) setBenchPaint(b.dataset.benchPaint);
+    });
+
+    // ---- 鍛冶場 ----
+    document.getElementById("btn-forge-close").addEventListener("click", () => el.forge.classList.add("hidden"));
+    el.forgeItems.addEventListener("click", (e) => {
+      const b = e.target.closest && e.target.closest("[data-forge]");
+      if (b && !b.disabled) forgeAction(b.dataset.forge);
+    });
+
+    // ---- 徴兵ガチャ ----
+    document.getElementById("btn-gacha-close").addEventListener("click", () => el.gacha.classList.add("hidden"));
+    document.getElementById("btn-gacha-one").addEventListener("click", () => doGacha(1));
+    document.getElementById("btn-gacha-ten").addEventListener("click", () => doGacha(GACHA_TEN_TICKETS));
+    document.getElementById("btn-gacha-buy").addEventListener("click", buyTicket);
+
+    // ---- 編成テント ----
+    document.getElementById("btn-squad-close").addEventListener("click", () => el.squad.classList.add("hidden"));
+    el.squadChars.addEventListener("click", (e) => {
+      const b = e.target.closest && e.target.closest("[data-squad-char]");
+      if (b && !b.disabled) setSquadChar(b.dataset.squadChar);
+    });
+    el.squadLoadout.addEventListener("click", (e) => {
+      const b = e.target.closest && e.target.closest("button");
+      if (!b || b.disabled) return;
+      if (b.dataset.squadWeapon) setSquadWeapon(Number(b.dataset.squadSlot), b.dataset.squadWeapon);
+      else if (b.dataset.squadArrow) setArrowType(b.dataset.squadArrow);
     });
 
     window.addEventListener("keydown", (e) => {
       if (e.key !== "Escape" || e.repeat) return;
+      // 手前に出ているものから順に閉じる
       if (!el.medals.classList.contains("hidden")) el.medals.classList.add("hidden");
       else if (!el.help.classList.contains("hidden")) closeHelp();
+      else if (hubPanelOpen()) closeHubPanels();
+      else if (scene === "garden") { leaveGarden(); openMenu(); }
       else if (!el.pause.classList.contains("hidden")) resumeMatch();
       else if (isMatchActive()) openPauseMenu();
       else return;
@@ -6975,6 +8981,10 @@
     // 途中でやめた試合も、そこまでの戦果は実績に反映する
     commitRun(false);
     if (G) { G.running = false; }
+    if (scene === "garden") leaveGarden();
+    scene = "menu";
+    syncMenuClassButtons();
+    refreshWallets();
     Audio.stopBgm();
     matchPaused = false;
     pauseStartedAt = 0;
