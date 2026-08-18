@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0d10">
+<title>STEEL SERPENT ― 鋼の蛇</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ==================== ゲーム画面 ==================== -->
+  <div id="stage-wrap">
+    <canvas id="game"></canvas>
+
+    <!-- ---------- HUD ---------- -->
+    <div id="hud" class="hidden">
+      <div class="hud-tl">
+        <div class="lifebar">
+          <div class="lifebar-label">LIFE</div>
+          <div class="lifebar-track"><div id="hp-ghost"></div><div id="hp-fill"></div></div>
+          <div id="hp-num">100</div>
+        </div>
+        <div class="subbar">
+          <div class="subbar-label">集中</div>
+          <div class="subbar-track"><div id="focus-fill"></div></div>
+        </div>
+        <div id="ration-row" class="ration-row">
+          <span class="ration-icon">🍱</span><span id="ration-count">×0</span>
+          <span class="ration-key">［G］使用</span>
+        </div>
+      </div>
+
+      <div class="hud-tc">
+        <div id="alert-badge" class="alert-badge normal">
+          <span id="alert-mark">●</span><span id="alert-text">NORMAL</span>
+          <div id="alert-timer"></div>
+        </div>
+        <div id="objective">目標：船内へ侵入せよ</div>
+      </div>
+
+      <div class="hud-tr">
+        <div id="stage-name">STAGE 1 ― タンカー強襲</div>
+        <div class="hud-stats">
+          <span id="stat-time">00:00</span>
+          <span id="stat-kill">撃破 0</span>
+          <span id="stat-stealth">静粛 0</span>
+        </div>
+      </div>
+
+      <div class="hud-bl">
+        <div class="rush-block">
+          <div class="rush-label">RUSH</div>
+          <div id="rush-stocks" class="rush-stocks"></div>
+        </div>
+        <div class="dodge-block">
+          <div id="dodge-ring"><span>DODGE</span></div>
+        </div>
+      </div>
+
+      <div class="hud-br">
+        <div id="weapon-panel">
+          <div id="weapon-name">サプレッサー付きハンドガン</div>
+          <div id="weapon-ammo"><span id="ammo-mag">12</span><span class="slash">/</span><span id="ammo-res">120</span></div>
+          <div id="reload-hint" class="hidden">［R］リロード</div>
+        </div>
+        <div id="weapon-list"></div>
+      </div>
+
+      <div id="center-toast"></div>
+      <div id="boss-bar" class="hidden">
+        <div class="boss-name"><span id="boss-name-text">BOSS</span><span id="boss-phase"></span></div>
+        <div class="boss-track"><div id="boss-ghost"></div><div id="boss-fill"></div></div>
+      </div>
+      <div id="box-indicator" class="hidden">📦 段ボール箱で偽装中（移動でも維持／攻撃で解除）</div>
+    </div>
+
+    <!-- ---------- 無線（コーデック） ---------- -->
+    <div id="codec" class="hidden">
+      <div class="codec-frame">
+        <div class="codec-freq"><span id="codec-freq-text">140.85</span></div>
+        <div class="codec-faces">
+          <div class="codec-face"><canvas id="codec-left" width="150" height="150"></canvas></div>
+          <div class="codec-wave"><canvas id="codec-wave" width="120" height="150"></canvas></div>
+          <div class="codec-face"><canvas id="codec-right" width="150" height="150"></canvas></div>
+        </div>
+        <div class="codec-textbox">
+          <div id="codec-speaker">スネーク</div>
+          <div id="codec-line"></div>
+          <div class="codec-next">▼ ［Enter／クリック］で送る</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="rotate-hint">📱 横向きにすると遊びやすくなります</div>
+
+    <!-- ---------- タッチ操作 ---------- -->
+    <div id="touch" class="hidden">
+      <div id="tpad" class="tpad"><div id="tpad-knob"></div></div>
+      <div class="tbtns">
+        <button class="tbtn t-jump" data-act="jump">JUMP</button>
+        <button class="tbtn t-fire" data-act="fire">FIRE</button>
+        <button class="tbtn t-dodge" data-act="dodge">DODGE</button>
+        <button class="tbtn t-rush" data-act="rush">RUSH</button>
+        <button class="tbtn t-reload" data-act="reload">R</button>
+        <button class="tbtn t-swap" data-act="swap">武器</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== タイトル ==================== -->
+  <div id="screen-title" class="screen">
+    <div class="title-bg"></div>
+    <div class="title-scan"></div>
+    <div class="title-inner">
+      <div class="title-tag">TACTICAL ESPIONAGE ACTION</div>
+      <h1 class="game-title"><span class="t1">STEEL</span><span class="t2">SERPENT</span></h1>
+      <p class="game-sub">鋼 の 蛇</p>
+      <p class="game-lead">
+        回避（ドッジ）で敵弾をかいくぐった刹那、時が軋む。<br>
+        ナイフ一本の<b>ラッシュ</b>が、その一瞬を戦果に変える。
+      </p>
+      <div class="title-btns">
+        <button id="btn-continue" class="big-btn primary hidden">つづきから</button>
+        <button id="btn-start" class="big-btn">MISSION START</button>
+        <button id="btn-select" class="big-btn ghost">ミッション選択</button>
+        <button id="btn-help" class="big-btn ghost">操作説明</button>
+      </div>
+      <div class="title-diff">
+        <span>難易度</span>
+        <button class="diff-btn" data-diff="easy">EASY</button>
+        <button class="diff-btn active" data-diff="normal">NORMAL</button>
+        <button class="diff-btn" data-diff="hard">HARD</button>
+      </div>
+      <p class="title-foot">キーボード＋マウス推奨／タッチ操作対応　―　進行は自動保存されます</p>
+    </div>
+  </div>
+
+  <!-- ==================== ミッション選択 ==================== -->
+  <div id="screen-select" class="screen hidden">
+    <div class="panel-wide">
+      <h2 class="panel-h">MISSION SELECT</h2>
+      <div id="mission-list" class="mission-list"></div>
+      <div class="row-btns"><button id="btn-select-back" class="ghost-btn">もどる</button></div>
+    </div>
+  </div>
+
+  <!-- ==================== 操作説明 ==================== -->
+  <div id="screen-help" class="screen hidden">
+    <div class="panel-wide">
+      <h2 class="panel-h">操作説明</h2>
+      <div class="help-grid">
+        <section>
+          <h3>基本</h3>
+          <table class="keytable">
+            <tr><td><kbd>A</kbd><kbd>D</kbd> / <kbd>←</kbd><kbd>→</kbd></td><td>移動</td></tr>
+            <tr><td><kbd>W</kbd> / <kbd>Space</kbd></td><td>ジャンプ（はしごは上へ）</td></tr>
+            <tr><td><kbd>S</kbd></td><td>しゃがみ／はしごを下へ／床をすり抜け</td></tr>
+            <tr><td>マウス移動</td><td>照準（十字マーク）</td></tr>
+            <tr><td>左クリック / <kbd>J</kbd></td><td>射撃</td></tr>
+            <tr><td><kbd>R</kbd></td><td>リロード</td></tr>
+            <tr><td><kbd>1</kbd>〜<kbd>7</kbd> / ホイール</td><td>武器切替</td></tr>
+            <tr><td><kbd>G</kbd></td><td>レーションで回復</td></tr>
+            <tr><td><kbd>C</kbd></td><td>段ボール箱で偽装</td></tr>
+            <tr><td><kbd>Esc</kbd> / <kbd>P</kbd></td><td>ポーズ</td></tr>
+          </table>
+        </section>
+        <section>
+          <h3>回避とラッシュ</h3>
+          <table class="keytable">
+            <tr><td><kbd>Shift</kbd> / 右クリック</td><td><b>ドッジ（回避）</b>：転がって無敵</td></tr>
+            <tr><td><kbd>F</kbd></td><td><b>ラッシュ</b>／CQC（背後から静粛制圧）</td></tr>
+            <tr><td><kbd>Q</kbd></td><td>ナイフで斬る（通常近接）</td></tr>
+          </table>
+          <p class="help-note">
+            <b>パーフェクト回避</b>：ドッジの無敵中に敵弾・敵の攻撃をすり抜けると成立。
+            世界がスローになり <b>RUSHストックが1つ</b> たまり、撃ってきた敵に <span class="mark">◆</span> の刻印が付く。
+          </p>
+          <p class="help-note">
+            <b>ラッシュ</b>：ストックがあるとき <kbd>F</kbd> で発動。<b>武器はダガーナイフのみ</b>に持ち替え、
+            刻印した敵へ踏み込んで連続斬り。近くに敵が残っていればストックの続く限り連鎖する。
+            銃はラッシュ中は使えず、通常戦闘でいつも通り使う。
+          </p>
+        </section>
+      </div>
+      <div class="row-btns"><button id="btn-help-back" class="ghost-btn">もどる</button></div>
+    </div>
+  </div>
+
+  <!-- ==================== ブリーフィング ==================== -->
+  <div id="screen-brief" class="screen hidden">
+    <div class="brief-box">
+      <div class="brief-num" id="brief-num">MISSION 01</div>
+      <h2 class="brief-title" id="brief-title">タンカー強襲</h2>
+      <div class="brief-line"></div>
+      <p class="brief-text" id="brief-text"></p>
+      <ul class="brief-obj" id="brief-obj"></ul>
+      <button id="btn-brief-go" class="big-btn primary">潜入開始</button>
+    </div>
+  </div>
+
+  <!-- ==================== ポーズ ==================== -->
+  <div id="screen-pause" class="screen hidden">
+    <div class="panel-box">
+      <h2 class="panel-h">PAUSE</h2>
+      <div id="pause-info" class="pause-info"></div>
+      <div class="col-btns">
+        <button id="btn-resume" class="big-btn primary">再開</button>
+        <button id="btn-retry" class="big-btn ghost">ミッションをやり直す</button>
+        <button id="btn-quit" class="big-btn ghost">タイトルへ戻る</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 結果 ==================== -->
+  <div id="screen-result" class="screen hidden">
+    <div class="result-box">
+      <div id="result-head" class="result-head">MISSION COMPLETE</div>
+      <div id="result-rank" class="result-rank">S</div>
+      <table class="result-table" id="result-table"></table>
+      <div class="row-btns">
+        <button id="btn-result-next" class="big-btn primary">次のミッションへ</button>
+        <button id="btn-result-retry" class="big-btn ghost">やり直す</button>
+        <button id="btn-result-title" class="big-btn ghost">タイトルへ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== ゲームオーバー ==================== -->
+  <div id="screen-over" class="screen hidden">
+    <div class="over-box">
+      <div class="over-title">SNAKE?</div>
+      <div class="over-sub">SNAAAAKE!!</div>
+      <p id="over-cause" class="over-cause"></p>
+      <div class="row-btns">
+        <button id="btn-over-retry" class="big-btn primary">コンティニュー</button>
+        <button id="btn-over-title" class="big-btn ghost">タイトルへ</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="core.js"></script>
+<script src="data.js"></script>
+<script src="entities.js"></script>
+<script src="game.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
