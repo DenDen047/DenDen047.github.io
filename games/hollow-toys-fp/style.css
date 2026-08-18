@@ -756,7 +756,7 @@ body.locked #stage-wrap { cursor: none; }
 #lock-hint {
   position: absolute;
   left: 50%;
-  bottom: 20%;
+  bottom: 5%;
   transform: translateX(-50%);
   padding: 8px 18px;
   border: 1px solid rgba(220, 210, 190, 0.28);
@@ -793,5 +793,7 @@ body.map-open #lock-hint { display: none; }
   justify-content: flex-end;
 }
 @media (max-width: 720px) {
+  /* 画面が狭いときは縦積みだとタッチボタンに掛かるので、元どおり横並びに戻す */
+  .hud-bottom { flex-direction: row; align-items: flex-end; }
   #hud .kit { bottom: 90px; }
 }

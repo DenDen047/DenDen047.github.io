@@ -5393,11 +5393,8 @@
       if (t) {
         hint.textContent = (touch.on ? '' : 'E ') + t.label;
         hint.classList.remove('hidden');
-        const pt = fpProject(t.x, t.y, 30);
-        const sx = pt && pt.x > 40 && pt.x < RW - 40 ? pt.x / RW * 100 : 50;
-        const sy = pt && pt.y > 40 && pt.y < RH - 60 ? pt.y / RH * 100 : 62;
-        hint.style.left = sx + '%';
-        hint.style.top = sy + '%';
+        hint.style.left = '50%';
+        hint.style.top = '58%';
       } else hint.classList.add('hidden');
     }
 
