@@ -48,7 +48,7 @@ const RARITY = {
    ========================================================================= */
 const FRAMES = [
   {
-    id: 'vanguard', name: 'RX-01 ヴァンガード', rarity: 'N', cls: '汎用',
+    id: 'vanguard', name: 'RX-01 ヴァンガード', rarity: 'N', cls: '汎用', shape: 'standard', dmgMul: 1.00,
     hp: 180, dr: 0.00, speed: 168, rollCd: 0.90, sp: 100,
     body: '#5b7fa8', trim: '#9fd4ff', accent: '#ffd166',
     special: 'burst_cannon',
@@ -56,7 +56,7 @@ const FRAMES = [
     desc: '訓練校の標準機。癖がなく、どの武装でも扱える。整備性がよく再装填が早い。',
   },
   {
-    id: 'bulwark', name: 'HG-22 ブルワーク', rarity: 'R', cls: '重装',
+    id: 'bulwark', name: 'HG-22 ブルワーク', rarity: 'R', cls: '重装', shape: 'bulwark', dmgMul: 0.95,
     hp: 290, dr: 0.20, speed: 132, rollCd: 1.25, sp: 110,
     body: '#6d6a5a', trim: '#c9c0a0', accent: '#ff7a3c',
     special: 'shield_burst',
@@ -64,7 +64,7 @@ const FRAMES = [
     desc: '前線維持用の重装機。鈍いが硬い。増加装甲が衝撃を殺す。',
   },
   {
-    id: 'sparrow', name: 'SV-07 スパロー', rarity: 'R', cls: '軽量',
+    id: 'sparrow', name: 'SV-07 スパロー', rarity: 'R', cls: '軽量', shape: 'light', dmgMul: 0.92,
     hp: 138, dr: -0.05, speed: 214, rollCd: 0.52, sp: 90,
     body: '#3f8f7a', trim: '#8effd2', accent: '#ffe98a',
     special: 'blade_rush',
@@ -72,7 +72,7 @@ const FRAMES = [
     desc: '偵察改造の軽量機。装甲を削って推力に回してある。回避で生き延びる機体。',
   },
   {
-    id: 'artillery', name: 'AT-13 アーティラリー', rarity: 'SR', cls: '砲撃',
+    id: 'artillery', name: 'AT-13 アーティラリー', rarity: 'SR', cls: '砲撃', shape: 'artillery', dmgMul: 1.10,
     hp: 205, dr: 0.05, speed: 142, rollCd: 1.05, sp: 120,
     body: '#7a6b8f', trim: '#d3bcff', accent: '#ffb04a',
     special: 'orbital',
@@ -80,7 +80,7 @@ const FRAMES = [
     desc: '長射程支援機。射撃管制が優秀で、ロックした遠距離目標への火力が跳ね上がる。',
   },
   {
-    id: 'tesla', name: 'EL-30 テスラ', rarity: 'SR', cls: '電磁',
+    id: 'tesla', name: 'EL-30 テスラ', rarity: 'SR', cls: '電磁', shape: 'tesla', dmgMul: 1.00,
     hp: 190, dr: 0.05, speed: 162, rollCd: 0.85, sp: 100,
     body: '#3a5f96', trim: '#9ad4ff', accent: '#c58cff',
     special: 'emp_nova',
@@ -88,7 +88,7 @@ const FRAMES = [
     desc: '電磁兵装の試験機。被弾のたびに外殻が放電し、寄ってきた敵を焼く。',
   },
   {
-    id: 'inferno', name: 'BL-44 インフェルノ', rarity: 'SR', cls: '制圧',
+    id: 'inferno', name: 'BL-44 インフェルノ', rarity: 'SR', cls: '制圧', shape: 'inferno', dmgMul: 1.05,
     hp: 226, dr: 0.10, speed: 150, rollCd: 0.95, sp: 100,
     body: '#8f4436', trim: '#ffb08a', accent: '#ff5a2a',
     special: 'inferno_field',
@@ -96,7 +96,7 @@ const FRAMES = [
     desc: '焼却用に改造された制圧機。装甲が焼ける温度域でいちばん速く撃つ。',
   },
   {
-    id: 'wraith', name: 'XN-88 レイス', rarity: 'SSR', cls: '隠密',
+    id: 'wraith', name: 'XN-88 レイス', rarity: 'SSR', cls: '隠密', shape: 'wraith', dmgMul: 1.00,
     hp: 162, dr: 0.00, speed: 196, rollCd: 0.60, sp: 90,
     body: '#2f3550', trim: '#8f9fd8', accent: '#5fffe0',
     special: 'phantom',
@@ -104,12 +104,28 @@ const FRAMES = [
     desc: '光学迷彩を積んだ試作隠密機。撃たれずにいる間だけ、異常な火力を出す。',
   },
   {
-    id: 'titan', name: 'OM-99 タイタン', rarity: 'SSR', cls: '決戦',
+    id: 'titan', name: 'OM-99 グランドタイタン', rarity: 'SSR', cls: '決戦', shape: 'grandtitan', dmgMul: 1.20,
     hp: 318, dr: 0.18, speed: 148, rollCd: 1.00, sp: 130,
     body: '#5a5f6e', trim: '#e6e9f2', accent: '#ffd23f',
     special: 'full_salvo',
     trait: 'self_repair',
-    desc: '旧軍の決戦機。全ハードポイントを同時に開く「全弾発射」を持つ。',
+    desc: '旧軍の決戦機。タイタン系列の最上位で、全ハードポイントを同時に開く。',
+  },
+  {
+    id: 'jackal', name: 'FS-03 ジャッカル', rarity: 'R', cls: '疾走', shape: 'jackal', dmgMul: 0.70,
+    hp: 92, dr: -0.10, speed: 252, rollCd: 0.40, sp: 80,
+    body: '#2f6f8a', trim: '#7ff0ff', accent: '#ffe98a',
+    special: 'overboost',
+    trait: 'hit_and_run',
+    desc: '装甲をほぼ捨てた高速機。一発は軽いが、誰よりも早く懐へ入って早く抜ける。',
+  },
+  {
+    id: 'gtitan', name: 'GT-50 タイタン', rarity: 'R', cls: '重砲', shape: 'titan', dmgMul: 1.45,
+    hp: 340, dr: 0.26, speed: 104, rollCd: 1.45, sp: 120,
+    body: '#5f5a4e', trim: '#d8cfae', accent: '#ff8a3c',
+    special: 'siege',
+    trait: 'gun_mount',
+    desc: '厚い装甲板をリベットで重ねた標準型タイタン。足は遅いが、火力と粘りは群を抜く。',
   },
 ];
 
@@ -123,6 +139,8 @@ const SPECIALS = {
   inferno_field: { name: '焼却領域',        line: '足元に炎の海を作る。継続的に焼く。' },
   phantom:       { name: '幻影分身',        line: '分身二体が同じ武装で同時射撃する。' },
   full_salvo:    { name: '全弾発射',        line: '全ハードポイント斉射＋ミサイル雨。' },
+  overboost:     { name: 'オーバーブースト', line: '5 秒間、速度と発射速度が跳ね上がり弾薬を消費しない。' },
+  siege:         { name: '要塞モード',       line: '5 秒間その場に構える。被ダメージ半減・火力 +60%。' },
 };
 SPECIALS.blade_rush.line = '高速で四回斬り抜ける。その間は無敵。';
 
@@ -139,6 +157,8 @@ const TRAITS = {
   overheat:       { name: '過熱',       line: 'HP 50% 以下で発射速度 +35%' },
   optic_camo:     { name: '光学迷彩',   line: '3 秒被弾しないとダメージ +45%・敵に見つかりにくい' },
   self_repair:    { name: '自己修復',   line: '毎秒 最大HP の 0.8% を回復' },
+  hit_and_run:    { name: '一撃離脱',   line: 'ローリング直後 1.2 秒のダメージ +40%' },
+  gun_mount:      { name: '据え置き砲架', line: '0.6 秒静止すると発射速度 +30%・弾のばらつき半減' },
 
   vampiric:   { name: '吸血回路',   line: '与ダメージの 9% を回復' },
   twin_link:  { name: '二連装',     line: '弾数 +1・威力 −16%' },
@@ -422,6 +442,16 @@ const SECTORS = [
   },
 ];
 
+/* ---------- 練習場 ---------- */
+const TRAINING = {
+  id: 'training', no: 0, name: '練習場', sub: 'TRAINING RANGE', lv: 1,
+  size: 1700, theme: 'foundry', tickets: 0, scrapBonus: 0, training: true,
+  pool: [['scout', 1], ['gunner', 1], ['shielder', 1], ['heavy', 1], ['drone', 1],
+         ['arcbot', 1], ['bomber', 1], ['mender', 1], ['sniper', 1], ['mortar', 1]],
+  count: 0, objectives: [], boss: null,
+  brief: '的で属性の相性を、動く標的で立ち回りを確かめる。撃破された的も自機も自動で復旧する。',
+};
+
 /* ---------- 目標のラベル ---------- */
 const OBJ_LABEL = {
   kill_all:  (s, t) => `敵性機体を撃破 ${s}/${t}`,
@@ -440,6 +470,6 @@ const getSector = (id) => byId(SECTORS, id);
 
 window.MRData = {
   ELEMENTS, ARMORS, AFFINITY, affinityOf, RARITY,
-  FRAMES, SPECIALS, TRAITS, CORES, WEAPONS, ENEMIES, BOSSES, SECTORS, OBJ_LABEL,
+  FRAMES, SPECIALS, TRAITS, CORES, WEAPONS, ENEMIES, BOSSES, SECTORS, TRAINING, OBJ_LABEL,
   getFrame, getWeapon, getCore, getSector,
 };

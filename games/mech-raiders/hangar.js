@@ -121,8 +121,14 @@ class Hangar {
   }
 
   show() {
+    this.save = this.app.save;
+    const pl = el('hg-players');
+    if (pl) for (const b of pl.querySelectorAll('.pbtn')) b.classList.toggle('on', Number(b.dataset.n) === this.app.numPlayers);
     el('hg-pselect').classList.toggle('hidden', this.app.numPlayers < 2);
-    if (this.app.numPlayers < 2) this.pid = 1;
+    if (this.app.numPlayers < 2) {
+      this.pid = 1;
+      for (const x of el('hg-pselect').querySelectorAll('.pbtn')) x.classList.toggle('on', x.dataset.p === '1');
+    }
     this.render();
     this.startPreview();
   }
@@ -387,7 +393,7 @@ class Hangar {
         x: cv.width / 2, y: cv.height / 2, r: 50,
         ang: a, aim: a + Math.sin(this.previewT * 0.7) * 0.22,
         walkPhase: this.previewT * 2.0, muzzle: 0, recoil: 0, hitFlash: 0, thrust: false,
-      }, { body: f.body, trim: f.trim, accent: f.accent }, { twin: !!lo.sub });
+      }, { body: f.body, trim: f.trim, accent: f.accent }, { twin: !!lo.sub, shape: f.shape });
       this.raf = requestAnimationFrame(tick);
     };
     if (!this.raf) this.raf = requestAnimationFrame(tick);

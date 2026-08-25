@@ -218,7 +218,7 @@ kbd {
 .hg-pane { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; padding: 18px 20px; }
 .hg-foot {
   padding: 12px 20px; border-top: 1px solid var(--line);
-  display: flex; justify-content: flex-end;
+  display: flex; justify-content: flex-end; gap: 10px; align-items: center;
   background: linear-gradient(0deg, rgba(79,195,255,.04), transparent);
 }
 
@@ -632,3 +632,76 @@ kbd {
   #keyhint { display: none; }
   .hangar { height: 96vh; }
 }
+
+/* ------------------------------ セーブスロット ------------------------------ */
+.slot-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.slot-card {
+  position: relative; text-align: left; overflow: hidden;
+  background: linear-gradient(135deg, #16202e, #0e1520);
+  border: 1px solid var(--line); border-radius: 6px; padding: 16px 18px;
+  font-family: var(--font); color: var(--ink);
+}
+.slot-card.pick { cursor: pointer; transition: .14s; }
+.slot-card.pick:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 10px 30px rgba(0,0,0,.4); }
+.slot-card.dim { opacity: .42; }
+.slot-no {
+  position: absolute; right: 14px; top: 8px; font-size: 40px; font-weight: 900;
+  color: rgba(255,255,255,.05); line-height: 1;
+}
+.slot-name { font-size: 16px; font-weight: 800; letter-spacing: .04em; }
+.slot-sub { font-size: 10px; letter-spacing: .22em; color: var(--ink-mute); margin-top: 2px; }
+.slot-rows { margin: 12px 0 10px; display: flex; flex-direction: column; gap: 4px; }
+.slot-rows div { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-dim); }
+.slot-rows b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.slot-empty { font-size: 12.5px; color: var(--ink-mute); line-height: 1.9; margin: 14px 0 10px; }
+.slot-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.slot-acts .btn { padding: 7px 14px; font-size: 12px; }
+
+/* ------------------------------ 設定 ------------------------------ */
+.setgroup { margin-bottom: 22px; }
+.setgroup:last-child { margin-bottom: 0; }
+.setgroup h3 {
+  font-size: 12px; letter-spacing: .16em; color: var(--accent);
+  margin-bottom: 12px; padding-bottom: 7px; border-bottom: 1px solid var(--line);
+}
+.setrow {
+  display: grid; grid-template-columns: 116px 1fr 42px; align-items: center;
+  gap: 12px; padding: 7px 0; font-size: 13px;
+}
+.setrow label { color: var(--ink-dim); }
+.setrow b { text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; color: var(--ink); }
+.setrow input[type="range"] {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 5px;
+  background: #16202e; border: 1px solid var(--line); border-radius: 3px; outline: none;
+}
+.setrow input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%;
+  background: linear-gradient(180deg, #7ad4ff, #2f7fb0); border: 1px solid #9fe0ff; cursor: pointer;
+}
+.setrow input[type="range"]::-moz-range-thumb {
+  width: 15px; height: 15px; border-radius: 50%;
+  background: #4fc3ff; border: 1px solid #9fe0ff; cursor: pointer;
+}
+.seg { display: inline-flex; justify-self: start; border: 1px solid var(--line2); border-radius: 4px; overflow: hidden; }
+.seg button {
+  background: transparent; border: none; color: var(--ink-mute); cursor: pointer;
+  font-family: var(--font); font-weight: 700; font-size: 12px; padding: 6px 20px;
+}
+.seg button.on { background: var(--accent); color: #04121c; }
+.setrow.toggle { grid-template-columns: 116px 1fr 42px; }
+
+/* ------------------------------ タイトル背景のデモ ------------------------------ */
+.demo-tag { font-size: 11px; color: var(--ink-mute); letter-spacing: .1em; margin-right: 10px; }
+/* デモ再生中はメニューの背景を透かして戦闘を見せる */
+body.demo .screen {
+  background: linear-gradient(180deg, rgba(6,9,14,.58), rgba(6,9,14,.80));
+  backdrop-filter: blur(1.5px);
+}
+body.demo #screen-title {
+  background: radial-gradient(ellipse at 50% 34%, rgba(8,12,19,.36) 0%, rgba(5,8,13,.80) 74%);
+}
+body.demo .bg-grid { opacity: .5; }
+
+/* ------------------------------ 練習場 HUD ------------------------------ */
+#hud-objectives li.stat { }
+#hud-objectives li.stat::before { content: "▸"; color: var(--accent); }

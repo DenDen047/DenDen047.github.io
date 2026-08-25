@@ -75,13 +75,14 @@
         ガチャで引いた武装とコアで機体を組み替え、必殺技と特性で押し切れ。
       </p>
       <div class="title-btns">
-        <button id="btn-solo" class="btn btn-main">1人で出撃</button>
-        <button id="btn-duo" class="btn btn-main alt">2人で出撃</button>
+        <button id="btn-newgame" class="btn btn-main">ニューゲーム</button>
+        <button id="btn-continue" class="btn btn-main alt">続きから</button>
+        <button id="btn-settings" class="btn">設定</button>
         <button id="btn-howto" class="btn">操作と仕組み</button>
       </div>
       <div class="title-foot">
+        <span class="demo-tag">◉ 背景は自動戦闘のデモ映像</span>
         <button id="btn-mute" class="linkbtn">🔊 音 ON</button>
-        <button id="btn-reset" class="linkbtn">データを消す</button>
       </div>
     </div>
   </div>
@@ -95,6 +96,10 @@
         <div class="hg-wallet">
           <span class="w-item"><i class="ico scrap">⬢</i><b id="w-scrap">0</b><small>スクラップ</small></span>
           <span class="w-item"><i class="ico ticket">◆</i><b id="w-ticket">0</b><small>チケット</small></span>
+        </div>
+        <div class="hg-pselect" id="hg-players">
+          <button class="pbtn on" data-n="1">1人</button>
+          <button class="pbtn" data-n="2">2人</button>
         </div>
         <div class="hg-pselect" id="hg-pselect">
           <button class="pbtn on" data-p="1">P1</button>
@@ -183,6 +188,7 @@
       </div>
 
       <footer class="hg-foot">
+        <button class="btn" id="btn-training">練習場へ</button>
         <button class="btn btn-main big" id="btn-tosector">出撃準備 ▶</button>
       </footer>
     </div>
@@ -197,6 +203,69 @@
         <button class="btn btn-ghost" id="btn-sector-back">格納庫へ</button>
       </div>
       <div class="sector-list" id="sector-list"></div>
+    </div>
+  </div>
+
+  <!-- ==================== セーブスロット ==================== -->
+  <div id="screen-slot" class="screen hidden">
+    <div class="bg-grid"></div>
+    <div class="panel wide">
+      <div class="panel-head">
+        <h2 id="slot-title">セーブデータを選ぶ</h2>
+        <button class="btn btn-ghost" data-back="title">タイトルへ</button>
+      </div>
+      <p class="pane-lead" id="slot-lead">続きから遊ぶデータを選ぶ。</p>
+      <div class="slot-list" id="slot-list"></div>
+    </div>
+  </div>
+
+  <!-- ==================== 設定 ==================== -->
+  <div id="screen-settings" class="screen hidden">
+    <div class="bg-grid"></div>
+    <div class="panel">
+      <div class="panel-head">
+        <h2>設定</h2>
+        <button class="btn btn-ghost" data-back="title">閉じる</button>
+      </div>
+
+      <div class="setgroup">
+        <h3>音</h3>
+        <div class="setrow">
+          <label for="set-master">全体音量</label>
+          <input type="range" id="set-master" min="0" max="100" step="1">
+          <b id="set-master-v">70</b>
+        </div>
+        <div class="setrow">
+          <label for="set-sfx">効果音</label>
+          <input type="range" id="set-sfx" min="0" max="100" step="1">
+          <b id="set-sfx-v">90</b>
+        </div>
+        <div class="setrow">
+          <label for="set-bgm">BGM 音量</label>
+          <input type="range" id="set-bgm" min="0" max="100" step="1">
+          <b id="set-bgm-v">50</b>
+        </div>
+        <div class="setrow toggle">
+          <label>BGM</label>
+          <div class="seg" id="seg-bgm"><button data-v="1">ON</button><button data-v="0">OFF</button></div>
+          <b></b>
+        </div>
+        <div class="setrow toggle">
+          <label>消音（ミュート）</label>
+          <div class="seg" id="seg-mute"><button data-v="0">OFF</button><button data-v="1">ON</button></div>
+          <b></b>
+        </div>
+        <p class="note">BGM は場面に合わせて速さと音数が変わる。ミュートは効果音と BGM の両方を止める。</p>
+      </div>
+
+      <div class="setgroup">
+        <h3>セーブデータ</h3>
+        <p class="note" id="set-slotinfo">―</p>
+        <div class="panel-foot btns">
+          <button class="btn" id="btn-set-slots">セーブデータを選び直す</button>
+          <button class="btn btn-ghost" id="btn-set-erase">このデータを消す</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -254,6 +323,20 @@
           <h3>フィールドの進め方</h3>
           <p>敵は最初こちらに気づいていない。視界に入るか銃声が届くと「！」が出て寄ってくる。周囲の仲間にも伝わるので、一度に相手にする数を減らすなら遮蔽を使う。</p>
           <p class="note">右下のレーダーは自機から一定距離の敵しか映さない。通信塔とコンテナは常に表示される。目標を片付けるとボスが降りてくる。</p>
+        </section>
+        <section class="howto-card">
+          <h3>練習場</h3>
+          <p>格納庫の <b>［練習場へ］</b>から入れる。装甲 4 種の的が並んでいて、当てると属性の相性がダメージ表示の色で分かる。左上に<b>与ダメージ合計と DPS</b> が出る。</p>
+          <p class="note">動く相手も倒すたびに戻ってくる。撃破されても自機はその場で復旧するので、好きなだけ試せる。Esc →［撤退］で格納庫へ戻る。</p>
+        </section>
+        <section class="howto-card">
+          <h3>機体の選び方</h3>
+          <ul class="dotlist">
+            <li><b>FS-03 ジャッカル</b> ― 最速。装甲も火力も低いが、必殺「オーバーブースト」中は弾薬を食わずに撃ち続けられる。</li>
+            <li><b>GT-50 タイタン</b> ― 最も硬く、火力 ×1.45。足は遅い。必殺「要塞モード」で踏ん張ると被ダメージ半減。</li>
+            <li><b>RX-01 ヴァンガード</b> ― 中間。まず慣れるならこれ。</li>
+          </ul>
+          <p class="note">機体ごとに火力の倍率が違う。同じ武器でもジャッカルとタイタンでは 2 倍以上の差が出る。</p>
         </section>
         <section class="howto-card">
           <h3>改造とガチャ</h3>

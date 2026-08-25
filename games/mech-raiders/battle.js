@@ -9,7 +9,7 @@ const C = window.MRCore, D = window.MRData, F = window.MRField;
 const { TAU, clamp, lerp, dist, dist2, angTo, angDiff, angApproach, deg,
         RNG, rnd, rndi, pick, circleRect, segRect, segCircle,
         Particles, FloatText, Camera } = C;
-const { buildLoadout, Mech, Enemy, Boss, genWorld, wallsNear, pointBlocked,
+const { buildLoadout, Mech, Enemy, Boss, genWorld, genArena, wallsNear, pointBlocked,
         hasLOS, collideWalls } = F;
 
 /* ============================ Field ============================ */
@@ -22,6 +22,7 @@ class Field {
     this.save = opts.save;
     this.sector = opts.sector;
     this.numPlayers = opts.numPlayers || 1;
+    this.demo = !!opts.demo;
     this.onEnd = opts.onEnd || (() => {});
     this.onHud = opts.onHud || (() => {});
     this.rng = new RNG(opts.seed || (Date.now() & 0xffffffff));
@@ -59,15 +60,19 @@ class Field {
   /* ---------------- 構築 ---------------- */
   build() {
     const s = this.sector;
-    this.world = genWorld(s, this.rng);
+    this.training = !!s.training;
+    this.world = this.training ? genArena(s) : genWorld(s, this.rng);
     const W = this.world;
 
     this.players = [];
     for (let p = 1; p <= this.numPlayers; p++) {
       const lo = buildLoadout(p, this.save);
-      const m = new Mech(p, lo, 250 + (p - 1) * 56, 250);
+      const m = new Mech(p, lo, (this.training ? 300 : 250) + (p - 1) * 56, this.training ? 420 : 250);
       this.players.push(m);
     }
+
+    if (this.training) return this.buildTraining();
+    if (this.demo) { this.respawnQueue = []; this.trainStats = null; }
 
     const lvMul = 1 + (s.lv - 1) * 0.28;
     this.lvMul = lvMul;
@@ -96,11 +101,45 @@ class Field {
       this.objectives.push({ id: 'boss', need: 1, done: 0, locked: true });
       this.bossSite = { x: W.w - 280, y: W.h - 280 };
     }
-    this.banner = `${s.name} ― ${s.sub}`;
-    this.bannerT = 3.2;
-    this.setToast(s.brief, 5.0);
+    if (this.demo) { this.objectives = []; this.banner = null; this.bannerT = 0; this.toastT = 0; }
+    else {
+      this.banner = `${s.name} ― ${s.sub}`;
+      this.bannerT = 3.2;
+      this.setToast(s.brief, 5.0);
+    }
     this.cam.follow(this.players[0].x, this.players[0].y, this.viewW(), this.viewH(), W.w, W.h, 1, true);
     this.roster = this.enemies.slice();
+  }
+
+  /* ---------------- 練習場 ---------------- */
+  buildTraining() {
+    const s = this.sector, W = this.world;
+    this.objectives = [];
+    this.trainStats = { dmg: 0, dps: 0, peak: 0, kills: 0, recent: [] };
+    this.respawnQueue = [];
+    /* 的（装甲 4 種を並べて相性を見る） */
+    const armors = ['FRAME', 'ARMOR', 'SHIELD', 'COMP'];
+    armors.forEach((armor, i) => {
+      this.objects.push({
+        kind: 'dummy', x: 640 + i * 200, y: 150, r: 22, armor, team: 'foe',
+        hp: 900, maxHp: 900, dead: false, hitFlash: 0, respawn: 0,
+        name: D.ARMORS[armor].name,
+      });
+    });
+    /* 動く相手 */
+    const kinds = ['scout', 'gunner', 'shielder', 'heavy', 'arcbot', 'mender'];
+    kinds.forEach((k, i) => {
+      const a = (i / kinds.length) * TAU;
+      const x = clamp(W.w * 0.55 + Math.cos(a) * 380, 120, W.w - 120);
+      const y = clamp(W.h * 0.66 + Math.sin(a) * 300, 120, W.h - 120);
+      const e = new Enemy(D.ENEMIES[k], x, y, 1, false);
+      this.enemies.push(e);
+    });
+    this.roster = this.enemies.slice();
+    this.banner = '練習場 ― TRAINING RANGE';
+    this.bannerT = 3.0;
+    this.setToast(s.brief, 6.0);
+    this.cam.follow(this.players[0].x, this.players[0].y, this.viewW(), this.viewH(), W.w, W.h, 1, true);
   }
 
   viewW() { return this.canvas.width / (this.cam.zoom || 1); }
@@ -207,7 +246,7 @@ class Field {
   updatePlayer(m, dt) {
     if (m.dead) return;
     const idle = { mx: 0, my: 0, fire: false, roll: false, special: false, swap: false, lock: false };
-    const inp = this.state === 'play' ? this.input.read(m.pid) : idle;
+    const inp = this.state !== 'play' ? idle : this.demo ? this.botInput(m, dt) : this.input.read(m.pid);
 
     m.rollCd = Math.max(0, m.rollCd - dt);
     m.iframe = Math.max(0, m.iframe - dt);
@@ -216,6 +255,8 @@ class Field {
     m.muzzle = Math.max(0, m.muzzle - dt * 12);
     m.stun = Math.max(0, m.stun - dt);
     m.noHitT += dt;
+    m.hnrT = Math.max(0, (m.hnrT || 0) - dt);
+    m.stillT = Math.hypot(m.vx, m.vy) < 26 ? (m.stillT || 0) + dt : 0;
     if (m.shieldT > 0) m.shieldT -= dt;
     if (m.burn > 0) {
       m.burnT -= dt;
@@ -234,7 +275,7 @@ class Field {
 
     /* ---- 照準 ---- */
     this.updateLock(m, inp);
-    if (m.pid === 1) {
+    if (m.pid === 1 && !this.demo) {
       const mw = this.screenToWorld(this.input.mouse.x, this.input.mouse.y);
       m.aim = angTo(m.x, m.y, mw.x, mw.y);
       m.aimX = mw.x; m.aimY = mw.y;
@@ -251,6 +292,8 @@ class Field {
     /* ---- 移動 ---- */
     let spd = m.lo.speed;
     if (m.has('adrenaline') && m.hp / m.maxHp <= 0.30) spd *= 1.30;
+    if (m.specialState === 'overboost') spd *= 1.95;
+    if (m.specialState === 'siege') spd *= 0.22;
     if (m.slow > 0) { spd *= 0.55; m.slow -= dt; }
     if (m.stun > 0) spd = 0;
 
@@ -292,6 +335,7 @@ class Field {
       m.rollSpeed = m.lo.speed * 3.0 * (m.has('inertia_cancel') ? 1.15 : 1);
       m.rollCd = m.lo.rollCd;
       m.iframe = 0.22 * (m.has('adrenaline') && m.hp / m.maxHp <= 0.3 ? 1.6 : 1);
+      if (m.has('hit_and_run')) m.hnrT = m.rollDur + 1.2;
       this.audio.sfx('roll');
       this.parts.dirSpark(m.x, m.y, dir + Math.PI, 9, m.lo.frame.trim, 190, 0.7, 0.34, 2.4);
       this.parts.ring(m.x, m.y, 'rgba(180,220,255,0.5)', 8, 42, 0.22, 3);
@@ -310,6 +354,47 @@ class Field {
     if (m.specialState) this.runSpecial(m, dt);
 
     this.updateWeapon(m, dt, inp.fire && m.rollT <= 0 && m.stun <= 0 && !m.blockFire);
+  }
+
+  /* タイトル背景で流すデモ用の自動操縦 */
+  botInput(m, dt) {
+    if (!m.bot) m.bot = { strafe: Math.random() < 0.5 ? 1 : -1, swT: 0, rollT: rnd(1, 3), swapT: rnd(8, 16) };
+    const bt = m.bot;
+    bt.swT -= dt; bt.rollT -= dt; bt.swapT -= dt;
+    if (bt.swT <= 0) { bt.strafe *= -1; bt.swT = rnd(1.2, 2.6); }
+
+    let t = m.lock && !m.lock.dead ? m.lock : null;
+    if (!t) {
+      let bd = Infinity;
+      for (const e of this.allFoes()) {
+        const d = dist2(m.x, m.y, e.x, e.y);
+        if (d < bd) { bd = d; t = e; }
+      }
+    }
+    const out = { mx: 0, my: 0, fire: false, roll: false, special: false, swap: false, lock: false };
+    if (!t) {
+      /* 相手がいないときは中央へ流す */
+      const a = angTo(m.x, m.y, this.world.w / 2, this.world.h / 2);
+      out.mx = Math.cos(a); out.my = Math.sin(a);
+      return out;
+    }
+    const d = dist(m.x, m.y, t.x, t.y);
+    const toT = angTo(m.x, m.y, t.x, t.y);
+    let a;
+    if (d > 340) a = toT + 0.25 * bt.strafe;
+    else if (d < 170) a = toT + Math.PI + 0.4 * bt.strafe;
+    else a = toT + (Math.PI / 2) * bt.strafe;
+    /* 壁を避ける */
+    for (const off of [0, 0.6, -0.6, 1.3, -1.3, 2.2, -2.2]) {
+      const px = m.x + Math.cos(a + off) * 90, py = m.y + Math.sin(a + off) * 90;
+      if (!pointBlocked(this.world, px, py, m.r)) { a += off; break; }
+    }
+    out.mx = Math.cos(a); out.my = Math.sin(a);
+    out.fire = d < 540 && hasLOS(this.world, m.x, m.y, t.x, t.y, false);
+    if (bt.rollT <= 0) { out.roll = true; bt.rollT = rnd(2.2, 4.5); }
+    if (m.sp >= m.spMax && d < 420) out.special = true;
+    if (bt.swapT <= 0) { out.swap = true; bt.swapT = rnd(9, 18); }
+    return out;
   }
 
   screenToWorld(sx, sy) {
@@ -350,6 +435,9 @@ class Field {
     let rateMul = 1;
     if (m.has('overheat') && m.hp / m.maxHp <= 0.5) rateMul *= 1.35;
     if (m.specialState === 'full_salvo') rateMul *= 1.6;
+    if (m.specialState === 'overboost') rateMul *= 1.9;
+    if (m.specialState === 'siege') rateMul *= 1.35;
+    if (m.has('gun_mount') && (m.stillT || 0) > 0.6) rateMul *= 1.3;
 
     if (w.reloading > 0) {
       w.reloading -= dt * rateMul;
@@ -387,7 +475,7 @@ class Field {
 
   shoot(m, w) {
     w.cool = 60 / w.rpm;
-    if (w.mag > 0) w.ammo--;
+    if (w.mag > 0 && m.specialState !== 'overboost') w.ammo--;
     m.recoil = 1; m.muzzle = 1;
     const bx = m.x + Math.cos(m.aim) * (m.r + 8);
     const by = m.y + Math.sin(m.aim) * (m.r + 8);
@@ -395,10 +483,13 @@ class Field {
     if (w.kind === 'melee') return this.meleeSwing(m, w);
     if (w.kind === 'chain') return this.chainZap(m, w);
 
+    let spreadMul = 1;
+    if (m.specialState === 'siege') spreadMul *= 0.4;
+    if (m.has('gun_mount') && (m.stillT || 0) > 0.6) spreadMul *= 0.5;
     const volley = w.volley || 1;
     for (let v = 0; v < volley; v++) {
       for (let i = 0; i < w.pellets; i++) {
-        const sp = deg(w.spread || 0);
+        const sp = deg(w.spread || 0) * spreadMul;
         const a = m.aim + rnd(-sp, sp) + (volley > 1 ? rnd(-0.14, 0.14) : 0);
         this.spawnBullet({
           x: bx, y: by, ang: a, speed: w.bspeed * rnd(0.94, 1.06),
@@ -418,7 +509,7 @@ class Field {
   fireBeam(m, w, dt, firing) {
     if (!firing) { w.spin = Math.max(0, w.spin - dt * 3); return; }
     if (w.mag > 0 && w.ammo <= 0) { w.reloading = w.reload; return; }
-    w.ammo -= dt * 26;
+    if (m.specialState !== 'overboost') w.ammo -= dt * 26;
     const hit = this.rayHit(m.x, m.y, m.aim, w.range, 'ally', w.pierce >= 99 ? 99 : 1);
     this.beams.push({ x1: m.x + Math.cos(m.aim) * (m.r + 4), y1: m.y + Math.sin(m.aim) * (m.r + 4),
       x2: hit.x, y2: hit.y, w: w.beamw || 3, color: D.ELEMENTS[w.el].color });
@@ -432,7 +523,7 @@ class Field {
   fireFlame(m, w, dt, firing) {
     if (!firing) return;
     if (w.mag > 0 && w.ammo <= 0) { w.reloading = w.reload; return; }
-    w.ammo -= dt * 34;
+    if (m.specialState !== 'overboost') w.ammo -= dt * 34;
     m.muzzle = 1;
     const life = w.range / w.bspeed;
     for (let i = 0; i < 3; i++) {
@@ -637,7 +728,7 @@ class Field {
   allFoes() {
     const out = [];
     for (const e of this.enemies) if (!e.dead) out.push(e);
-    for (const o of this.objects) if (o.kind === 'tower' && !o.dead) out.push(o);
+    for (const o of this.objects) if ((o.kind === 'tower' || o.kind === 'dummy') && !o.dead) out.push(o);
     if (this.boss && !this.boss.dead && this.boss.entered > 0.4) out.push(this.boss);
     return out;
   }
@@ -658,9 +749,15 @@ class Field {
     if (src && src.lo) {
       if (src.has('fire_control') && dist(src.x, src.y, t.x, t.y) > 300) dmg *= 1.25;
       if (src.has('optic_camo') && src.noHitT >= 3) dmg *= 1.45;
+      if (src.specialState === 'siege') dmg *= 1.6;
+      if (src.has('hit_and_run') && src.rollT <= 0 && (src.hnrT || 0) > 0) dmg *= 1.40;
       if (src.has('vampiric')) src.hp = Math.min(src.maxHp, src.hp + dmg * 0.09);
       src.dmgDealt += dmg;
       this.gainSp(src, dmg * 0.16);
+      if (this.trainStats) {
+        this.trainStats.dmg += dmg;
+        this.trainStats.recent.push({ t: this.time, d: dmg });
+      }
     }
 
     t.hp -= dmg;
@@ -685,6 +782,7 @@ class Field {
     if (m.iframe > 0 || m.rollT > 0) return;
     let dmg = amount * (1 - m.lo.dr);
     if (m.shieldT > 0) dmg *= 0.3;
+    if (m.specialState === 'siege') dmg *= 0.5;
     if (dmg <= 0) return;
     m.hp -= dmg;
     m.hitFlash = 1;
@@ -699,6 +797,13 @@ class Field {
     if (m.has('charged_hull')) {
       this.parts.ring(m.x, m.y, 'rgba(197,140,255,0.7)', 10, 130, 0.3, 4);
       for (const t of this.allFoes()) if (dist(m.x, m.y, t.x, t.y) < 130) this.applyDamage(t, 18, 'EMP', m, { text: false });
+    }
+    if (m.hp <= 0 && (this.training || this.demo)) {
+      m.hp = m.maxHp; m.iframe = 2.2;
+      for (const w of m.lo.weapons) { w.ammo = w.mag; w.reloading = 0; }
+      this.ft.add(m.x, m.y - 44, 'システム復旧', '#8dffb0', 16, 1.6);
+      this.parts.ring(m.x, m.y, '#8dffb0', 14, 150, 0.5, 5);
+      return;
     }
     if (m.hp <= 0) {
       if (m.has('lastditch') && m.lastDitch) {
@@ -753,6 +858,14 @@ class Field {
 
   killFoe(t, src) {
     t.dead = true;
+    if (t.kind === 'dummy') {
+      this.parts.explosion(t.x, t.y, 90);
+      this.audio.sfx('explode');
+      this.ft.add(t.x, t.y - 30, '的 破壊', '#ffcf4a', 15, 1.2);
+      t.respawn = 2.5;
+      if (this.trainStats) this.trainStats.kills++;
+      return;
+    }
     if (t.kind === 'tower') {
       this.parts.explosion(t.x, t.y, 150);
       this.parts.shard(t.x, t.y, 14, '#c8d8e8');
@@ -779,6 +892,10 @@ class Field {
     if (Math.random() < (t.commander ? 1 : 0.11)) this.dropPickup(t.x, t.y, 'repair');
     if (Math.random() < 0.09) this.dropPickup(t.x, t.y, 'ammo');
 
+    if (this.training || this.demo) {
+      this.respawnQueue.push({ id: t.def.id, t: this.demo ? 1.6 : 3.0 });
+      if (this.trainStats) this.trainStats.kills++;
+    }
     const ko = this.objectives.find((x) => x.id === 'kill_all');
     if (ko) ko.done++;
     if (t.commander) {

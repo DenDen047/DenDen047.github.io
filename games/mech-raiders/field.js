@@ -41,22 +41,23 @@ function buildLoadout(pid, save) {
     const w = D.getWeapon(wid);
     if (!w) continue;
     const rec = save.weapons[wid] || { lv: 1, lb: 0 };
-    weapons.push(makeWeapon(w, rec.lv || 1, traits));
+    weapons.push(makeWeapon(w, rec.lv || 1, traits, frame.dmgMul || 1));
   }
-  if (!weapons.length) weapons.push(makeWeapon(D.getWeapon('ar12'), 1, traits));
+  if (!weapons.length) weapons.push(makeWeapon(D.getWeapon('ar12'), 1, traits, frame.dmgMul || 1));
 
   return {
     pid, frame, frameLv: fLv, core, coreLv: cRec ? cRec.lv : 1,
     traits, maxHp, dr, rollCd,
     speed: frame.speed * (traits.has('inertia_cancel') ? 1.03 : 1),
     spMax: frame.sp, special: frame.special, weapons,
+    dmgMul: frame.dmgMul || 1, shape: frame.shape || 'standard',
   };
 }
 
-function makeWeapon(def, lv, traits) {
+function makeWeapon(def, lv, traits, dmgMul) {
   const w = Object.assign({}, def);
   w.lv = lv;
-  const g = 1 + 0.062 * (lv - 1);            // レベルによる威力補正
+  const g = (1 + 0.062 * (lv - 1)) * (dmgMul || 1);   // レベル補正 × 機体の火力補正
   w.dmg = def.dmg * g;
   if (def.splash) w.splash = def.splash * (1 + 0.03 * (lv - 1));
   w.mag = def.mag ? Math.round(def.mag * (traits.has('ext_mag') ? 1.5 : 1)) : 0;
@@ -219,6 +220,35 @@ function genWorld(sector, rng) {
   return world;
 }
 
+/* 練習場は手で組んだ射撃レーン付きの閉じた区画にする */
+function genArena(sector) {
+  const size = sector.size;
+  const th = THEME[sector.theme] || THEME.foundry;
+  const world = { w: size, h: size, theme: th, themeId: sector.theme, walls: [], decos: [], grid: null };
+  const T = 44;
+  world.walls.push({ x: 0, y: 0, w: size, h: T, tall: true });
+  world.walls.push({ x: 0, y: size - T, w: size, h: T, tall: true });
+  world.walls.push({ x: 0, y: 0, w: T, h: size, tall: true });
+  world.walls.push({ x: size - T, y: 0, w: T, h: size, tall: true });
+
+  /* 射撃レーンの仕切り（低い遮蔽） */
+  for (let i = 0; i < 3; i++) {
+    world.walls.push({ x: 620, y: 190 + i * 200, w: 620, h: 26, low: true });
+  }
+  /* 立ち回り練習用の遮蔽 */
+  const blocks = [
+    [200, 780, 150, 120], [420, 1020, 110, 200], [760, 900, 220, 90],
+    [1060, 1080, 130, 130], [250, 1220, 200, 100], [900, 1280, 260, 90],
+    [1300, 780, 110, 260], [620, 1160, 90, 90],
+  ];
+  for (const [x, y, w, h] of blocks) world.walls.push({ x, y, w, h, tall: (x + y) % 3 === 0 });
+  for (let i = 0; i < 40; i++) {
+    world.decos.push({ x: 60 + Math.random() * (size - 120), y: 60 + Math.random() * (size - 120), r: 20 + Math.random() * 70, a: 0.04 });
+  }
+  buildWallGrid(world);
+  return world;
+}
+
 /* 壁の空間ハッシュ（当たり判定を速くする） */
 function buildWallGrid(world) {
   const cs = 200;
@@ -313,5 +343,5 @@ function collideWalls(world, a) {
 }
 
 window.MRField = { buildLoadout, makeWeapon, Actor, Mech, Enemy, Boss,
-  genWorld, wallsNear, pointBlocked, hasLOS, losScan, collideWalls, THEME };
+  genWorld, genArena, wallsNear, pointBlocked, hasLOS, losScan, collideWalls, THEME };
 })();

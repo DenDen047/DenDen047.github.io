@@ -151,26 +151,60 @@ class Input {
 }
 
 /* ------------------------------ 音 ------------------------------ */
+/* master → (sfx | bgm) の 2 系統。設定は localStorage に別枠で持つ。 */
+const SET_KEY = 'mech-raiders-settings-v1';
+const defaultSettings = () => ({ master: 0.7, sfx: 0.9, bgm: 0.5, muted: false, bgmOn: true });
+
 class Audio2 {
-  constructor() { this.ctx = null; this.muted = false; this.master = null; this.last = {}; }
+  constructor() {
+    this.ctx = null; this.master = null; this.sfxBus = null; this.bgmBus = null;
+    this.last = {};
+    this.set = Object.assign(defaultSettings(), readSettings());
+    this.bgm = null;
+  }
   ensure() {
-    if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
+    if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); this.syncBgm(); return; }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     this.ctx = new AC();
     this.master = this.ctx.createGain();
-    this.master.gain.value = 0.32;
+    this.sfxBus = this.ctx.createGain();
+    this.bgmBus = this.ctx.createGain();
+    this.sfxBus.connect(this.master);
+    this.bgmBus.connect(this.master);
     this.master.connect(this.ctx.destination);
+    this.bgm = new Bgm(this.ctx, this.bgmBus);
+    this.applyVolumes();
+    this.syncBgm();
   }
-  setMuted(m) { this.muted = m; if (this.master) this.master.gain.value = m ? 0 : 0.32; }
-  /* 同種の音が同フレームに殺到するのを間引く */
+  applyVolumes() {
+    if (!this.master) return;
+    const s = this.set;
+    this.master.gain.value = s.muted ? 0 : clamp(s.master, 0, 1) * 0.55;
+    this.sfxBus.gain.value = clamp(s.sfx, 0, 1);
+    this.bgmBus.gain.value = clamp(s.bgm, 0, 1) * 0.55;
+  }
+  syncBgm() {
+    if (!this.bgm) return;
+    if (this.set.bgmOn && !this.set.muted) this.bgm.start(); else this.bgm.stop();
+  }
+  update(patch) {
+    Object.assign(this.set, patch);
+    writeSettings(this.set);
+    this.applyVolumes();
+    this.syncBgm();
+  }
+  setMuted(m) { this.update({ muted: !!m }); }
+  get muted() { return this.set.muted; }
+  setScene(name) { if (this.bgm) this.bgm.setScene(name); }
+
   throttle(key, ms) {
     const now = performance.now();
     if (this.last[key] && now - this.last[key] < ms) return false;
     this.last[key] = now; return true;
   }
   tone({ f = 440, f2 = null, t = 0.1, type = 'square', vol = 0.3, delay = 0 }) {
-    if (!this.ctx || this.muted) return;
+    if (!this.ctx || this.set.muted) return;
     const c = this.ctx, now = c.currentTime + delay;
     const o = c.createOscillator(); const g = c.createGain();
     o.type = type; o.frequency.setValueAtTime(f, now);
@@ -178,10 +212,10 @@ class Audio2 {
     g.gain.setValueAtTime(0.0001, now);
     g.gain.exponentialRampToValueAtTime(vol, now + 0.006);
     g.gain.exponentialRampToValueAtTime(0.0001, now + t);
-    o.connect(g); g.connect(this.master); o.start(now); o.stop(now + t + 0.02);
+    o.connect(g); g.connect(this.sfxBus); o.start(now); o.stop(now + t + 0.02);
   }
   noise({ t = 0.2, vol = 0.3, lp = 1400, hp = 0, delay = 0 }) {
-    if (!this.ctx || this.muted) return;
+    if (!this.ctx || this.set.muted) return;
     const c = this.ctx, now = c.currentTime + delay;
     const len = Math.max(1, Math.floor(c.sampleRate * t));
     const buf = c.createBuffer(1, len, c.sampleRate);
@@ -189,15 +223,14 @@ class Audio2 {
     for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
     const src = c.createBufferSource(); src.buffer = buf;
     let node = src;
-    if (lp) { const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = lp; node.connect(f); node = f; }
-    if (hp) { const f = c.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = hp; node.connect(f); node = f; }
+    if (lp) { const fl = c.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = lp; node.connect(fl); node = fl; }
+    if (hp) { const fh = c.createBiquadFilter(); fh.type = 'highpass'; fh.frequency.value = hp; node.connect(fh); node = fh; }
     const g = c.createGain(); g.gain.setValueAtTime(vol, now);
     g.gain.exponentialRampToValueAtTime(0.0001, now + t);
-    node.connect(g); g.connect(this.master); src.start(now);
+    node.connect(g); g.connect(this.sfxBus); src.start(now);
   }
-  /* ---- 効果音 ---- */
   sfx(name, arg) {
-    if (!this.ctx || this.muted) return;
+    if (!this.ctx || this.set.muted) return;
     switch (name) {
       case 'shot':      if (this.throttle('shot', 28)) { this.noise({ t: 0.06, vol: 0.18, lp: 2600, hp: 500 }); this.tone({ f: 320, f2: 120, t: 0.05, type: 'square', vol: 0.10 }); } break;
       case 'shotBig':   this.noise({ t: 0.18, vol: 0.3, lp: 1200 }); this.tone({ f: 150, f2: 50, t: 0.16, type: 'sawtooth', vol: 0.2 }); break;
@@ -229,45 +262,208 @@ class Audio2 {
   }
 }
 
+/* ---------- BGM（音源ファイルを持たず、その場で鳴らす） ---------- */
+/* Am - F - C - G を 4 小節で回す。場面で音数と速さを変える。 */
+const BGM_CHORDS = [
+  { root: 55.00, notes: [220.00, 261.63, 329.63] },   // Am
+  { root: 43.65, notes: [174.61, 220.00, 261.63] },   // F
+  { root: 65.41, notes: [196.00, 261.63, 329.63] },   // C
+  { root: 49.00, notes: [196.00, 246.94, 293.66] },   // G
+];
+
+class Bgm {
+  constructor(ctx, bus) {
+    this.ctx = ctx; this.bus = bus;
+    this.playing = false; this.timer = null;
+    this.step = 0; this.nextT = 0;
+    this.bpm = 96; this.scene = 'menu';
+  }
+  setScene(s) {
+    if (this.scene === s) return;
+    this.scene = s;
+    this.bpm = s === 'battle' ? 124 : s === 'boss' ? 138 : 96;
+  }
+  start() {
+    if (this.playing) return;
+    this.playing = true;
+    this.nextT = this.ctx.currentTime + 0.08;
+    this.timer = setInterval(() => this.schedule(), 25);
+  }
+  stop() {
+    if (!this.playing) return;
+    this.playing = false;
+    clearInterval(this.timer); this.timer = null;
+  }
+  schedule() {
+    if (!this.playing) return;
+    const spb = 60 / this.bpm / 4;                 // 16 分音符ひとつ分
+    while (this.nextT < this.ctx.currentTime + 0.22) {
+      this.playStep(this.step, this.nextT, spb);
+      this.step = (this.step + 1) % 64;
+      this.nextT += spb;
+    }
+  }
+  v(f, type, t0, dur, vol, f2) {
+    const c = this.ctx;
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t0);
+    if (f2) o.frequency.exponentialRampToValueAtTime(Math.max(20, f2), t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(this.bus);
+    o.start(t0); o.stop(t0 + dur + 0.03);
+  }
+  hit(t0, dur, vol, lp, hp) {
+    const c = this.ctx;
+    const len = Math.max(1, Math.floor(c.sampleRate * dur));
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = c.createBufferSource(); src.buffer = buf;
+    let n = src;
+    const f1 = c.createBiquadFilter(); f1.type = 'lowpass'; f1.frequency.value = lp; n.connect(f1); n = f1;
+    if (hp) { const f2 = c.createBiquadFilter(); f2.type = 'highpass'; f2.frequency.value = hp; n.connect(f2); n = f2; }
+    const g = c.createGain(); g.gain.setValueAtTime(vol, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    n.connect(g); g.connect(this.bus);
+    src.start(t0);
+  }
+  playStep(s, t, spb) {
+    const bar = Math.floor(s / 16);
+    const b = s % 16;
+    const ch = BGM_CHORDS[bar % 4];
+    const heavy = this.scene !== 'menu';
+    const boss = this.scene === 'boss';
+
+    /* ベース */
+    if (b % 4 === 0 || (heavy && b % 8 === 6)) {
+      this.v(ch.root, 'sawtooth', t, spb * 3.2, 0.16, ch.root * 0.995);
+    }
+    /* 和音のパッド（小節頭） */
+    if (b === 0) {
+      ch.notes.forEach((n, i) => this.v(n / 2, 'triangle', t, spb * 14, 0.045 + i * 0.004));
+    }
+    /* アルペジオ */
+    if (heavy ? b % 2 === 0 : b % 4 === 2) {
+      const n = ch.notes[(Math.floor(s / 2) + bar) % ch.notes.length];
+      this.v(n * (boss ? 2 : 1), 'square', t, spb * 1.4, boss ? 0.045 : 0.032);
+    }
+    /* キック */
+    if (b === 0 || b === 8 || (heavy && b === 11)) {
+      this.v(120, 'sine', t, 0.16, 0.30, 40);
+      this.hit(t, 0.05, 0.12, 500);
+    }
+    /* スネア */
+    if (b === 4 || b === 12) this.hit(t, 0.14, heavy ? 0.16 : 0.10, 3200, 700);
+    /* ハイハット */
+    if (heavy ? b % 2 === 0 : b % 4 === 0) this.hit(t, 0.035, 0.05, 9000, 5000);
+    /* ボス戦だけ低音のうねりを足す */
+    if (boss && b === 0) this.v(ch.root / 2, 'sawtooth', t, spb * 15, 0.09, ch.root / 2 * 1.01);
+  }
+}
+
+function readSettings() {
+  try { return JSON.parse(localStorage.getItem(SET_KEY)) || {}; } catch (e) { return {}; }
+}
+function writeSettings(s) {
+  try { localStorage.setItem(SET_KEY, JSON.stringify(s)); } catch (e) { /* 保存できなくても続行 */ }
+}
+
 /* ------------------------------ セーブ ------------------------------ */
-const SAVE_KEY = 'mech-raiders-save-v1';
+/* スロット 3 枠。設定（音量など）はスロットとは別枠で保存する。 */
+const SLOT_PREFIX = 'mech-raiders-slot-';
+const LEGACY_KEY = 'mech-raiders-save-v1';
+const SLOT_COUNT = 3;
 
 function defaultSave() {
   return {
     scrap: 400,
     tickets: 6,
     /* 所持品: id -> { lv, lb(限界突破), n(所持数) } */
-    frames:  { vanguard: { lv: 1, lb: 0, n: 1 } },
+    frames:  { vanguard: { lv: 1, lb: 0, n: 1 }, jackal: { lv: 1, lb: 0, n: 1 }, gtitan: { lv: 1, lb: 0, n: 1 } },
     weapons: { ar12: { lv: 1, lb: 0, n: 1 }, db8: { lv: 1, lb: 0, n: 1 } },
     cores:   { core_std: { lv: 1, lb: 0, n: 1 } },
     loadout: { 1: { frame: 'vanguard', main: 'ar12', sub: 'db8', core: 'core_std' },
-               2: { frame: 'vanguard', main: 'ar12', sub: 'db8', core: 'core_std' } },
+               2: { frame: 'gtitan', main: 'ar12', sub: 'db8', core: 'core_std' } },
     cleared: {},        // sectorId -> { best: 秒, rank: 'S' }
     pity: 0,            // SSR 天井カウンタ
     totalKills: 0,
     seen: {},           // 図鑑
-    muted: false,
+    playtime: 0,        // 秒
+    created: 0,
+    updated: 0,
   };
+}
+
+/* 壊れた保存でも遊べる状態に整える */
+function normalize(d) {
+  const base = defaultSave();
+  d = Object.assign({}, base, d || {});
+  d.frames = Object.assign({}, base.frames, d.frames);
+  d.weapons = Object.assign({}, base.weapons, d.weapons);
+  d.cores = Object.assign({}, base.cores, d.cores);
+  if (!d.loadout) d.loadout = base.loadout;
+  for (const pid of [1, 2]) {
+    if (!d.loadout[pid]) d.loadout[pid] = Object.assign({}, base.loadout[pid]);
+    if (!d.frames[d.loadout[pid].frame]) d.loadout[pid].frame = 'vanguard';
+  }
+  return d;
 }
 
 const Save = {
   data: null,
-  load() {
+  slot: 1,
+  /* スロットの概要（一覧表示用）。存在しなければ null */
+  peek(i) {
     try {
-      const raw = localStorage.getItem(SAVE_KEY);
-      this.data = raw ? Object.assign(defaultSave(), JSON.parse(raw)) : defaultSave();
-    } catch (e) { this.data = defaultSave(); }
-    /* 壊れた保存に備えて最低限の初期装備を保証する */
-    const d = this.data;
-    if (!d.frames || !d.frames.vanguard) d.frames = Object.assign({ vanguard: { lv: 1, lb: 0, n: 1 } }, d.frames);
-    if (!d.weapons || !d.weapons.ar12) d.weapons = Object.assign({ ar12: { lv: 1, lb: 0, n: 1 } }, d.weapons);
-    if (!d.cores || !d.cores.core_std) d.cores = Object.assign({ core_std: { lv: 1, lb: 0, n: 1 } }, d.cores);
-    if (!d.loadout) d.loadout = defaultSave().loadout;
-    for (const pid of [1, 2]) if (!d.loadout[pid]) d.loadout[pid] = Object.assign({}, defaultSave().loadout[1]);
-    return d;
+      const raw = localStorage.getItem(SLOT_PREFIX + i);
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      const cleared = d.cleared ? Object.keys(d.cleared).length : 0;
+      return { cleared, scrap: d.scrap || 0, tickets: d.tickets || 0,
+               kills: d.totalKills || 0, playtime: d.playtime || 0, updated: d.updated || 0 };
+    } catch (e) { return null; }
   },
-  save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.data)); } catch (e) { /* 容量超過などは黙って諦める */ } },
-  reset() { this.data = defaultSave(); this.save(); return this.data; },
+  list() {
+    const out = [];
+    for (let i = 1; i <= SLOT_COUNT; i++) out.push({ i, info: this.peek(i) });
+    return out;
+  },
+  /* 旧形式のセーブがあれば空きスロット 1 に引き継ぐ */
+  migrate() {
+    try {
+      const old = localStorage.getItem(LEGACY_KEY);
+      if (!old) return;
+      if (!localStorage.getItem(SLOT_PREFIX + 1)) {
+        const d = normalize(JSON.parse(old));
+        d.updated = Date.now();
+        localStorage.setItem(SLOT_PREFIX + 1, JSON.stringify(d));
+      }
+      localStorage.removeItem(LEGACY_KEY);
+    } catch (e) { /* 引き継げなくても新規で始められる */ }
+  },
+  open(i) {
+    this.slot = i;
+    let d = null;
+    try { d = JSON.parse(localStorage.getItem(SLOT_PREFIX + i)); } catch (e) { d = null; }
+    this.data = normalize(d);
+    if (!this.data.created) this.data.created = Date.now();
+    return this.data;
+  },
+  create(i) {
+    this.slot = i;
+    this.data = normalize(null);
+    this.data.created = Date.now();
+    this.save();
+    return this.data;
+  },
+  erase(i) { try { localStorage.removeItem(SLOT_PREFIX + i); } catch (e) { /* noop */ } },
+  save() {
+    if (!this.data) return;
+    this.data.updated = Date.now();
+    try { localStorage.setItem(SLOT_PREFIX + this.slot, JSON.stringify(this.data)); } catch (e) { /* 容量超過は黙って諦める */ }
+  },
 };
 
 /* ------------------------------ パーティクル ------------------------------ */
@@ -417,6 +613,7 @@ window.MRCore = {
   TAU, clamp, lerp, dist, dist2, angTo, angDiff, angApproach, deg,
   RNG, rnd, rndi, pick, mulberry32,
   circleRect, segRect, segCircle,
-  Input, KEYMAP, Audio2, Save, defaultSave, Particles, FloatText, Camera,
+  Input, KEYMAP, Audio2, Bgm, defaultSettings, readSettings, writeSettings,
+  Save, defaultSave, SLOT_COUNT, Particles, FloatText, Camera,
   fmtTime, el, show, hide, roundRect,
 };

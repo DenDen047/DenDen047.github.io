@@ -388,6 +388,14 @@ startSpecial(m) {
     case 'phantom':
       for (let i = 0; i < 2; i++) this.phantoms.push({ owner: m, x: m.x, y: m.y, ang: m.aim, off: i * Math.PI, t: 7, cool: 0, walkPhase: 0 });
       break;
+    case 'overboost':
+      m.iframe = Math.max(m.iframe, 0.35);
+      this.parts.ring(m.x, m.y, '#7ff0ff', 12, 150, 0.45, 6);
+      break;
+    case 'siege':
+      this.parts.ring(m.x, m.y, '#ff8a3c', 14, 130, 0.5, 7);
+      this.cam.addShake(6);
+      break;
     case 'orbital': {
       const cx = m.aimX, cy = m.aimY;
       for (let i = 0; i < 9; i++) {
@@ -482,6 +490,29 @@ runSpecial(m, dt) {
       }
       break;
     }
+    case 'overboost': {
+      /* 残像と噴射炎。弾薬を食わずに走り回れる 5 秒 */
+      if (Math.random() < dt * 34) {
+        this.parts.add({ x: m.x + rnd(-6, 6), y: m.y + rnd(-6, 6), vx: -m.vx * 0.12, vy: -m.vy * 0.12,
+          life: 0.32, max: 0.32, color: '#7ff0ff', size: rnd(3, 6), drag: 2, kind: 'spark' });
+      }
+      if (Math.random() < dt * 8) this.parts.ring(m.x, m.y, 'rgba(127,240,255,0.35)', 6, 34, 0.28, 2);
+      if (t > 5.0) m.specialState = null;
+      break;
+    }
+    case 'siege': {
+      /* 四方にアンカーを打って踏ん張る */
+      if (Math.random() < dt * 10) {
+        const a2 = rnd(TAU);
+        this.parts.add({ x: m.x + Math.cos(a2) * 26, y: m.y + Math.sin(a2) * 26, vx: 0, vy: -18,
+          life: 0.5, max: 0.5, color: '#ffb07a', size: rnd(2, 4), drag: 1, kind: 'spark' });
+      }
+      if (t > 5.0) {
+        m.specialState = null;
+        this.parts.ring(m.x, m.y, 'rgba(255,180,90,0.5)', 20, 120, 0.4, 4);
+      }
+      break;
+    }
     case 'inferno_field': if (t > 0.4) m.specialState = null; break;
     case 'phantom': if (t > 0.4) m.specialState = null; break;
     case 'orbital': if (t > 0.6) m.specialState = null; break;
@@ -501,7 +532,13 @@ runSpecial(m, dt) {
 
 /* ============================ 目標・オブジェクト ============================ */
 updateObjects(dt) {
+  if (this.training || this.demo) this.updateTraining(dt);
   for (const o of this.objects) {
+    if (o.kind === 'dummy' && o.dead) {
+      o.respawn -= dt;
+      if (o.respawn <= 0) { o.dead = false; o.hp = o.maxHp; this.parts.ring(o.x, o.y, '#8fd4ff', 8, 40, 0.4, 3); }
+      continue;
+    }
     if (o.dead) continue;
     if (o.kind === 'tower') {
       o.ang += dt * 0.9;
@@ -544,8 +581,33 @@ updateObjects(dt) {
   }
 },
 
+updateTraining(dt) {
+  const st = this.trainStats;
+  if (st) {
+    /* 直近 3 秒の与ダメージから DPS を出す */
+    while (st.recent.length && this.time - st.recent[0].t > 3) st.recent.shift();
+    let sum = 0;
+    for (const r of st.recent) sum += r.d;
+    st.dps = sum / 3;
+    if (st.dps > st.peak) st.peak = st.dps;
+  }
+  /* 倒した相手を数秒後に戻す */
+  for (let i = this.respawnQueue.length - 1; i >= 0; i--) {
+    const q = this.respawnQueue[i];
+    q.t -= dt;
+    if (q.t > 0) continue;
+    this.respawnQueue.splice(i, 1);
+    const pos = this.findSpot(420) || { x: this.world.w * 0.6, y: this.world.h * 0.7 };
+    const e = new Enemy(D.ENEMIES[q.id], pos.x, pos.y, 1, false);
+    this.enemies.push(e);
+    this.parts.ring(pos.x, pos.y, '#ffcf4a', 8, 60, 0.5, 4);
+  }
+  /* 死体を掃除して配列が膨らむのを防ぐ */
+  if (this.enemies.length > 40) this.enemies = this.enemies.filter((e) => !e.dead);
+},
+
 checkObjectives() {
-  if (this.state !== 'play') return;
+  if (this.training || this.demo || this.state !== 'play') return;
   const ko = this.objectives.find((o) => o.id === 'kill_all');
   if (ko) ko.done = Math.min(ko.need, (this.roster || this.enemies).filter((e) => e.dead).length);
 
