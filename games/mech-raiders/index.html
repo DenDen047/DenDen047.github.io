@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#070a10">
+<title>MECH RAIDERS ― 鋼鉄機兵</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ==================== 戦闘画面 ==================== -->
+  <div id="stage-wrap">
+    <canvas id="game"></canvas>
+    <div id="scanlines"></div>
+    <div id="vignette"></div>
+
+    <div id="hud" class="hidden">
+      <div class="hud-top">
+        <div class="hud-mission">
+          <div id="hud-sector">セクター</div>
+          <ul id="hud-objectives"></ul>
+        </div>
+        <div class="hud-clock">
+          <div id="hud-time">00:00.00</div>
+          <div class="hud-scrap"><span class="ico">⬢</span><span id="hud-scrap">0</span></div>
+        </div>
+      </div>
+
+      <div id="boss-bar" class="hidden">
+        <div class="bb-name"><span id="bb-name">BOSS</span><span id="bb-phase">第1形態</span></div>
+        <div class="bb-track"><div id="bb-fill"></div><div id="bb-ghost"></div></div>
+        <div id="bb-parts"></div>
+      </div>
+
+      <div class="hud-bottom">
+        <div class="pstat" id="pstat-1">
+          <div class="ps-head"><b class="ps-tag">P1</b><span class="ps-frame">―</span></div>
+          <div class="ps-bars">
+            <div class="bar hp"><div class="fill"></div><span class="btxt">0</span></div>
+            <div class="bar sp"><div class="fill"></div><span class="btxt">必殺</span></div>
+          </div>
+          <div class="ps-weapon"><span class="wname">―</span><span class="wammo">0</span></div>
+          <div class="ps-roll"><div class="rfill"></div><span>ローリング</span></div>
+        </div>
+        <div class="pstat" id="pstat-2">
+          <div class="ps-head"><b class="ps-tag p2">P2</b><span class="ps-frame">―</span></div>
+          <div class="ps-bars">
+            <div class="bar hp"><div class="fill"></div><span class="btxt">0</span></div>
+            <div class="bar sp"><div class="fill"></div><span class="btxt">必殺</span></div>
+          </div>
+          <div class="ps-weapon"><span class="wname">―</span><span class="wammo">0</span></div>
+          <div class="ps-roll"><div class="rfill"></div><span>ローリング</span></div>
+        </div>
+      </div>
+
+      <div id="keyhint">
+        <span><kbd>WASD</kbd> 移動</span><span><kbd>マウス</kbd> 照準・射撃</span>
+        <span><kbd>Space</kbd> ローリング</span><span><kbd>Q</kbd> 必殺</span>
+        <span><kbd>E</kbd> 武器切替</span><span><kbd>Tab</kbd> ロック</span><span><kbd>Esc</kbd> 中断</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== タイトル ==================== -->
+  <div id="screen-title" class="screen">
+    <div class="bg-grid"></div><div class="bg-glow"></div>
+    <div class="title-inner">
+      <div class="title-tag">TOP-DOWN MECH COMBAT</div>
+      <h1 class="game-title"><span class="t1">MECH</span><span class="t2">RAIDERS</span></h1>
+      <p class="game-sub">鋼 鉄 機 兵</p>
+      <p class="game-lead">
+        機体をフィールドへ降ろし、散った敵機を自分で探して潰す見下ろし型のロボット戦。<br>
+        ガチャで引いた武装とコアで機体を組み替え、必殺技と特性で押し切れ。
+      </p>
+      <div class="title-btns">
+        <button id="btn-solo" class="btn btn-main">1人で出撃</button>
+        <button id="btn-duo" class="btn btn-main alt">2人で出撃</button>
+        <button id="btn-howto" class="btn">操作と仕組み</button>
+      </div>
+      <div class="title-foot">
+        <button id="btn-mute" class="linkbtn">🔊 音 ON</button>
+        <button id="btn-reset" class="linkbtn">データを消す</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 格納庫 ==================== -->
+  <div id="screen-hangar" class="screen hidden">
+    <div class="bg-grid"></div>
+    <div class="hangar">
+      <header class="hg-head">
+        <div class="hg-title"><span class="hg-mark">▚</span> 格納庫 <small>HANGAR</small></div>
+        <div class="hg-wallet">
+          <span class="w-item"><i class="ico scrap">⬢</i><b id="w-scrap">0</b><small>スクラップ</small></span>
+          <span class="w-item"><i class="ico ticket">◆</i><b id="w-ticket">0</b><small>チケット</small></span>
+        </div>
+        <div class="hg-pselect" id="hg-pselect">
+          <button class="pbtn on" data-p="1">P1</button>
+          <button class="pbtn" data-p="2">P2</button>
+        </div>
+        <button class="btn btn-ghost" id="btn-hangar-back">タイトル</button>
+      </header>
+
+      <nav class="hg-tabs">
+        <button class="tab on" data-tab="loadout">編成</button>
+        <button class="tab" data-tab="upgrade">改造</button>
+        <button class="tab" data-tab="gacha">ガチャ</button>
+        <button class="tab" data-tab="codex">図鑑</button>
+      </nav>
+
+      <div class="hg-body">
+        <!-- 編成 -->
+        <section class="hg-pane" id="pane-loadout">
+          <div class="lo-left">
+            <div class="mech-view"><canvas id="mech-canvas" width="300" height="300"></canvas></div>
+            <div class="mech-name" id="lo-frame-name">―</div>
+            <div class="mech-cls" id="lo-frame-cls">―</div>
+            <div class="statgrid" id="lo-stats"></div>
+            <div class="special-box">
+              <div class="sb-head">必殺技</div>
+              <div class="sb-name" id="lo-special-name">―</div>
+              <div class="sb-line" id="lo-special-line">―</div>
+            </div>
+            <div class="trait-box" id="lo-traits"></div>
+          </div>
+          <div class="lo-right">
+            <div class="slot-row">
+              <h3>機体</h3><div class="cardlist" id="list-frames"></div>
+            </div>
+            <div class="slot-row">
+              <h3>主武装 <small>（射撃キーで使用）</small></h3><div class="cardlist" id="list-main"></div>
+            </div>
+            <div class="slot-row">
+              <h3>副武装 <small>（E / M で切替）</small></h3><div class="cardlist" id="list-sub"></div>
+            </div>
+            <div class="slot-row">
+              <h3>コア <small>（特性）</small></h3><div class="cardlist" id="list-cores"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 改造 -->
+        <section class="hg-pane hidden" id="pane-upgrade">
+          <p class="pane-lead">スクラップを注いで装備を鍛える。重複して引いた装備は<b>限界突破</b>になり、上限レベルが伸びる。</p>
+          <div class="up-grid" id="up-grid"></div>
+        </section>
+
+        <!-- ガチャ -->
+        <section class="hg-pane hidden" id="pane-gacha">
+          <div class="gacha-wrap">
+            <div class="gacha-art">
+              <div class="ga-ring"></div><div class="ga-core">◆</div>
+              <div class="ga-label">補給ガチャ<br><small>SUPPLY DROP</small></div>
+            </div>
+            <div class="gacha-side">
+              <p class="pane-lead">回収したチケットで武装・機体・コアを引く。同じものが出たら限界突破に変わる。</p>
+              <table class="ratetable">
+                <tr><th>SSR</th><td>3%</td><td>最上位機体・SSR武装</td></tr>
+                <tr><th>SR</th><td>12%</td><td>属性特化の武装とコア</td></tr>
+                <tr><th>R</th><td>30%</td><td>実用級の武装</td></tr>
+                <tr><th>N</th><td>55%</td><td>基本武装・基本コア</td></tr>
+              </table>
+              <p class="pity">30 連続で SSR が出なければ、次は必ず SSR（現在 <b id="pity-count">0</b> / 30）</p>
+              <div class="gacha-btns">
+                <button class="btn btn-main" id="btn-pull1">1 連（◆1）</button>
+                <button class="btn btn-main alt" id="btn-pull10">10 連（◆10・SR以上確定）</button>
+                <button class="btn btn-ghost" id="btn-buyticket">スクラップ 300 → ◆1</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 図鑑 -->
+        <section class="hg-pane hidden" id="pane-codex">
+          <p class="pane-lead">属性と装甲の相性。相手の装甲に刺さる属性を主武装に選ぶと、体感が変わる。</p>
+          <div class="codex-grid">
+            <div class="codex-card"><h3>属性 × 装甲</h3><div id="aff-table"></div></div>
+            <div class="codex-card"><h3>敵機</h3><div id="enemy-list"></div></div>
+          </div>
+        </section>
+      </div>
+
+      <footer class="hg-foot">
+        <button class="btn btn-main big" id="btn-tosector">出撃準備 ▶</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ==================== セクター選択 ==================== -->
+  <div id="screen-sector" class="screen hidden">
+    <div class="bg-grid"></div>
+    <div class="panel wide">
+      <div class="panel-head">
+        <h2>出撃セクター</h2>
+        <button class="btn btn-ghost" id="btn-sector-back">格納庫へ</button>
+      </div>
+      <div class="sector-list" id="sector-list"></div>
+    </div>
+  </div>
+
+  <!-- ==================== 操作説明 ==================== -->
+  <div id="screen-howto" class="screen hidden">
+    <div class="bg-grid"></div>
+    <div class="panel wide">
+      <div class="panel-head">
+        <h2>操作と仕組み</h2>
+        <button class="btn btn-ghost" data-back="title">タイトルへ</button>
+      </div>
+      <div class="howto-grid">
+        <section class="howto-card">
+          <h3>1P の操作</h3>
+          <table class="keytable">
+            <tr><th>移動</th><td>W A S D</td></tr>
+            <tr><th>照準</th><td>マウス</td></tr>
+            <tr><th>射撃</th><td>マウス左ボタン（押しっぱなし）</td></tr>
+            <tr><th>ローリング</th><td><b>Space</b> ― 進んでいる向きへ転がる</td></tr>
+            <tr><th>必殺技</th><td>Q（ゲージ満タンで）</td></tr>
+            <tr><th>武器切替</th><td>E</td></tr>
+            <tr><th>ロック切替</th><td>Tab</td></tr>
+            <tr><th>中断</th><td>Esc</td></tr>
+          </table>
+        </section>
+        <section class="howto-card">
+          <h3>2P の操作</h3>
+          <table class="keytable">
+            <tr><th>移動</th><td>↑ ↓ ← →</td></tr>
+            <tr><th>照準</th><td>ロックした敵へ自動で向く</td></tr>
+            <tr><th>射撃</th><td>右Shift ／ 「.」</td></tr>
+            <tr><th>ローリング</th><td><b>「/」</b> ／ 右Ctrl</td></tr>
+            <tr><th>必殺技</th><td>「,」</td></tr>
+            <tr><th>武器切替</th><td>M</td></tr>
+            <tr><th>ロック切替</th><td>N</td></tr>
+          </table>
+          <p class="note">2 人プレイは同じフィールドの協力戦。倒れた相方に近づいて数秒待つと復旧できる。片方が生きていれば全滅にはならない。</p>
+        </section>
+        <section class="howto-card">
+          <h3>ローリング</h3>
+          <p>Space を押すと、そのとき<b>歩いている向き</b>へ一気に転がる。転がっている間は弾が当たらない（無敵）。移動していないときは機体の向きへ出る。</p>
+          <p class="note">軽量機は再使用が速い。コア「緊急噴射」を積むと、転がりながら敵を吹き飛ばせる。</p>
+        </section>
+        <section class="howto-card">
+          <h3>属性と装甲</h3>
+          <p>弾には <b>実弾・熱・エネルギー・電磁</b> の 4 属性、敵には <b>素体・重装甲・シールド・複合装甲</b> の 4 種類がある。噛み合うとダメージ表示が緑、不利だと赤になる。</p>
+          <ul class="dotlist">
+            <li>重装甲には <b>熱</b>（火炎放射・グレネード）</li>
+            <li>シールドには <b>電磁</b>（テスラアーク）</li>
+            <li>複合装甲には <b>エネルギー</b>（プラズマ・レーザー）</li>
+            <li>素体には <b>実弾</b>（ライフル・ショットガン）</li>
+          </ul>
+        </section>
+        <section class="howto-card">
+          <h3>フィールドの進め方</h3>
+          <p>敵は最初こちらに気づいていない。視界に入るか銃声が届くと「！」が出て寄ってくる。周囲の仲間にも伝わるので、一度に相手にする数を減らすなら遮蔽を使う。</p>
+          <p class="note">右下のレーダーは自機から一定距離の敵しか映さない。通信塔とコンテナは常に表示される。目標を片付けるとボスが降りてくる。</p>
+        </section>
+        <section class="howto-card">
+          <h3>改造とガチャ</h3>
+          <p>撃破で得た<b>スクラップ</b>で装備をレベルアップ。クリアで得た<b>チケット</b>でガチャを回す。同じ装備が重複すると<b>限界突破</b>となり、上限レベルが +2 される。</p>
+          <p class="note">コアは特性そのもの。吸血・貫通・跳弾・過負荷など、組み合わせで戦い方が変わる。</p>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== リザルト ==================== -->
+  <div id="screen-result" class="screen hidden">
+    <div class="bg-grid"></div>
+    <div class="panel">
+      <div class="result-head">
+        <div id="result-rank" class="rank">S</div>
+        <div>
+          <h2 id="result-title">作戦成功</h2>
+          <p id="result-sector" class="result-sub">廃棄港湾</p>
+        </div>
+      </div>
+      <div class="result-rows">
+        <div class="rrow"><span>制圧時間</span><b id="result-time">00:00.00</b></div>
+        <div class="rrow"><span>撃破数</span><b id="result-kills">0</b></div>
+        <div class="rrow"><span>獲得スクラップ</span><b id="result-scrap">0</b></div>
+        <div class="rrow"><span>獲得チケット</span><b id="result-ticket">0</b></div>
+      </div>
+      <div class="result-players" id="result-players"></div>
+      <div class="panel-foot btns">
+        <button id="btn-again" class="btn btn-main">もう一度</button>
+        <button id="btn-tohangar" class="btn">格納庫へ</button>
+        <button id="btn-tosectors" class="btn btn-ghost">セクター選択</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== ポーズ ==================== -->
+  <div id="screen-pause" class="screen hidden">
+    <div class="panel narrow">
+      <h2>一時停止</h2>
+      <p id="pause-sector" class="result-sub">―</p>
+      <div class="panel-foot btns col">
+        <button id="btn-resume" class="btn btn-main">再開</button>
+        <button id="btn-restart" class="btn">最初からやり直す</button>
+        <button id="btn-abort" class="btn btn-ghost">撤退して格納庫へ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== ガチャ演出 ==================== -->
+  <div id="gacha-overlay" class="hidden">
+    <div class="go-flash"></div>
+    <div class="go-inner">
+      <div class="go-cards" id="go-cards"></div>
+      <button class="btn btn-main" id="btn-gacha-close">閉じる</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="data.js"></script>
+<script src="core.js"></script>
+<script src="field.js"></script>
+<script src="battle.js"></script>
+<script src="ai.js"></script>
+<script src="boss.js"></script>
+<script src="render.js"></script>
+<script src="hangar.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
