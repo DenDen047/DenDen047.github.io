@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>NOCLIP ― 壁抜けの館</title>
+<meta name="description" content="ツルハシ一本でバックルームズと洋館を掘り進む見下ろし型サバイバルホラー。ひび割れた壁も宝箱もロック扉も壊せるが、その音が実体たちを呼ぶ。6ステージ、7種のスキンと専用ツルハシ、口笛で敵を釣れるエモート機能つき。ハロウィン期間中にログインするとカボチャ頭の限定スキンが手に入る。">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ══════════ ゲーム画面 ══════════ -->
+  <div id="stage-wrap">
+    <canvas id="game"></canvas>
+    <div id="vignette"></div>
+    <div id="flash"></div>
+  </div>
+
+  <!-- ══════════ HUD ══════════ -->
+  <div id="hud" class="hidden">
+    <div class="hud-top">
+      <div class="chip" id="hud-stage">レベル0</div>
+      <div class="chip obj" id="hud-obj">🔑 <b>0</b>/3</div>
+      <div class="chip" id="hud-time">00:00</div>
+      <div class="chip candy">🍬 <b id="hud-candy">0</b></div>
+      <button class="chip btn-pause" id="pause-btn" title="一時停止">Ⅱ</button>
+    </div>
+
+    <canvas id="minimap" width="150" height="150"></canvas>
+
+    <div class="hud-bottom">
+      <div class="vitals">
+        <div class="bar-row hp"><span class="lb">HP</span><span class="bar"><i id="hp-fill"></i></span><b id="hp-txt">100</b></div>
+        <div class="bar-row st"><span class="lb">ST</span><span class="bar"><i id="st-fill"></i></span></div>
+        <div class="bar-row ba"><span class="lb">🔦</span><span class="bar"><i id="ba-fill"></i></span></div>
+      </div>
+      <div class="gear">
+        <canvas id="pick-icon" width="72" height="72"></canvas>
+        <div class="gear-txt"><b id="pick-name">作業用ツルハシ</b><span id="pick-sub">威力 1 ／ 静音 —</span></div>
+      </div>
+    </div>
+
+    <div id="alert-ring"></div>
+    <div id="subtitle"></div>
+  </div>
+
+  <!-- ══════════ エモートホイール ══════════ -->
+  <div id="emote-wheel" class="hidden"><div id="emote-ring"></div></div>
+
+  <!-- ══════════ タッチ操作 ══════════ -->
+  <div id="touch" class="hidden">
+    <div id="stick"><i id="stick-knob"></i></div>
+    <div id="tbtns">
+      <button class="tb tb-swing" data-act="swing">⛏</button>
+      <button class="tb tb-run" data-act="run">走</button>
+      <button class="tb tb-light" data-act="light">🔦</button>
+      <button class="tb tb-emote" data-act="emote">😀</button>
+    </div>
+  </div>
+
+  <!-- ══════════ タイトル ══════════ -->
+  <section id="sc-title" class="screen">
+    <div class="title-art">
+      <h1>NOCLIP</h1>
+      <p class="sub">壁抜けの館</p>
+    </div>
+    <p class="lede">壁の向こうに、まだ部屋がある。<br>ツルハシは通り道になるが、その音は呼び声にもなる。</p>
+    <div class="menu">
+      <button class="btn primary" data-go="stage">ステージを選ぶ</button>
+      <button class="btn" data-go="skin">スキン</button>
+      <button class="btn" data-go="help">あそびかた</button>
+    </div>
+    <p class="foot">HTML + Canvas ／ 保存はこの端末のブラウザ内だけ</p>
+  </section>
+
+  <!-- ══════════ ステージ選択 ══════════ -->
+  <section id="sc-stage" class="screen hidden">
+    <header class="sc-head">
+      <button class="btn ghost back" data-go="title">← もどる</button>
+      <h2>ステージ選択</h2>
+      <div class="head-right"><span class="chip candy">🍬 <b id="stage-candy">0</b></span></div>
+    </header>
+    <div id="stage-list" class="cards"></div>
+    <div class="equip-strip">
+      <canvas id="strip-char" width="64" height="64"></canvas>
+      <div class="strip-txt">装備中：<b id="strip-skin">調査員</b><br><span id="strip-pick">作業用ツルハシ</span></div>
+      <button class="btn small" data-go="skin">変更</button>
+    </div>
+  </section>
+
+  <!-- ══════════ スキン ══════════ -->
+  <section id="sc-skin" class="screen hidden">
+    <header class="sc-head">
+      <button class="btn ghost back" data-go="title">← もどる</button>
+      <h2>スキン一覧</h2>
+      <div class="head-right"><span id="skin-count" class="chip">0/7</span></div>
+    </header>
+
+    <div class="skin-layout">
+      <div class="skin-preview">
+        <canvas id="prev-char" width="360" height="300"></canvas>
+        <h3 id="prev-name">調査員</h3>
+        <span id="prev-rarity" class="rarity">コモン</span>
+        <p id="prev-desc" class="desc"></p>
+        <div class="prev-pick">
+          <canvas id="prev-pick-icon" width="96" height="96"></canvas>
+          <div>
+            <b id="prev-pick-name">作業用ツルハシ</b>
+            <ul id="prev-pick-stats" class="stats"></ul>
+          </div>
+        </div>
+        <p id="prev-perk" class="perk"></p>
+        <p id="prev-lock" class="lock hidden"></p>
+        <button id="equip-btn" class="btn primary wide">これを装備する</button>
+      </div>
+      <div id="skin-list" class="skin-grid"></div>
+    </div>
+
+    <div class="devrow">
+      <button id="hw-sim" class="btn tiny ghost">🎃 ハロウィン判定を試す（動作確認用）</button>
+    </div>
+  </section>
+
+  <!-- ══════════ あそびかた ══════════ -->
+  <section id="sc-help" class="screen hidden">
+    <header class="sc-head">
+      <button class="btn ghost back" data-go="title">← もどる</button>
+      <h2>あそびかた</h2><div class="head-right"></div>
+    </header>
+    <div class="help-body">
+      <div class="help-col">
+        <h3>操作</h3>
+        <table class="keys">
+          <tr><th>W A S D ／ ←↑↓→</th><td>移動</td></tr>
+          <tr><th>マウス</th><td>懐中電灯とツルハシの向き</td></tr>
+          <tr><th>左クリック ／ Space</th><td>ツルハシを振る</td></tr>
+          <tr><th>Shift</th><td>ダッシュ（スタミナ消費・小さな音）</td></tr>
+          <tr><th>F</th><td>懐中電灯の ON / OFF</td></tr>
+          <tr><th>E</th><td>エモートホイール</td></tr>
+          <tr><th>1 〜 8</th><td>エモートを直接出す</td></tr>
+          <tr><th>Esc</th><td>一時停止</td></tr>
+        </table>
+        <h3>目的</h3>
+        <p>フロアに散らばった<b>鍵</b>を全部集めて、非常口へ。鍵は宝箱の中や、ひび割れた壁の向こうにも隠れている。</p>
+      </div>
+      <div class="help-col">
+        <h3>ツルハシ</h3>
+        <p><b>ひび割れた壁</b>・<b>宝箱</b>・<b>ロックされた扉</b>は、向きを合わせて振れば壊せる。壁を抜けば近道になるが、掘る音は遠くの実体まで届く。</p>
+        <p>スキンごとに専用のツルハシがあり、威力・速さ・射程・出る音の大きさが違う。静かなツルハシほど生き残りやすい。</p>
+        <h3>実体たち</h3>
+        <p><b>スマイラー</b>は暗闇に笑顔だけを浮かべる。光を当てているあいだだけ実体化して殴れる。<b>ハウンド</b>は光を無視して音だけで追う。<b>スキンステイラー</b>はあなたの姿を真似る。</p>
+        <h3>エモート</h3>
+        <p>絵文字は音も出る。<b>🎵 口笛</b>はいちばん遠くまで響くので、実体をわざと別の通路へ釣るのに使える。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ ポーズ ══════════ -->
+  <section id="sc-pause" class="screen overlay hidden">
+    <div class="dialog">
+      <h2>一時停止</h2>
+      <button class="btn primary wide" id="resume-btn">つづける</button>
+      <button class="btn wide" id="retry-btn">やり直す</button>
+      <button class="btn wide ghost" id="quit-btn">ステージ選択へ</button>
+    </div>
+  </section>
+
+  <!-- ══════════ リザルト ══════════ -->
+  <section id="sc-result" class="screen overlay hidden">
+    <div class="dialog result">
+      <h2 id="res-title">脱出成功</h2>
+      <p id="res-sub"></p>
+      <ul id="res-stats" class="stats big"></ul>
+      <div id="res-unlock" class="unlock hidden"></div>
+      <button class="btn primary wide" id="res-next">つぎのステージへ</button>
+      <button class="btn wide" id="res-retry">もう一度</button>
+      <button class="btn wide ghost" id="res-quit">ステージ選択へ</button>
+    </div>
+  </section>
+
+  <!-- ══════════ 入手演出 ══════════ -->
+  <section id="sc-grant" class="screen overlay hidden">
+    <div class="dialog grant">
+      <span class="grant-tag">🎃 ハロウィン限定</span>
+      <canvas id="grant-char" width="300" height="260"></canvas>
+      <h2 id="grant-name"></h2>
+      <p id="grant-desc"></p>
+      <button class="btn primary wide" id="grant-ok">受け取る</button>
+    </div>
+  </section>
+
+  <div id="toast"></div>
+</div>
+
+<script src="data.js"></script>
+<script src="engine.js"></script>
+<script src="maze.js"></script>
+<script src="render.js"></script>
+<script src="game.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
