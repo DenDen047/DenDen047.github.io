@@ -352,6 +352,8 @@ body.touch-ui .vehicle-hint { bottom: 226px; }
 .tbtn.hidden { display: none; }
 .tbtn.action { background: rgba(91, 111, 48, 0.78); border: 1px solid rgba(255, 226, 125, 0.26); }
 .tbtn.shield-btn { background: rgba(43, 105, 119, 0.8); border: 1px solid rgba(138, 238, 235, 0.32); }
+.tbtn.ult-btn { background: rgba(146, 74, 24, 0.82); border: 1px solid rgba(255, 200, 120, 0.4); color: #ffe9c2; }
+.tbtn.ult-btn.charging { opacity: 0.45; }
 .tbtn.shield-btn.active { color: #202511; background: #a9efe5; }
 .tbtn:active { background: rgba(255, 255, 255, 0.25); }
 
@@ -575,6 +577,38 @@ body.touch-ui .vehicle-hint { bottom: 226px; }
 .result-stats .row.standing em { flex-basis: 100%; padding-left: 16px; font-style: normal; font-size: 10px; opacity: 0.66; }
 .result-divider { height: 1px; margin: 10px 6px; background: rgba(255, 255, 255, 0.13); }
 .result-panel { width: min(620px, 96vw); }
+
+/* ===== 勝利の紋章 ===== */
+.victory-crest { margin: -6px auto 2px; width: min(420px, 92vw); }
+.victory-crest.hidden { display: none; }
+.victory-crest svg { display: block; width: 100%; height: auto; overflow: visible; }
+.victory-crest .vc-text {
+  font-family: -apple-system, "Hiragino Sans", system-ui, sans-serif;
+  font-size: 44px; font-weight: 900; letter-spacing: 0.06em;
+  fill: #ffe89a; stroke: rgba(0, 0, 0, 0.45); stroke-width: 1.5; paint-order: stroke fill;
+}
+.victory-crest .vc-shield {
+  transform-box: fill-box; transform-origin: center;
+  animation: vc-shield-in 0.42s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+/* 羽は最初は無い。盾が出たあと、左右がぱっと現れる。 */
+.victory-crest .vc-wing {
+  opacity: 0; transform-box: fill-box; transform-origin: right center;
+  animation: vc-wing-in 0.3s cubic-bezier(0.2, 1.6, 0.4, 1) 0.5s both;
+}
+.victory-crest .vc-wing-r { transform-origin: left center; animation-delay: 0.66s; }
+@keyframes vc-shield-in {
+  from { opacity: 0; transform: scale(0.55); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes vc-wing-in {
+  from { opacity: 0; transform: scale(0.45); }
+  60% { opacity: 1; transform: scale(1.08); }
+  to { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .victory-crest .vc-shield, .victory-crest .vc-wing { animation: none; opacity: 1; }
+}
 .reward-summary { margin: -3px 0 10px; min-height: 20px; color: #d9e5b7; font-size: 13px; font-weight: 800; }
 .reward-summary.win { color: #ffe078; }
 .shop-panel { margin: 0 0 14px; padding: 12px; border: 1px solid rgba(255,255,255,0.13); border-radius: 12px; background: rgba(0,0,0,0.22); }
@@ -799,6 +833,21 @@ body.touch-ui .garden-help { display: none; }
 .swatch { display: inline-block; width: 22px; height: 12px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.35); vertical-align: middle; }
 
 /* 作業台 */
+/* ===== 兵器開発室 ===== */
+.lab-parts { text-align: left; margin: 0 0 10px; }
+.lab-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin-bottom: 8px; }
+.lab-row button {
+  padding: 7px 8px; border-radius: 9px; text-align: left; cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.16); background: rgba(255, 255, 255, 0.05);
+  color: #eef0e2; font-size: 11px; font-weight: 800; font-family: inherit;
+}
+.lab-row button.on { border-color: var(--you); background: rgba(255, 210, 63, 0.13); color: var(--you); }
+.lab-row button i { display: block; margin-top: 2px; font-style: normal; font-size: 9px; font-weight: 600; opacity: 0.72; }
+.lab-empty { margin: 0 0 8px; font-size: 10.5px; opacity: 0.6; }
+#lab .mech-top { display: block; }
+.lab-btns { display: flex; flex-direction: column; gap: 4px; }
+.lab-btns .shop-buy { min-width: 62px; padding: 5px 6px; }
+
 /* ===== ロボット格納庫 ===== */
 .mech-top { display: flex; gap: 14px; align-items: stretch; margin: 2px 0 10px; text-align: left; }
 #hangar-preview {

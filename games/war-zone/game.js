@@ -40,6 +40,16 @@
   const WIRE_DPS = 14;            // 中にいる敵への毎秒ダメージ
   const WIRE_SLOW = 0.42;         // 中にいる敵の移動速度倍率
   const WIRE_PLACE_COOLDOWN = 900;
+  // 必殺技「空爆要請」。輸送機が照準の先を通り抜けながら、直線に爆弾を落とす。
+  const AIRSTRIKE_BOMBS = 7;
+  const AIRSTRIKE_SPACING = 108;    // 爆弾どうしの間隔
+  const AIRSTRIKE_PLANE_SPEED = 760;
+  const AIRSTRIKE_RUN_IN = 900;     // 目標のどれだけ手前から飛んでくるか
+  const AIRSTRIKE_FALL_MS = 620;    // 投下から着弾までの猶予 (この間に逃げられる)
+  const AIRSTRIKE_DMG = 128;
+  const AIRSTRIKE_MARK_DIST = 430;  // 照準方向のどれだけ先を狙うか
+  // ハロウィンの森のカボチャ
+  const PUMPKIN_PICK_R = 30;
   const AUTO_HEAL_DELAY_MS = 5000;
   const AUTO_HEAL_PER_SEC = 5;
   const MEDKIT_HEAL = 45;
@@ -145,9 +155,70 @@
     // 二丁拳銃: 左右の手から交互に撃つ。1発ずつだが、とにかく手数が多い。
     { key: "dualpistol", name: "二丁拳銃", dmg: 21, interval: 105, mag: 24, reload: 1300, spread: 0.062, pellets: 1, auto: true, speed: 1050, range: 580, len: 12, kick: 1.5, dual: true, snd: "pistol" },
     // 二刀流: 振るたびに右手と左手が入れ替わる。振っている間は飛んできた銃弾を斬り落とす。
+    // ジャックランチャー: ジャック・オー・ランタン専用。狙いがそれていても近くの敵へ
+    // 向き直って飛び、飛びながらもゆるく追尾する。そのぶん弾はとても遅い。
+    { key: "jacklauncher", name: "ジャックランチャー", dmg: 112, interval: 1500, mag: 3, reload: 2700, spread: 0.02, pellets: 1, auto: false, speed: 330, range: 900, len: 30, kick: 4.6, rocket: true, seek: true, pumpkin: true, exclusive: "jack", snd: "sniper" },
     { key: "twinblade", name: "二刀流", dmg: 64, interval: 300, mag: 1, reload: 0, spread: 0, pellets: 1, auto: true, speed: 0, range: 96, len: 26, kick: 2.6, melee: true, arc: 0.95, style: "twinblade", twin: true, cutsBullets: true, snd: "melee" },
   ];
   const WKEY = {}; WEAPONS.forEach((w, i) => (WKEY[w.key] = i));
+  // ここまでが最初から用意してある武器。これより後ろは開発した武器が入る。
+  const BASE_WEAPON_COUNT = WEAPONS.length;
+
+  // ============================================================
+  //  兵器開発
+  //  4か所の部品を組み合わせて、自分で名前を付けた武器を作る。
+  //  部品は拠点のショップで買うか、戦場に落ちている部品箱から拾う。
+  //  一度手に入れた部品は無くならないので、何丁でも設計し直せる。
+  // ============================================================
+  const PART_SLOTS = [
+    { key: "barrel", name: "銃身",   icon: "🔩", note: "威力と射程が決まる" },
+    { key: "action", name: "機関部", icon: "⚙",  note: "連射の速さと単発/連射が決まる" },
+    { key: "mag",    name: "弾倉",   icon: "📦", note: "装弾数とリロードが決まる" },
+    { key: "stock",  name: "銃床",   icon: "🪵", note: "命中・反動・弾速が決まる" },
+  ];
+
+  const WEAPON_PARTS = [
+    // 銃身: 威力と射程
+    { key: "b-short", slot: "barrel", grade: 1, name: "ショートバレル", cost: 180,
+      desc: "取り回し重視。近距離向き。", dmg: 14, range: 380, spread: 0.10 },
+    { key: "b-std", slot: "barrel", grade: 2, name: "標準バレル", cost: 340,
+      desc: "くせのない中距離向き。", dmg: 22, range: 620, spread: 0.06 },
+    { key: "b-long", slot: "barrel", grade: 3, name: "ロングバレル", cost: 640,
+      desc: "遠くまでまっすぐ飛ぶ。", dmg: 34, range: 880, spread: 0.035 },
+    { key: "b-heavy", slot: "barrel", grade: 4, name: "重砲身", cost: 1020,
+      desc: "一撃が非常に重い。", dmg: 52, range: 1020, spread: 0.028 },
+    // 機関部: 連射の速さ
+    { key: "a-bolt", slot: "action", grade: 1, name: "ボルトアクション", cost: 200,
+      desc: "1発ずつ手で送る。そのぶん一撃が重い。", interval: 900, auto: false, dmgMul: 1.7 },
+    { key: "a-semi", slot: "action", grade: 2, name: "セミオート", cost: 400,
+      desc: "引くたびに1発。押しっぱなしでは撃てない。", interval: 260, auto: false, dmgMul: 1.15 },
+    { key: "a-full", slot: "action", grade: 3, name: "フルオート", cost: 720,
+      desc: "押しっぱなしで撃ち続ける。", interval: 112, auto: true, dmgMul: 0.82 },
+    { key: "a-gat", slot: "action", grade: 4, name: "ガトリング機関", cost: 1150,
+      desc: "とにかく手数。1発は軽い。", interval: 58, auto: true, dmgMul: 0.58 },
+    // 弾倉: 装弾数
+    { key: "m-small", slot: "mag", grade: 1, name: "小型弾倉", cost: 150,
+      desc: "軽くて入れ替えが速い。", mag: 10, reload: 900 },
+    { key: "m-std", slot: "mag", grade: 2, name: "標準弾倉", cost: 320,
+      desc: "ふつうの容量。", mag: 24, reload: 1300 },
+    { key: "m-drum", slot: "mag", grade: 3, name: "ドラムマガジン", cost: 660,
+      desc: "たくさん入るが入れ替えが遅い。", mag: 60, reload: 2200 },
+    { key: "m-belt", slot: "mag", grade: 4, name: "ベルト給弾", cost: 1050,
+      desc: "撃ち切るまで止まらない。", mag: 120, reload: 3400 },
+    // 銃床: 命中・反動・弾速
+    { key: "s-none", slot: "stock", grade: 1, name: "ストックなし", cost: 120,
+      desc: "軽いがばらつく。", spreadMul: 1.3, kick: 3.2, speed: 900 },
+    { key: "s-poly", slot: "stock", grade: 2, name: "樹脂ストック", cost: 320,
+      desc: "扱いやすい標準品。", spreadMul: 1, kick: 2, speed: 1120 },
+    { key: "s-tact", slot: "stock", grade: 3, name: "戦術ストック", cost: 640,
+      desc: "反動が小さく、弾も速い。", spreadMul: 0.76, kick: 1.3, speed: 1380 },
+    { key: "s-rail", slot: "stock", grade: 4, name: "レールストック", cost: 1080,
+      desc: "弾を加速させ、敵を1体多く貫く。", spreadMul: 0.58, kick: 1, speed: 1750, pierce: 1 },
+  ];
+  const PART_BY_KEY = {};
+  WEAPON_PARTS.forEach((x) => (PART_BY_KEY[x.key] = x));
+  const CUSTOM_ASSEMBLY_COST = 260;   // 組み立て工賃
+  const CUSTOM_MAX = 6;               // 保管しておける設計の数
 
   // ============================================================
   //  矢 (弓の弾)
@@ -339,6 +410,12 @@
     { key: "missile", name: "ミサイルポッド", icon: "🚀", cost: 1250, scrap: 16, style: "pod", tip: 26,
       interval: 900, dmg: 76, speed: 620, range: 860, spread: 0.09, pellets: 2, shell: true, flash: 16, snd: "sniper",
       desc: "一度に2発の小型ミサイルをばらまく。集団に強い。" },
+    // ロックオンミサイル: 視界に入った敵を一定時間狙い続けるとロックが完了し、
+    // 撃つと壁を越えて追いかける。ロックしていないあいだは撃てない。
+    { key: "lockon", name: "ロックオンミサイル", icon: "🎯", cost: 1600, scrap: 22, style: "pod", tip: 26,
+      interval: 1100, dmg: 118, speed: 520, range: 1050, spread: 0, shell: true, flash: 16, snd: "sniper",
+      lockMs: 1500, homing: true, ignoreWalls: true,
+      desc: "視界の敵に狙いを合わせ続けるとロックし、壁を越えて追う弾を撃つ。ロックするまで撃てない。" },
     { key: "beam", name: "レーザーキャノン", icon: "⚡", cost: 1500, scrap: 20, style: "beam", tip: 39,
       interval: 1500, dmg: 155, speed: 2600, range: 1400, spread: 0.004, pierce: 4, rail: true, flash: 18, snd: "sniper",
       desc: "壁ごと貫く極太のビーム。4体まで撃ち抜く。" },
@@ -430,7 +507,9 @@
     },
     {
       key: "grenadier", name: "擲弾兵 ボマー", icon: "💣", rarity: 4,
-      desc: "グレネードランチャー・ショットガン・銃剣。グレネードを6個持ち、爆発の威力も高い。",
+      desc: "グレネードランチャー・ショットガン・銃剣。グレネードを6個持ち、爆発の威力も高い。必殺技「空爆要請」で輸送機を呼べる。",
+      ultimate: { key: "airstrike", name: "空爆要請", icon: "✈️", cooldown: 42000,
+        desc: "照準の先へ輸送機を呼び、一直線に爆弾を落とす。" },
       hpBonus: 15, speedMul: 0.93, gunMul: 1, meleeMul: 0.95,
       grenades: 6, mines: 3, wires: 0,
       parryWindowMul: 0.9, parryCooldownMul: 1.1,
@@ -467,6 +546,19 @@
       armorBonus: 80, damageTakenMul: 0.88, noiseMul: 1.3,
       weapons: ["minigun", "shotgun", "shovel"],
     },
+    // ---- 隠しキャラクター。徴兵ガチャには出ない。 ----
+    {
+      key: "jack", name: "ジャック・オー・ランタン", icon: "🎃", rarity: 5, hidden: true,
+      bodyStyle: "jack",
+      lockedHint: "ハロウィンの森でカボチャをすべて集めて勝つと仲間になります。",
+      desc: "ジャックランチャー・ハンドガン・ナイフ。ランチャーの弾は狙いがそれていても敵のほうへ飛んでいく。弾は遅いので、置くように撃つ。",
+      hpBonus: 25, speedMul: 1.04, gunMul: 1, meleeMul: 1,
+      grenades: 4, mines: 2, wires: 0,
+      parryWindowMul: 1, parryCooldownMul: 1,
+      mineArmMul: 1, mineBlastMul: 1.2, mineStealthMul: 1, seesEnemyMines: false,
+      visionMul: 1.12,
+      weapons: ["jacklauncher", "pistol", "knife"],
+    },
     {
       key: "merc", name: "黒衣の傭兵 ヴァンタ", icon: "🖤", rarity: 5,
       bodyStyle: "merc",
@@ -498,7 +590,7 @@
   //  チケットを使って新しいキャラクターを仲間にする。すでに仲間のキャラが出たら
   //  「練度」が1つ上がり、そのキャラのHPと攻撃力が伸びる (最大 練度5)。
   // ============================================================
-  const GACHA_CHARS = CLASSES.filter((c) => !c.starter);
+  const GACHA_CHARS = CLASSES.filter((c) => !c.starter && !c.hidden);
   const GACHA_RATES = { 5: 0.06, 4: 0.28, 3: 0.66 };   // ★5 / ★4 / ★3 の出る割合
   const GACHA_TICKET_COST = 320;      // チケット1枚を所持金で買うときの値段
   const GACHA_TEN_TICKETS = 10;
@@ -582,6 +674,14 @@
       ground: ["#2a2f3f", "#303648", "#252a38"],
     },
     {
+      key: "halloween", name: "ハロウィンの森", icon: "🎃",
+      desc: "月あかりのカボチャ畑。森じゅうに光るカボチャが散らばっている。すべて拾って勝つと、隠しキャラクターが仲間になる。",
+      bgm: "bgm-darkforest", creature: false, training: false, fixedLight: 0.34,
+      phase: { key: "night", label: "🎃 ハロウィンの森", note: "カボチャを集めよう" },
+      pumpkins: 12,
+      ground: ["#2d2136", "#342740", "#261c2e"],
+    },
+    {
       key: "darkforest", name: "暗黒の森", icon: "🌲",
       desc: "夜が明けない密林。見通しは最悪で、何かが棲んでいる。走ると気づかれる。",
       bgm: "bgm-darkforest", creature: true, training: false, fixedLight: 0.1,
@@ -596,6 +696,7 @@
   const isTraining = () => !!stageDef().training;
   const isMonochrome = () => !!stageDef().monochrome;
   const hasSword = () => !!stageDef().sword;
+  const pumpkinQuota = () => stageDef().pumpkins || 0;
 
   const DIFF = {
     easy:   { aimErr: 0.17, react: 430, fireChance: 0.68, hpMul: 0.85, dmgMul: 0.85, sniperChance: 0.05 },
@@ -703,6 +804,7 @@
     resultTitle: document.getElementById("result-title"),
     resultStats: document.getElementById("result-stats"),
     rewardSummary: document.getElementById("reward-summary"),
+    victoryCrest: document.getElementById("victory-crest"),
     shopItems: document.getElementById("shop-items"),
     shopMoney: document.getElementById("shop-money"),
     shopMessage: document.getElementById("shop-message"),
@@ -717,6 +819,13 @@
     forge: document.getElementById("forge"),
     forgeItems: document.getElementById("forge-items"),
     forgeMessage: document.getElementById("forge-message"),
+    lab: document.getElementById("lab"),
+    labName: document.getElementById("lab-name"),
+    labSpec: document.getElementById("lab-spec"),
+    labParts: document.getElementById("lab-parts"),
+    labList: document.getElementById("lab-list"),
+    labMake: document.getElementById("btn-lab-make"),
+    labMessage: document.getElementById("lab-message"),
     hangar: document.getElementById("hangar"),
     hangarPreview: document.getElementById("hangar-preview"),
     hangarName: document.getElementById("hangar-name"),
@@ -1036,6 +1145,7 @@
     if (!e.repeat && (e.key === "f" || e.key === "F")) localInput.mineEdge = true;
     if (!e.repeat && (e.key === "c" || e.key === "C")) localInput.wireEdge = true;
     if (!e.repeat && (e.key === "q" || e.key === "Q")) localInput.parryEdge = true;
+    if (!e.repeat && (e.key === "x" || e.key === "X")) localInput.ultEdge = true;
     // 数字キーは「所持している武器の何番目か」。全武器の通し番号ではない。
     if (e.key >= "1" && e.key <= "9") {
       const me = localSoldier();
@@ -1045,6 +1155,43 @@
     if ([" ", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) e.preventDefault();
   });
   window.addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
+
+  // ---- チートコード ----
+  // メニューか拠点で番号を続けて打つと、隠しキャラ以外のキャラクターと
+  // ロボットの部品がすべて手に入る。試合中は数字キーが武器切替なので効かない。
+  const CHEAT_CODE = "4649";
+  let cheatBuffer = "";
+  window.addEventListener("keydown", (e) => {
+    if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+    if (isMatchActive()) { cheatBuffer = ""; return; }
+    if (e.key < "0" || e.key > "9") { cheatBuffer = ""; return; }
+    cheatBuffer = (cheatBuffer + e.key).slice(-CHEAT_CODE.length);
+    if (cheatBuffer === CHEAT_CODE) {
+      cheatBuffer = "";
+      applyUnlockCheat();
+    }
+  });
+
+  function applyUnlockCheat() {
+    let gained = 0;
+    for (const c of CLASSES) {
+      if (c.hidden || charRanks[c.key] != null) continue;
+      charRanks[c.key] = 0;
+      gained++;
+    }
+    for (const key of Object.keys(charRanks)) grantCharWeapons(key);
+    for (const f of MECH_FRAMES) ownedMechFrames[f.key] = true;
+    for (const c of MECH_PAINTS) ownedMechPaints[c.key] = true;
+    for (const a of MECH_ARMS) ownedMechArms[a.key] = true;
+    saveProgress();
+    syncMenuClassButtons();
+    // 開いているパネルがあれば中身を作り直す
+    if (!el.hangar.classList.contains("hidden")) renderHangar("チートコード: すべての部品を解放しました。");
+    if (!el.gacha.classList.contains("hidden")) renderGacha();
+    if (!el.squad.classList.contains("hidden")) renderSquad();
+    Audio.levelup();
+    banner(`🔓 チートコード ${CHEAT_CODE}：キャラクター${gained ? ` +${gained}人` : ""}とロボットの部品をすべて解放した`);
+  }
 
   canvas.addEventListener("mousemove", (e) => {
     const r = canvas.getBoundingClientRect();
@@ -1106,6 +1253,8 @@
   document.getElementById("t-mine").addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.mineEdge = true; });
   const wireBtn = document.getElementById("t-wire");
   wireBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.wireEdge = true; });
+  const ultBtn = document.getElementById("t-ult");
+  ultBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.ultEdge = true; });
   const tankBtn = document.getElementById("t-action");
   tankBtn.addEventListener("pointerdown", (e) => {
     e.preventDefault();
@@ -1135,7 +1284,7 @@
   // ローカルプレイヤーの入力(SP=自分のsoldierに適用 / client=送信)
   const localInput = {
     mvx: 0, mvy: 0, aimx: 1, aimy: 0, shoot: false, dash: false,
-    reloadEdge: false, grenadeEdge: false, interactEdge: false, parryEdge: false, mineEdge: false, wireEdge: false,
+    reloadEdge: false, grenadeEdge: false, interactEdge: false, parryEdge: false, mineEdge: false, wireEdge: false, ultEdge: false,
     weaponWanted: -1, aimAngle: 0, shield: false,
   };
 
@@ -1249,6 +1398,9 @@
   let ownedMechPaints = {};      // カラーkey → true
   let ownedMechArms = {};        // 腕の武器key → true
   let mechSetup = { frame: "hound", paint: "steel", arms: ["vulcan", "vulcan"], name: "" };
+  // ---- 兵器開発 ----
+  let ownedParts = {};       // 部品key → true
+  let customWeapons = [];    // { key, name, parts: { barrel, action, mag, stock } }
 
   function emptyState() {
     return {
@@ -1260,6 +1412,9 @@
       grenades: [],
       mines: [],
       wires: [],
+      airstrikes: [],
+      pumpkins: [],
+      pumpkinsTaken: 0,
       tanks: [],
       turrets: [],
       particles: [],
@@ -1629,6 +1784,32 @@
     for (const f of MECH_FRAMES) if (!f.cost && !f.scrap) ownedMechFrames[f.key] = true;
     for (const c of MECH_PAINTS) if (!c.cost) ownedMechPaints[c.key] = true;
     for (const a of MECH_ARMS) if (!a.cost && !a.scrap) ownedMechArms[a.key] = true;
+    // 開発部品と、開発ずみの武器
+    ownedParts = keep(inv.parts, (k) => !!PART_BY_KEY[k]);
+    customWeapons = [];
+    if (Array.isArray(inv.custom)) {
+      for (const raw of inv.custom.slice(0, CUSTOM_MAX)) {
+        if (!raw || typeof raw !== "object") continue;
+        const parts = {};
+        let ok = true;
+        for (const slot of PART_SLOTS) {
+          const def = PART_BY_KEY[raw.parts && raw.parts[slot.key]];
+          if (!def || def.slot !== slot.key) { ok = false; break; }
+          parts[slot.key] = def.key;
+        }
+        if (!ok) continue;
+        const name = String(raw.name || "").slice(0, 12) || "試作銃";
+        customWeapons.push({ key: String(raw.key || ""), name, parts });
+      }
+      // key は保存されたものを使いつつ、重複や空は振り直す
+      const used = new Set();
+      customWeapons.forEach((cw, i) => {
+        if (!cw.key || used.has(cw.key)) cw.key = `custom-${i}`;
+        used.add(cw.key);
+      });
+    }
+    syncCustomWeapons();
+
     const m = (inv.mech && typeof inv.mech === "object") ? inv.mech : {};
     mechSetup = {
       frame: ownedMechFrames[m.frame] ? m.frame : MECH_FRAMES[0].key,
@@ -1652,6 +1833,7 @@
       armor: ownedArmor, chars: charRanks, attach: weaponAttach, paint: weaponPaint,
       loadout: charLoadout, wearing: equippedArmor, arrows: arrowStock, arrowType,
       mechFrames: ownedMechFrames, mechPaints: ownedMechPaints, mechArms: ownedMechArms, mech: mechSetup,
+      parts: ownedParts, custom: customWeapons,
     }));
     refreshWallets();
   }
@@ -1665,6 +1847,42 @@
     document.querySelectorAll("[data-wallet-ticket]").forEach((n) => (n.textContent = tickets));
   }
 
+  // 開発した武器の実性能。部品の値をそのまま組み合わせるだけ。
+  function customWeaponStats(design) {
+    const b = PART_BY_KEY[design.parts.barrel];
+    const a = PART_BY_KEY[design.parts.action];
+    const m = PART_BY_KEY[design.parts.mag];
+    const st = PART_BY_KEY[design.parts.stock];
+    if (!b || !a || !m || !st) return null;
+    return {
+      key: design.key, name: design.name, custom: true, design,
+      dmg: Math.round(b.dmg * a.dmgMul * 10) / 10,
+      interval: a.interval,
+      mag: m.mag, reload: m.reload,
+      spread: Math.round(b.spread * st.spreadMul * 1000) / 1000,
+      pellets: 1, auto: a.auto,
+      speed: st.speed, range: b.range,
+      len: 10 + b.grade * 4, kick: st.kick,
+      pierce: st.pierce || 0,
+      snd: a.interval < 130 ? "smg" : a.interval > 600 ? "sniper" : "rifle",
+    };
+  }
+
+  // 開発した武器を WEAPONS の後ろに並べ直す。
+  // 既存の武器の並びは動かさないので、番号がずれることはない。
+  function syncCustomWeapons() {
+    for (const w of WEAPONS.slice(BASE_WEAPON_COUNT)) delete WKEY[w.key];
+    WEAPONS.length = BASE_WEAPON_COUNT;
+    for (const design of customWeapons) {
+      const st = customWeaponStats(design);
+      if (!st) continue;
+      WKEY[st.key] = WEAPONS.length;
+      WEAPONS.push(st);
+    }
+  }
+
+  const isCustomWeapon = (key) => customWeapons.some((c) => c.key === key);
+
   // ---- 持ち物のたずね方 ----
   const weaponDef = (key) => WEAPONS[WKEY[key]] || null;
   const hasChar = (key) => charRanks[key] != null;
@@ -1674,6 +1892,7 @@
   function weaponUnlocked(key) {
     if (WKEY[key] == null) return false;
     if (key === "timesword") return false;          // 時の剣は岩から抜くしかない
+    if (isCustomWeapon(key)) return true;           // 自分で開発した武器
     if (!WEAPON_SHOP_BY_KEY[key]) return true;
     return !!ownedWeapons[key];
   }
@@ -1697,6 +1916,7 @@
     if (!w) return false;
     if (!weaponUnlocked(weaponKey)) return false;
     if (meleeOnlyChar(charKey) && !w.melee) return false;
+    if (w.exclusive && w.exclusive !== charKey) return false;   // 専用武器
     return true;
   }
 
@@ -1856,7 +2076,10 @@
     s.stunResist = gear.stunResist;
     s.hp = s.maxHp; s.armor = s.maxArmor; s.shield = s.maxShield;
     // 編成テントで組んだ武器
-    const list = loadoutFor(charKey);
+    // 開発した武器は自分の端末にしか無いので、オンラインでは持ち出さない
+    let list = loadoutFor(charKey);
+    if (mode !== "sp") list = list.filter((wk) => !isCustomWeapon(wk));
+    if (!list.length) list = (CLASS_BY_KEY[charKey] || CLASSES[0]).weapons.slice();
     if (list.length) {
       s.loadout = list.map((wk) => WKEY[wk]).filter((i) => i != null);
       s.weapon = s.loadout[0];
@@ -1899,6 +2122,7 @@
     { key: "attach",  label: "🔩 部品",   note: "アタッチメントは一度買えば、作業台でどの武器にも付け替えられます。" },
     { key: "paint",   label: "🎨 塗装",   note: "武器の色を変える塗料です。強さは変わりません。作業台で塗ります。" },
     { key: "arrow",   label: "🏹 矢",     note: `弓で撃つ矢です。${ARROW_BUNDLE}本ずつ買えます。出撃するときに矢筒の容量ぶんだけ持ち出します。` },
+    { key: "part",    label: "🧰 開発部品", note: "兵器開発室で武器を組む部品です。戦場に落ちている部品箱からも拾えます。一度買えば何丁でも作れます。" },
   ];
   let shopTab = "upgrade";
 
@@ -1980,6 +2204,18 @@
           buyBtn("buy-arrow", a.key, full ? "満杯" : `${ARROW_BUNDLE}本 ${cost} G`, full, ""));
       }).join("");
     }
+    if (key === "part") {
+      return PART_SLOTS.map((slot) => {
+        const rows = WEAPON_PARTS.filter((x) => x.slot === slot.key).map((x) => {
+          const owned = !!ownedParts[x.key];
+          return shopCard(x.icon || slot.icon,
+            `${esc(x.name)}<span class="tag">★${x.grade}</span>${owned ? '<span class="tag own">所持</span>' : ""}`,
+            `${esc(x.desc)}<br>${esc(partSummary(x))}`,
+            buyBtn("buy-part", x.key, owned ? "所持ずみ" : `${x.cost} G`, owned, owned ? "owned" : ""));
+        }).join("");
+        return `<p class="forge-group">${slot.icon} ${slot.name}　<span style="opacity:.7;font-weight:600">${slot.note}</span></p>` + rows;
+      }).join("");
+    }
     // 強化
     return SHOP_ITEMS.map((item) => {
       const level = shopLevels[item.key] || 0;
@@ -2045,6 +2281,23 @@
     ownedPaints[key] = true;
     saveProgress();
     renderShop(`${p.name}を手に入れました。作業台で武器に塗れます。`);
+  }
+
+  // 部品1つの効きめを1行にまとめる
+  function partSummary(x) {
+    if (x.slot === "barrel") return `威力 ${x.dmg} ・ 射程 ${x.range} ・ ばらつき ${x.spread}`;
+    if (x.slot === "action") return `毎秒 ${(1000 / x.interval).toFixed(1)} 発 ・ ${x.auto ? "連射" : "単発"} ・ 威力 ×${x.dmgMul}`;
+    if (x.slot === "mag") return `装弾 ${x.mag} 発 ・ リロード ${(x.reload / 1000).toFixed(1)} 秒`;
+    return `ばらつき ×${x.spreadMul} ・ 反動 ${x.kick} ・ 弾速 ${x.speed}${x.pierce ? ` ・ 貫通 +${x.pierce}` : ""}`;
+  }
+
+  function buyPart(key) {
+    const x = PART_BY_KEY[key];
+    if (!x || ownedParts[key]) return;
+    if (!spendMoney(x.cost, renderShop)) return;
+    ownedParts[key] = true;
+    saveProgress();
+    renderShop(`${x.name}を手に入れました。兵器開発室で組み込めます。`);
   }
 
   function buyArrows(key) {
@@ -2234,6 +2487,132 @@
     saveProgress();
     Audio.levelup();
     renderForge(`${r.name}を作って装備しました。`);
+  }
+
+  // ============================================================
+  //  兵器開発室
+  //  4か所の部品を選び、名前を付けて自分の武器を作る。
+  // ============================================================
+  let labDraft = { name: "", parts: { barrel: "", action: "", mag: "", stock: "" } };
+  let labEditing = null;     // 作り直している設計の key (新規なら null)
+
+  function openLab() {
+    labEditing = null;
+    labDraft = { name: "", parts: { barrel: "", action: "", mag: "", stock: "" } };
+    // 持っている部品のうち、いちばん良いものを最初から入れておく
+    for (const slot of PART_SLOTS) {
+      const owned = WEAPON_PARTS.filter((x) => x.slot === slot.key && ownedParts[x.key]);
+      if (owned.length) labDraft.parts[slot.key] = owned[owned.length - 1].key;
+    }
+    el.labName.value = "";
+    renderLab();
+    el.lab.classList.remove("hidden");
+  }
+
+  const labComplete = () => PART_SLOTS.every((slot) => !!labDraft.parts[slot.key]);
+
+  function renderLab(message = "", isError = false) {
+    refreshWallets();
+    // 設計中の性能表
+    if (labComplete()) {
+      const st = customWeaponStats({ key: "draft", name: labDraft.name || "（名前未設定）", parts: labDraft.parts });
+      const row = (label, value) => `<span class="row"><span>${label}</span><b>${value}</b></span>`;
+      el.labSpec.innerHTML =
+        row("名前", esc(labDraft.name || "（名前未設定）")) +
+        row("威力", `${st.dmg}　（毎秒 ${Math.round(st.dmg * 1000 / st.interval)}）`) +
+        row("連射", `毎秒 ${(1000 / st.interval).toFixed(1)} 発 ・ ${st.auto ? "連射" : "単発"}`) +
+        row("装弾 / リロード", `${st.mag} 発 / ${(st.reload / 1000).toFixed(1)} 秒`) +
+        row("射程", st.range) +
+        row("ばらつき", st.spread) +
+        row("弾速 / 貫通", `${st.speed} / ${st.pierce}`);
+    } else {
+      el.labSpec.innerHTML = '<span class="row"><span>4か所すべてに部品を入れてください</span><b>—</b></span>';
+    }
+    // 部品の選択欄
+    el.labParts.innerHTML = PART_SLOTS.map((slot) => {
+      const owned = WEAPON_PARTS.filter((x) => x.slot === slot.key && ownedParts[x.key]);
+      const body = owned.length
+        ? owned.map((x) => {
+            const on = labDraft.parts[slot.key] === x.key;
+            return `<button data-lab-part="${x.key}" data-lab-slot="${slot.key}" class="${on ? "on" : ""}">` +
+              `${esc(x.name)}<i>★${x.grade} ${esc(partSummary(x))}</i></button>`;
+          }).join("")
+        : `<p class="lab-empty">${slot.name}の部品をまだ持っていません。ショップの「開発部品」か、戦場の部品箱で手に入ります。</p>`;
+      return `<p class="forge-group">${slot.icon} ${slot.name}　<span style="opacity:.7;font-weight:600">${slot.note}</span></p>` +
+        `<div class="lab-row">${body}</div>`;
+    }).join("");
+    // 開発ずみの一覧
+    el.labList.innerHTML = customWeapons.length
+      ? customWeapons.map((cw) => {
+          const st = customWeaponStats(cw);
+          const detail = st ? `威力 ${st.dmg} ・ 毎秒 ${(1000 / st.interval).toFixed(1)}発 ・ 装弾 ${st.mag} ・ 射程 ${st.range}` : "";
+          return shopCard("🛠", esc(cw.name), detail,
+            `<span class="lab-btns">` +
+            `<button class="shop-buy" data-lab-load="${cw.key}">作り直す</button>` +
+            `<button class="shop-buy" data-lab-del="${cw.key}">捨てる</button></span>`);
+        }).join("")
+      : '<p class="lab-empty">まだ1丁も開発していません。</p>';
+    el.labMake.disabled = !labComplete();
+    el.labMake.textContent = labEditing ? `この設計で作り直す（${CUSTOM_ASSEMBLY_COST} G）` : `開発する（${CUSTOM_ASSEMBLY_COST} G）`;
+    el.labMessage.textContent = message;
+    el.labMessage.classList.toggle("err", isError);
+  }
+
+  function setLabPart(slot, key) {
+    const x = PART_BY_KEY[key];
+    if (!x || x.slot !== slot || !ownedParts[key]) return;
+    labDraft.parts[slot] = key;
+    renderLab();
+  }
+
+  function loadLabDesign(key) {
+    const cw = customWeapons.find((c) => c.key === key);
+    if (!cw) return;
+    labEditing = key;
+    labDraft = { name: cw.name, parts: Object.assign({}, cw.parts) };
+    el.labName.value = cw.name;
+    renderLab(`「${cw.name}」を読み込みました。部品を変えて作り直せます。`);
+  }
+
+  function deleteLabDesign(key) {
+    const cw = customWeapons.find((c) => c.key === key);
+    if (!cw) return;
+    customWeapons = customWeapons.filter((c) => c.key !== key);
+    // 編成から外す (番号がずれるので作り直してから掃除する)
+    syncCustomWeapons();
+    for (const ck of Object.keys(charLoadout)) {
+      charLoadout[ck] = (charLoadout[ck] || []).filter((wk) => WKEY[wk] != null);
+    }
+    if (labEditing === key) { labEditing = null; }
+    saveProgress();
+    renderLab(`「${cw.name}」を捨てました。`);
+  }
+
+  function developWeapon() {
+    if (!labComplete()) { renderLab("4か所すべてに部品を入れてください。", true); return; }
+    const name = (el.labName.value || "").trim().slice(0, 12);
+    if (!name) { renderLab("武器の名前を入れてください。", true); return; }
+    if (!labEditing && customWeapons.length >= CUSTOM_MAX) {
+      renderLab(`保管できる設計は ${CUSTOM_MAX} 丁までです。いらないものを捨ててください。`, true);
+      return;
+    }
+    if (!spendMoney(CUSTOM_ASSEMBLY_COST, renderLab)) return;
+    if (labEditing) {
+      const cw = customWeapons.find((c) => c.key === labEditing);
+      cw.name = name;
+      cw.parts = Object.assign({}, labDraft.parts);
+    } else {
+      // key は使い回さない。捨てた設計の番号を再利用すると編成が入れ替わるため。
+      let n = 0;
+      while (customWeapons.some((c) => c.key === `custom-${n}`)) n++;
+      customWeapons.push({ key: `custom-${n}`, name, parts: Object.assign({}, labDraft.parts) });
+      labEditing = `custom-${n}`;
+    }
+    labDraft.name = name;
+    syncCustomWeapons();
+    saveProgress();
+    Audio.levelup();
+    renderLab(`「${name}」が完成しました。編成テントで持ち出せます。`);
   }
 
   // ============================================================
@@ -3476,12 +3855,152 @@
     }
   }
 
+  // ============================================================
+  //  必殺技 (キャラクターごとの切り札)
+  //  クールタイムだけで撃てる。いまのところ擲弾兵ボマーの「空爆要請」だけ。
+  // ============================================================
+  const ultimateOf = (s) => (s ? classDef(s.classKey).ultimate : null) || null;
+
+  function ultimateRemaining(s, t) {
+    if (!ultimateOf(s)) return 0;
+    return Math.max(0, (s.ultReadyAt || 0) - t);
+  }
+
+  function tryUltimate(s, t) {
+    const ult = ultimateOf(s);
+    if (!ult || s.dead || isDropping(s) || s.vehicleId >= 0 || s.turretId >= 0) return;
+    if (t < (s.ultReadyAt || 0)) return;
+    s.ultReadyAt = t + ult.cooldown;
+    if (ult.key === "airstrike") callAirstrike(s, t);
+  }
+
+  // 照準の先を目標にして輸送機を呼ぶ。機体は目標の手前から飛んできて通り抜ける。
+  function callAirstrike(s, t) {
+    const tx = clamp(s.x + Math.cos(s.aimAngle) * AIRSTRIKE_MARK_DIST, 80, WORLD_W - 80);
+    const ty = clamp(s.y + Math.sin(s.aimAngle) * AIRSTRIKE_MARK_DIST, 80, WORLD_H - 80);
+    const angle = s.aimAngle;
+    // 爆撃線の中央が目標に来るように、投下開始点を手前へずらす
+    const half = (AIRSTRIKE_BOMBS - 1) * AIRSTRIKE_SPACING / 2;
+    G.airstrikes.push({
+      team: s.team, owner: s.id, angle,
+      sx: tx - Math.cos(angle) * AIRSTRIKE_RUN_IN,
+      sy: ty - Math.sin(angle) * AIRSTRIKE_RUN_IN,
+      travel: 0,
+      firstDrop: AIRSTRIKE_RUN_IN - half,
+      dropped: 0,
+      bombs: [],
+      markX: tx, markY: ty,
+    });
+    if (s.id === G.localId) banner("✈️ 空爆要請！　着弾まで下がれ");
+    Audio.roar();          // 機影が近づいてくる合図
+  }
+
+  function updateAirstrikes(dt, t) {
+    for (let i = G.airstrikes.length - 1; i >= 0; i--) {
+      const a = G.airstrikes[i];
+      a.travel += AIRSTRIKE_PLANE_SPEED * dt;
+      a.x = a.sx + Math.cos(a.angle) * a.travel;
+      a.y = a.sy + Math.sin(a.angle) * a.travel;
+      // 爆撃線を通過しながら順に落とす
+      while (a.dropped < AIRSTRIKE_BOMBS && a.travel >= a.firstDrop + a.dropped * AIRSTRIKE_SPACING) {
+        const d = a.firstDrop + a.dropped * AIRSTRIKE_SPACING;
+        a.bombs.push({
+          x: clamp(a.sx + Math.cos(a.angle) * d, 20, WORLD_W - 20),
+          y: clamp(a.sy + Math.sin(a.angle) * d, 20, WORLD_H - 20),
+          at: t + AIRSTRIKE_FALL_MS,
+          born: t,
+        });
+        a.dropped++;
+      }
+      for (let j = a.bombs.length - 1; j >= 0; j--) {
+        const bomb = a.bombs[j];
+        if (t < bomb.at) continue;
+        explodeProjectile({
+          x: bomb.x, y: bomb.y, dmg: AIRSTRIKE_DMG,
+          team: a.team, owner: a.owner, kind: "shell",
+        });
+        if (dist2(bomb.x, bomb.y, camX + viewW() / 2, camY + viewH() / 2) < 700 ** 2) {
+          shake = Math.min(16, shake + 5);
+        }
+        a.bombs.splice(j, 1);
+      }
+      const done = a.dropped >= AIRSTRIKE_BOMBS && a.bombs.length === 0;
+      if (done && a.travel > a.firstDrop + AIRSTRIKE_BOMBS * AIRSTRIKE_SPACING + 900) G.airstrikes.splice(i, 1);
+    }
+  }
+
+  // ============================================================
+  //  ハロウィンの森のカボチャ
+  //  拾うのは自分だけ。すべて拾って勝つと隠しキャラクターが仲間になる。
+  // ============================================================
+  function spawnPumpkins() {
+    G.pumpkins = [];
+    G.pumpkinsTaken = 0;
+    const quota = pumpkinQuota();
+    for (let id = 0; id < quota; id++) {
+      let placed = null;
+      for (let attempt = 0; attempt < 90; attempt++) {
+        const x = rand(120, WORLD_W - 120), y = rand(120, WORLD_H - 120);
+        const blocked = G.obstacles.some((o) => isSolid(o) && circleRect(x, y, 20, o.x, o.y, o.w, o.h));
+        const crowded = G.pumpkins.some((q) => dist2(x, y, q.x, q.y) < 220 ** 2) ||
+          G.bases.some((b) => !b.hidden && dist2(x, y, b.x, b.y) < 260 ** 2);
+        if (!blocked && !crowded) { placed = { x, y }; break; }
+      }
+      if (!placed) continue;
+      G.pumpkins.push({ id, x: placed.x, y: placed.y, taken: false, phase: Math.random() * Math.PI * 2 });
+    }
+  }
+
+  function updatePumpkins() {
+    if (!G.pumpkins.length) return;
+    const me = localSoldier();
+    if (!me || me.dead || me.vehicleId >= 0) return;
+    for (const q of G.pumpkins) {
+      if (q.taken) continue;
+      if (dist2(me.x, me.y, q.x, q.y) > PUMPKIN_PICK_R * PUMPKIN_PICK_R) continue;
+      q.taken = true;
+      G.pumpkinsTaken++;
+      Audio.heal();
+      for (let i = 0; i < 12; i++) {
+        addParticle(q.x + rand(-8, 8), q.y + rand(-8, 8), {
+          kind: "spark", vx: rand(-70, 70), vy: rand(-110, -30), life: rand(400, 800), size: rand(2, 5),
+        });
+      }
+      const left = G.pumpkins.length - G.pumpkinsTaken;
+      banner(left > 0 ? `🎃 カボチャ ${G.pumpkinsTaken} / ${G.pumpkins.length}　のこり ${left}`
+        : "🎃 カボチャを全部集めた！　このまま勝てば仲間になる");
+    }
+  }
+
+  // 戦場で拾った部品箱の中身。持っていない部品を優先し、
+  // すべて揃っていたら代わりに所持金が増える。
+  function grantFoundPart() {
+    const missing = WEAPON_PARTS.filter((x) => !ownedParts[x.key]);
+    if (missing.length) {
+      // 良い部品ほど出にくい (grade が小さいほど当たりやすい)
+      const pool = [];
+      for (const x of missing) for (let i = 0; i < 5 - x.grade; i++) pool.push(x);
+      const got = pick(pool.length ? pool : missing);
+      ownedParts[got.key] = true;
+      saveProgress();
+      Audio.levelup();
+      banner(`🧰 部品を拾った：${got.name}　拠点の兵器開発室で使える`);
+      return;
+    }
+    money += 120;
+    saveProgress();
+    Audio.heal();
+    banner("🧰 部品箱：部品はもう揃っている　+120 G");
+  }
+
   function spawnMedkits() {
     G.pickups = [];
     const kinds = [
       "medkit", "medkit", "medkit", "medkit", "medkit", "medkit", "medkit", "medkit",
       "armor", "armor", "armor", "armor", "armor", "armor",
       "shield", "shield", "shield", "shield",
+      // 兵器開発の部品箱。拾えるのは自分だけ。
+      "part", "part", "part", "part",
     ];
     for (let id = 0; id < kinds.length; id++) {
       let placed = null;
@@ -3584,6 +4103,71 @@
   // ============================================================
   //  射撃 / ダメージ
   // ============================================================
+  // 追尾弾の狙い先。視線が通っている一番近い敵をえらぶ。
+  function findSeekTarget(s, range) {
+    let best = null, bestD = range * range;
+    const consider = (o, extra) => {
+      const d = dist2(s.x, s.y, o.x, o.y);
+      if (d >= bestD + extra) return;
+      if (!lineClear(s.x, s.y, o.x, o.y)) return;
+      bestD = d; best = o;
+    };
+    for (const e of G.soldiers) {
+      if (e.dead || e.dummy || e.vehicleId >= 0 || e.team === s.team) continue;
+      consider(e, 0);
+    }
+    for (const tank of G.tanks) {
+      if (tank.dead || tank.team === s.team) continue;
+      consider(tank, 0);
+    }
+    for (const dog of G.dogs) {
+      if (dog.dead || dog.team === s.team) continue;
+      consider(dog, 0);
+    }
+    return best;
+  }
+
+  // ロックした相手を追いかけるミサイル。障害物は越えていくので、
+  // 相手が生きているかぎり当たるまで曲がり続ける。
+  function steerHomingBullet(b, dt) {
+    const id = b.homingId;
+    const num = Number(String(id).slice(1));
+    const target = String(id)[0] === "s"
+      ? G.soldiers.find((x) => x.id === num && !x.dead && x.vehicleId < 0)
+      : G.tanks.find((x) => x.id === num && !x.dead);
+    if (!target) { b.homingId = null; return; }
+    // 追いつけるよう、射程は目標を追う間だけ伸ばす
+    b.range = Math.max(b.range, b.traveled + 400);
+    const want = Math.atan2(target.y - b.y, target.x - b.x);
+    const cur = Math.atan2(b.vy, b.vx);
+    const na = angLerp(cur, want, clamp(dt * 5.5, 0, 1));
+    const sp = Math.hypot(b.vx, b.vy);
+    b.vx = Math.cos(na) * sp;
+    b.vy = Math.sin(na) * sp;
+  }
+
+  // 飛んでいる追尾弾を、近くの敵のほうへ少しずつ向け直す
+  function steerSeekBullet(b, dt) {
+    let best = null, bestD = 620 * 620;
+    for (const e of G.soldiers) {
+      if (e.dead || e.dummy || e.vehicleId >= 0 || e.team === b.team) continue;
+      const d = dist2(b.x, b.y, e.x, e.y);
+      if (d < bestD) { bestD = d; best = e; }
+    }
+    for (const tank of G.tanks) {
+      if (tank.dead || tank.team === b.team) continue;
+      const d = dist2(b.x, b.y, tank.x, tank.y);
+      if (d < bestD) { bestD = d; best = tank; }
+    }
+    if (!best) return;
+    const want = Math.atan2(best.y - b.y, best.x - b.x);
+    const cur = Math.atan2(b.vy, b.vx);
+    const na = angLerp(cur, want, clamp(dt * 2.4, 0, 1));
+    const sp = Math.hypot(b.vx, b.vy);
+    b.vx = Math.cos(na) * sp;
+    b.vy = Math.sin(na) * sp;
+  }
+
   function tryShoot(s, t) {
     if (s.dead || s.reloading || s.shieldRaised || t < s.stunnedUntil) return;
     const w = wstat(s);
@@ -3612,16 +4196,24 @@
       s.gunSide = s.gunSide ? 0 : 1;
       handOff = (s.gunSide ? 1 : -1) * DUAL_HAND_OFFSET;
     }
-    const mx = s.x + Math.cos(s.aimAngle) * (SOLDIER_R + 14) + Math.cos(s.aimAngle + Math.PI / 2) * handOff;
-    const my = s.y + Math.sin(s.aimAngle) * (SOLDIER_R + 14) + Math.sin(s.aimAngle + Math.PI / 2) * handOff;
+    // 追尾弾は、狙いがそれていても敵のほうへ向けて撃ち出す
+    let fireAngle = s.aimAngle;
+    if (w.seek) {
+      const target = findSeekTarget(s, w.range);
+      if (target) fireAngle = Math.atan2(target.y - s.y, target.x - s.x);
+    }
+    const mx = s.x + Math.cos(fireAngle) * (SOLDIER_R + 14) + Math.cos(fireAngle + Math.PI / 2) * handOff;
+    const my = s.y + Math.sin(fireAngle) * (SOLDIER_R + 14) + Math.sin(fireAngle + Math.PI / 2) * handOff;
     const paintTracer = w.paint && w.paint.tracer;
     for (let p = 0; p < w.pellets; p++) {
-      const a = s.aimAngle + (Math.random() - 0.5) * w.spread * 2;
+      const a = fireAngle + (Math.random() - 0.5) * w.spread * 2;
       if (G.bullets.length < MAX_BULLETS) {
         G.bullets.push({
           // ロケット弾・爆裂矢は戦車砲と同じ「着弾して爆発する」弾種として扱う
           kind: (w.rocket || w.blast) ? "shell" : "bullet",
           rocket: !!w.rocket,
+          seek: !!w.seek,
+          pumpkin: !!w.pumpkin,
           arrow: !!w.bow,
           flame: !!w.flame,
           rail: !!w.rail,
@@ -3780,6 +4372,7 @@
   function tryTankShoot(tank, t) {
     if (tank.dead) return;
     const w = tankWeaponOf(tank);
+    if (w.lockMs && !tank.locked) return;      // ロックが済むまでは撃てない
     if (t - tank.lastShot < w.interval) return;
     tank.lastShot = t;
     tank.muzzle = t;
@@ -3804,6 +4397,8 @@
         vx: Math.cos(a) * w.speed, vy: Math.sin(a) * w.speed,
         dmg: w.dmg, team: tank.team, owner: driver ? driver.id : -1, tankOwner: tank.id,
         range: w.range, traveled: 0, pierce: w.pierce || 0,
+        homingId: w.homing ? tank.lockTargetId : null,
+        ignoreWalls: !!w.ignoreWalls,
         flame: !!w.flame, rail: !!w.rail,
         col: w.flame ? "#ff9a3c" : w.rail ? "#c8b0ff" : w.shell ? "#ffcf62" : "#ffe49a",
         len: w.rail ? 26 : w.shell ? 12 : 15,
@@ -4391,6 +4986,21 @@
         if (t >= kit.respawnAt) kit.active = true;
         else continue;
       }
+      // 部品箱は自分だけが拾える。中身は持っていない部品から1つ。
+      if (kit.kind === "part") {
+        const me = localSoldier();
+        if (!me || me.dead || me.vehicleId >= 0) continue;
+        if (dist2(me.x, me.y, kit.x, kit.y) > 30 ** 2) continue;
+        kit.active = false;
+        kit.respawnAt = t + 40000;
+        grantFoundPart();
+        for (let i = 0; i < 10; i++) {
+          addParticle(kit.x + rand(-10, 10), kit.y + rand(-8, 8), {
+            kind: "equip", vx: rand(-30, 30), vy: rand(-70, -20), life: rand(400, 800), size: rand(3, 6), a: 0,
+          });
+        }
+        continue;
+      }
       for (const s of G.soldiers) {
         if (s.dead || s.vehicleId >= 0) continue;
         const needed = kit.kind === "medkit" ? s.maxHp - s.hp : kit.kind === "armor" ? s.maxArmor - s.armor : s.maxShield - s.shield;
@@ -4781,12 +5391,65 @@
     s.x = tank.x; s.y = tank.y; s.aimAngle = tank.turretAngle; s.moving = m > 0.05;
   }
 
+  // ロックオン。いま構えている腕が lockMs を持つときだけ働く。
+  // 砲塔の向きに近く、視線が通っている敵を狙い続けるとロックが完了する。
+  function updateMechLock(tank, dt, t) {
+    const w = tankWeaponOf(tank);
+    if (!tank.mech || !w.lockMs || tank.dead) {
+      tank.lockTargetId = -1; tank.lockProgress = 0; tank.locked = false;
+      return;
+    }
+    let best = null, bestGap = 0.55;      // 砲塔の正面この角度以内だけ狙える
+    const consider = (o, id) => {
+      const d = dist2(tank.x, tank.y, o.x, o.y);
+      if (d > w.range * w.range) return;
+      if (!lineClear(tank.x, tank.y, o.x, o.y)) return;   // 見えていることが条件
+      const a = Math.atan2(o.y - tank.y, o.x - tank.x);
+      const gap = Math.abs(((a - tank.turretAngle + Math.PI) % (Math.PI * 2)) - Math.PI);
+      if (gap >= bestGap) return;
+      bestGap = gap; best = { o, id };
+    };
+    for (const e of G.soldiers) {
+      if (e.dead || e.dummy || e.vehicleId >= 0 || e.team === tank.team) continue;
+      consider(e, "s" + e.id);
+    }
+    for (const other of G.tanks) {
+      if (other.dead || other === tank || other.team === tank.team) continue;
+      consider(other, "t" + other.id);
+    }
+    if (!best) {
+      tank.lockTargetId = -1; tank.lockProgress = 0; tank.locked = false;
+      return;
+    }
+    if (tank.lockTargetId !== best.id) {
+      tank.lockTargetId = best.id;
+      tank.lockProgress = 0;
+      tank.locked = false;
+    }
+    tank.lockProgress = Math.min(1, (tank.lockProgress || 0) + (dt * 1000) / w.lockMs);
+    if (tank.lockProgress >= 1 && !tank.locked) {
+      tank.locked = true;
+      if (tank.driverId === G.localId) Audio.heal();
+    }
+    tank.lockX = best.o.x; tank.lockY = best.o.y;
+  }
+
+  // ロック中の相手を実体で返す
+  function mechLockTarget(tank) {
+    const id = tank && tank.lockTargetId;
+    if (!id || id === -1) return null;
+    const num = Number(id.slice(1));
+    if (id[0] === "s") return G.soldiers.find((x) => x.id === num && !x.dead) || null;
+    return G.tanks.find((x) => x.id === num && !x.dead) || null;
+  }
+
   function updateTanks(dt, t) {
     for (const tank of G.tanks) {
       if (tank.dead) {
         if (t >= tank.respawnAt && teamAlive(tank.team)) respawnTank(tank);
         continue;
       }
+      updateMechLock(tank, dt, t);
       const driver = G.soldiers.find((s) => s.id === tank.driverId && !s.dead);
       if (driver) {
         driver.x = tank.x; driver.y = tank.y; driver.aimAngle = tank.turretAngle;
@@ -5028,6 +5691,8 @@
       if (!human) updateAI(s, t, dt);
     }
     updateTanks(dt, t);
+    updateAirstrikes(dt, t);
+    updatePumpkins();
     updateTurrets(dt, t);
     updateCreature(dt, t);
     updateBeasts(dt, t);
@@ -5083,6 +5748,7 @@
     inp.parryEdge = false;
     inp.mineEdge = false;
     inp.wireEdge = false;
+    inp.ultEdge = false;
     inp.weaponWanted = -1;
   }
 
@@ -5094,7 +5760,7 @@
       s.noiseRadius = 0;
       s.shieldRaised = false;
       inp.reloadEdge = false; inp.grenadeEdge = false; inp.interactEdge = false;
-      inp.parryEdge = false; inp.mineEdge = false; inp.wireEdge = false;
+      inp.parryEdge = false; inp.mineEdge = false; inp.wireEdge = false; inp.ultEdge = false;
       inp.weaponWanted = -1;
       return;
     }
@@ -5140,6 +5806,7 @@
     if (inp.grenadeEdge) { tryThrowGrenade(s, t); inp.grenadeEdge = false; }
     if (inp.mineEdge) { tryPlaceMine(s, t); inp.mineEdge = false; }
     if (inp.wireEdge) { tryPlaceWire(s, t); inp.wireEdge = false; }
+    if (inp.ultEdge) { tryUltimate(s, t); inp.ultEdge = false; }
     if (inp.shoot) tryShoot(s, t);
     applyMove(s, inp.mvx, inp.mvy, dtGlobal, inp.dash && !s.shieldRaised);
   }
@@ -5159,6 +5826,8 @@
       } else {
         b.slowed = false;
       }
+      if (b.seek) steerSeekBullet(b, dt * speedMul);
+      if (b.homingId) steerHomingBullet(b, dt * speedMul);
       const stepX = b.vx * dt * speedMul, stepY = b.vy * dt * speedMul;
       b.x += stepX; b.y += stepY;
       b.traveled += Math.hypot(stepX, stepY);
@@ -5170,6 +5839,7 @@
       if (!dead) {
         // 障害物 (茂みや対戦車バリケードは弾が抜ける)
         for (const o of G.obstacles) {
+          if (b.ignoreWalls) break;      // 誘導ミサイルは壁を越えていく
           if (!stopsBullets(o)) continue;
           if (b.x >= o.x && b.x <= o.x + o.w && b.y >= o.y && b.y <= o.y + o.h) {
             if (o.type === "barrel") { o.hp -= b.dmg; }
@@ -5368,6 +6038,7 @@
     drawWires();
     drawMines();
     drawPickups();
+    drawPumpkins();
     for (const turret of G.turrets) if (!turret.dead && isEntityVisible(turret)) drawTurretShadow(turret);
     for (const tank of G.tanks) if (!tank.dead && isEntityVisible(tank)) drawTankShadow(tank);
     for (const dog of G.dogs) if (!dog.dead && isEntityVisible(dog)) drawDogShadow(dog);
@@ -5385,6 +6056,8 @@
     drawBullets();
     drawParticlesOver();
     drawFootstepPings();
+    drawLockOnMarks();
+    drawAirstrikes();
     drawNameTags();
     drawDropPlanes();
 
@@ -5539,6 +6212,146 @@
     }
   }
 
+  // ハロウィンの森に転がっているカボチャ。拾うと消える。
+  function drawPumpkins() {
+    if (!G.pumpkins || !G.pumpkins.length) return;
+    const t = now() * 0.003;
+    for (const q of G.pumpkins) {
+      if (q.taken) continue;
+      const bob = Math.sin(t + q.phase) * 2;
+      ctx.fillStyle = "rgba(0,0,0,0.3)";
+      ctx.beginPath(); ctx.ellipse(q.x + 2, q.y + 10, 14, 6, 0, 0, 6.283); ctx.fill();
+      ctx.save();
+      ctx.translate(q.x, q.y + bob);
+      drawPumpkinFace(ctx, 13, 0.85 + 0.15 * Math.sin(t * 2 + q.phase));
+      ctx.restore();
+    }
+  }
+
+  // カボチャの顔。ジャック・オー・ランタンの頭と弾の先端で使い回す。
+  // 目と口は緑に光る。
+  function drawPumpkinFace(c, r, glow) {
+    c.fillStyle = "#e07a1c";
+    c.beginPath(); c.arc(0, 0, r, 0, 6.283); c.fill();
+    // うねの陰
+    c.strokeStyle = "rgba(120,60,10,0.5)"; c.lineWidth = Math.max(1, r * 0.11);
+    for (const off of [-0.45, 0, 0.45]) {
+      c.beginPath();
+      c.ellipse(0, 0, r * Math.abs(off || 0.14) * 1.6 + r * 0.12, r * 0.94, 0, 0, 6.283);
+      c.stroke();
+    }
+    c.strokeStyle = "rgba(0,0,0,0.4)"; c.lineWidth = Math.max(1, r * 0.09);
+    c.beginPath(); c.arc(0, 0, r, 0, 6.283); c.stroke();
+    // へた
+    c.fillStyle = "#4d6b28";
+    c.fillRect(-r * 0.12, -r * 1.25, r * 0.24, r * 0.34);
+    // 顔 (緑に光る)
+    const g = `rgba(120,255,120,${0.75 + 0.25 * (glow || 1)})`;
+    c.save();
+    c.shadowColor = "#7dff7d"; c.shadowBlur = r * 0.7;
+    c.fillStyle = g;
+    for (const side of [-1, 1]) {
+      c.beginPath();
+      c.moveTo(side * r * 0.22, -r * 0.15);
+      c.lineTo(side * r * 0.62, -r * 0.42);
+      c.lineTo(side * r * 0.62, 0.02);
+      c.closePath(); c.fill();
+    }
+    // ぎざぎざの口
+    c.beginPath();
+    c.moveTo(-r * 0.62, r * 0.28);
+    c.lineTo(-r * 0.34, r * 0.62);
+    c.lineTo(-r * 0.1, r * 0.3);
+    c.lineTo(r * 0.14, r * 0.62);
+    c.lineTo(r * 0.4, r * 0.3);
+    c.lineTo(r * 0.62, r * 0.6);
+    c.lineTo(r * 0.5, r * 0.74);
+    c.lineTo(-r * 0.5, r * 0.74);
+    c.closePath(); c.fill();
+    c.restore();
+  }
+
+  // ロックオン中の相手に照準リングを出す。自分の機体のロックだけ描く。
+  function drawLockOnMarks() {
+    for (const tank of G.tanks) {
+      if (!tank.mech || tank.dead || !tank.lockTargetId || tank.lockTargetId === -1) continue;
+      if (tank.team !== localTeam()) continue;
+      const target = mechLockTarget(tank);
+      if (!target) continue;
+      const p = clamp(tank.lockProgress || 0, 0, 1);
+      const locked = !!tank.locked;
+      const r = locked ? 26 : 26 + (1 - p) * 34;
+      ctx.save();
+      ctx.strokeStyle = locked ? "rgba(255,90,70,0.95)" : "rgba(255,210,63,0.75)";
+      ctx.lineWidth = locked ? 2.6 : 1.8;
+      // 進み具合ぶんだけ弧を描く
+      ctx.beginPath();
+      ctx.arc(target.x, target.y, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (locked ? 1 : p));
+      ctx.stroke();
+      // 四隅のかぎ括弧
+      for (let i = 0; i < 4; i++) {
+        const a = i * Math.PI / 2 + Math.PI / 4;
+        const cx = target.x + Math.cos(a) * r, cy = target.y + Math.sin(a) * r;
+        ctx.beginPath();
+        ctx.moveTo(cx - Math.cos(a) * 7, cy - Math.sin(a) * 7);
+        ctx.lineTo(cx + Math.cos(a) * 7, cy + Math.sin(a) * 7);
+        ctx.stroke();
+      }
+      if (locked) {
+        ctx.fillStyle = "rgba(255,90,70,0.95)";
+        ctx.font = "bold 11px -apple-system, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("LOCK ON", target.x, target.y - r - 6);
+        ctx.textAlign = "left";
+      }
+      ctx.restore();
+    }
+  }
+
+  // 必殺技「空爆要請」。輸送機と、落ちてくる爆弾の影を描く。
+  function drawAirstrikes() {
+    if (!G.airstrikes || !G.airstrikes.length) return;
+    const t = now();
+    for (const a of G.airstrikes) {
+      // 落下中の爆弾: 影が小さくなりながら地面へ寄っていく
+      for (const bomb of a.bombs) {
+        const p = clamp((t - bomb.born) / AIRSTRIKE_FALL_MS, 0, 1);
+        const alt = (1 - p) * 90;
+        ctx.strokeStyle = `rgba(255,120,60,${0.35 + p * 0.5})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(bomb.x, bomb.y, 26 + (1 - p) * 26, 0, 6.283); ctx.stroke();
+        ctx.fillStyle = "rgba(0,0,0,0.32)";
+        ctx.beginPath(); ctx.ellipse(bomb.x, bomb.y, 7 + (1 - p) * 5, 4 + (1 - p) * 3, 0, 0, 6.283); ctx.fill();
+        ctx.save();
+        ctx.translate(bomb.x, bomb.y - alt);
+        ctx.rotate(a.angle);
+        ctx.fillStyle = "#3c4148";
+        ctx.beginPath();
+        ctx.moveTo(9, 0); ctx.lineTo(-6, -4); ctx.lineTo(-9, 0); ctx.lineTo(-6, 4);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "#8d959d"; ctx.fillRect(-9, -3, 3, 6);
+        ctx.restore();
+      }
+      // 輸送機 (地面より高いところを飛ぶので、影を離して描く)
+      ctx.save();
+      ctx.fillStyle = "rgba(0,0,0,0.22)";
+      ctx.beginPath(); ctx.ellipse(a.x + 26, a.y + 34, 30, 10, a.angle, 0, 6.283); ctx.fill();
+      ctx.translate(a.x, a.y - 60);
+      ctx.rotate(a.angle);
+      ctx.fillStyle = "#2f353c";
+      ctx.beginPath();
+      ctx.moveTo(34, 0); ctx.lineTo(6, -9); ctx.lineTo(-26, -7); ctx.lineTo(-30, 0);
+      ctx.lineTo(-26, 7); ctx.lineTo(6, 9);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#464e57";
+      ctx.fillRect(-6, -34, 12, 68);
+      ctx.fillRect(-26, -18, 8, 36);
+      ctx.fillStyle = "#9fe8ff";
+      ctx.beginPath(); ctx.arc(24, 0, 3.4, 0, 6.283); ctx.fill();
+      ctx.restore();
+    }
+  }
+
   function drawPickups() {
     const t = now() * 0.003;
     for (const kit of G.pickups) {
@@ -5557,6 +6370,20 @@
         ctx.beginPath(); ctx.moveTo(-12, -12); ctx.lineTo(-3, -8); ctx.lineTo(3, -8); ctx.lineTo(12, -12);
         ctx.lineTo(14, 9); ctx.lineTo(5, 13); ctx.lineTo(-5, 13); ctx.lineTo(-14, 9); ctx.closePath(); ctx.fill(); ctx.stroke();
         ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.fillRect(-2, -7, 4, 17);
+      } else if (kit.kind === "part") {
+        // 工具箱。中身は兵器開発の部品。
+        ctx.fillStyle = "#8a6a3c"; ctx.strokeStyle = "#e0c88a"; ctx.lineWidth = 2;
+        ctx.fillRect(-14, -10, 28, 20); ctx.strokeRect(-14, -10, 28, 20);
+        ctx.fillStyle = "#5d4527"; ctx.fillRect(-14, -4, 28, 4);
+        ctx.strokeStyle = "#ffd23f"; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(0, 2, 5, 0, 6.283); ctx.stroke();
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * 6.283;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(a) * 5, 2 + Math.sin(a) * 5);
+          ctx.lineTo(Math.cos(a) * 8, 2 + Math.sin(a) * 8);
+          ctx.stroke();
+        }
       } else {
         ctx.fillStyle = "#45bfc4"; ctx.strokeStyle = "#c9fff8"; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(13, -8); ctx.lineTo(10, 8); ctx.quadraticCurveTo(0, 17, -10, 8); ctx.lineTo(-13, -8); ctx.closePath(); ctx.fill(); ctx.stroke();
@@ -6241,7 +7068,7 @@
     const recoilBack = s.recoil * 0.6;
     drawSkinTorso(style, skin, s, c, recoilBack);
     // 防弾鎧プレート (ホログラムとボクセルは体の作りが違うので付けない)
-    if (s.armor > 0 && style !== "hologram" && style !== "voxel" && style !== "merc") {
+    if (s.armor > 0 && style !== "hologram" && style !== "voxel" && style !== "merc" && style !== "jack") {
       const ar = clamp(s.armor / s.maxArmor, 0, 1);
       ctx.fillStyle = `rgba(126,165,194,${0.35 + ar * 0.45})`;
       ctx.fillRect(-10 - recoilBack, -12, 13, 8); ctx.fillRect(-10 - recoilBack, 4, 13, 8);
@@ -6768,6 +7595,16 @@
       ctx.fillRect(-5, 9 + legSwing * 0.3, 11, 3);
       return;
     }
+    if (style === "jack") {
+      // かぼちゃ畑の案山子。細い黒い脚に泥だらけのブーツ。
+      ctx.fillStyle = "#2a2130";
+      ctx.fillRect(-4, -10 - legSwing * 0.3, 10, 6);
+      ctx.fillRect(-4, 4 + legSwing * 0.3, 10, 6);
+      ctx.fillStyle = "#6b4a22";
+      ctx.fillRect(3, -10 - legSwing * 0.3, 3, 6);
+      ctx.fillRect(3, 4 + legSwing * 0.3, 3, 6);
+      return;
+    }
     if (style === "merc") {
       // 黒のボディスーツに濃いグレーのブーツ
       ctx.fillStyle = "#141416";
@@ -6860,6 +7697,26 @@
       ctx.fillRect(-4 - back, -4, 9, 9);
       ctx.strokeStyle = "rgba(215,200,255,0.7)"; ctx.lineWidth = 1;
       ctx.strokeRect(-13 - back, -13, 27, 27);
+      return;
+    }
+    if (style === "jack") {
+      // 濃い紫のぼろマント。裾と肩に枯れ葉色の縁取りを入れる。
+      ctx.fillStyle = "#2b2038";
+      ctx.beginPath();
+      ctx.ellipse(-back, 0, SOLDIER_R - 1, SOLDIER_R + 2, 0, 0, 6.283);
+      ctx.fill();
+      ctx.strokeStyle = "#6b4a22"; ctx.lineWidth = 1.8; ctx.stroke();
+      // 肩に乗ったぼろ布
+      ctx.fillStyle = "#3b2c4c";
+      ctx.beginPath(); ctx.ellipse(-2 - back, -11, 6.5, 5, 0.4, 0, 6.283); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(-2 - back, 11, 6.5, 5, -0.4, 0, 6.283); ctx.fill();
+      // 胸のランタンの灯り
+      ctx.fillStyle = "rgba(125,255,125,0.75)";
+      ctx.beginPath(); ctx.arc(-3 - back, 0, 3.4, 0, 6.283); ctx.fill();
+      // 所属を出す肩章
+      ctx.fillStyle = c.a;
+      ctx.fillRect(-5 - back, -14, 7, 3.2);
+      ctx.fillRect(-5 - back, 10.8, 7, 3.2);
       return;
     }
     if (style === "merc") {
@@ -6971,6 +7828,11 @@
       ctx.fillRect(1, 1, 6, 3);
       return;
     }
+    if (style === "jack") {
+      // 頭そのものがカボチャ。目も口も緑に光る。
+      drawPumpkinFace(ctx, 9.2, 0.7 + 0.3 * Math.sin(now() / 260));
+      return;
+    }
     if (style === "merc") {
       // 黒い覆面。目だけが白く抜けている。
       ctx.fillStyle = "#141416";
@@ -6995,6 +7857,32 @@
   function drawBullets() {
     ctx.lineCap = "round";
     for (const b of G.bullets) {
+      // ジャックランチャーの弾。先端にカボチャの顔が乗ったロケット弾。
+      if (b.pumpkin) {
+        const a = Math.atan2(b.vy, b.vx);
+        ctx.save();
+        ctx.translate(b.x, b.y);
+        ctx.rotate(a);
+        // 尾を引く炎
+        ctx.fillStyle = "rgba(255,150,50,0.55)";
+        ctx.beginPath();
+        ctx.moveTo(-9, -4); ctx.lineTo(-26 - Math.random() * 8, 0); ctx.lineTo(-9, 4);
+        ctx.closePath(); ctx.fill();
+        // 弾体
+        ctx.fillStyle = "#3f4650";
+        ctx.fillRect(-11, -4, 14, 8);
+        ctx.fillStyle = "#6d7681";
+        ctx.beginPath();
+        ctx.moveTo(-11, -4); ctx.lineTo(-16, -8); ctx.lineTo(-16, 8); ctx.lineTo(-11, 4);
+        ctx.closePath(); ctx.fill();
+        ctx.restore();
+        // 顔は回さずに描く (どの向きへ飛んでもこちらを向く)
+        ctx.save();
+        ctx.translate(b.x + Math.cos(a) * 7, b.y + Math.sin(a) * 7);
+        drawPumpkinFace(ctx, 9, 1);
+        ctx.restore();
+        continue;
+      }
       // 爆裂矢は「着弾で爆発する弾」だが、見た目は矢のままにする
       if (b.kind === "shell" && !b.arrow) {
         ctx.fillStyle = "#ffb83e";
@@ -7568,6 +8456,13 @@
   function updateHUD() {
     const me = localSoldier();
     updateTeamBoard();
+    // ハロウィンの森では、目標欄にカボチャの収集数を出す
+    if (G.pumpkins && G.pumpkins.length) {
+      const all = G.pumpkinsTaken >= G.pumpkins.length;
+      el.scoreGoal.textContent = all
+        ? `🎃 ${G.pumpkinsTaken} / ${G.pumpkins.length}　全部集めた！ このまま勝て`
+        : `🎃 ${G.pumpkinsTaken} / ${G.pumpkins.length}　カボチャを集めて勝つ`;
+    }
     const phase = dayPhase();
     el.daytime.textContent = phase.label;
     el.daytime.className = "daytime " + phase.key;
@@ -7637,7 +8532,16 @@
         if (tank.mech) {
           const other = MECH_ARM_BY_KEY[(tank.arms || [])[(tank.weapon || 0) ? 0 : 1]];
           const swap = other ? `${other.icon} ${other.name}` : "反対の腕";
-          el.grenade.textContent = isTouch ? `「武器」で${swap}に持ち替え` : `数字キー・ホイールで${swap}に持ち替え`;
+          const hint = isTouch ? `「武器」で${swap}に持ち替え` : `数字キー・ホイールで${swap}に持ち替え`;
+          // ロックが要る腕なら、いまの進み具合を出す
+          if (tw.lockMs) {
+            const pct = Math.round((tank.lockProgress || 0) * 100);
+            el.ammo.textContent = tank.locked ? "LOCK ON" : pct > 0 ? `ロック中 ${pct}%` : "敵を狙え";
+            el.ammo.classList.toggle("low", !tank.locked);
+            el.grenade.textContent = `🎯 ${tank.locked ? "撃てる（壁ごしでも当たる）" : "照準に敵を入れ続けるとロックする"}　/　${hint}`;
+          } else {
+            el.grenade.textContent = hint;
+          }
         } else {
           el.grenade.textContent = isTouch ? "「武器」で主砲 / 機関銃を切替" : "数字キー・ホイールで主砲 / 機関銃";
         }
@@ -7665,9 +8569,20 @@
         // 弓を持っていなくても矢を持っているなら残数を出しておく
         const hasBow = (me.loadout || []).some((i) => WEAPONS[i] && WEAPONS[i].bow);
         const arrowText = hasBow && !w.bow ? `　🏹 ${me.arrows | 0}` : "";
-        el.grenade.textContent = `💣 ${me.grenades == null ? 0 : me.grenades}　🧨 ${me.mines == null ? 0 : me.mines}${wireText}${arrowText}`;
-        // 鉄線ボタンは罠師のときだけ出す
+        // 必殺技を持つキャラだけ、残りのクールタイムを出す
+        const ult = ultimateOf(me);
+        let ultText = "";
+        if (ult) {
+          const left = ultimateRemaining(me, now());
+          ultText = left > 0
+            ? `　${ult.icon} ${Math.ceil(left / 1000)}秒`
+            : `　${ult.icon} ${isTouch ? "「必殺技」" : "X"}で${ult.name}`;
+        }
+        el.grenade.textContent = `💣 ${me.grenades == null ? 0 : me.grenades}　🧨 ${me.mines == null ? 0 : me.mines}${wireText}${arrowText}${ultText}`;
+        // 鉄線ボタンは罠師のとき、必殺技ボタンは必殺技を持つキャラのときだけ出す
         wireBtn.classList.toggle("hidden", !hasWires);
+        ultBtn.classList.toggle("hidden", !ult);
+        ultBtn.classList.toggle("charging", !!ult && ultimateRemaining(me, now()) > 0);
       }
 
       let hint = "";
@@ -8003,6 +8918,8 @@
           x: 300, y: 800, w: 230, h: 130, roof: "#2f5a3c", wall: "#3f7d53", open: () => openSquad() },
         { id: "hangar", icon: "🤖", label: "ロボット格納庫", sub: "ロボットのフレーム・色・武器を変える",
           x: 590, y: 110, w: 290, h: 170, roof: "#39404a", wall: "#697585", open: () => openHangar() },
+        { id: "lab", icon: "🛠", label: "兵器開発室", sub: "部品を組んで自分の武器を作る",
+          x: 620, y: 400, w: 250, h: 140, roof: "#2f4a52", wall: "#46707a", open: () => openLab() },
         { id: "sortie", icon: "🚩", label: "出撃ゲート",  sub: "メニューへ戻って戦いに行く",
           x: 950, y: 800, w: 230, h: 130, roof: "#5a5320", wall: "#8a7c30", open: () => { leaveGarden(); openMenu(); } },
       ];
@@ -8377,8 +9294,9 @@
       const def = teamDef(playerTeam);
       // 専用の見た目を持つキャラは、拠点でもその配色で立たせる
       const merc = !!(char && char.bodyStyle === "merc");
-      const uniform = merc ? "#141416" : isYou ? YOU_UNIFORM : def.uniform;
-      const accent = merc ? "#33373e" : isYou ? YOU_ACCENT : def.accent;
+      const jack = !!(char && char.bodyStyle === "jack");
+      const uniform = merc ? "#141416" : jack ? "#2b2038" : isYou ? YOU_UNIFORM : def.uniform;
+      const accent = merc ? "#33373e" : jack ? "#6b4a22" : isYou ? YOU_ACCENT : def.accent;
       const R = 19;
       ctx.save();
       ctx.translate(x, y);
@@ -8433,7 +9351,17 @@
         ctx.fillStyle = "#caa06b";
         ctx.beginPath(); ctx.arc(R * 0.82, R * 0.14, R * 0.19, 0, 6.283); ctx.fill();
       }
-      // 頭 (ヘルメット。黒衣の傭兵だけは覆面に白い目)
+      // 頭。黒衣の傭兵は覆面、ジャック・オー・ランタンはカボチャ。
+      if (jack) {
+        ctx.save();
+        ctx.translate(R * 0.1, 0);
+        ctx.rotate(-angle);         // 顔はいつも同じ向きに見えるよう戻す
+        drawPumpkinFace(ctx, R * 0.5, 0.85);
+        ctx.restore();
+        ctx.restore();
+        drawGardenLabel(x, y, R, isYou, char);
+        return;
+      }
       ctx.fillStyle = merc ? "#141416" : accent;
       ctx.beginPath(); ctx.arc(R * 0.1, 0, R * 0.46, 0, 6.283); ctx.fill();
       if (merc) {
@@ -8448,20 +9376,24 @@
       ctx.strokeStyle = "rgba(0,0,0,0.35)"; ctx.lineWidth = 1.2;
       ctx.beginPath(); ctx.arc(R * 0.1, 0, R * 0.46, 0, 6.283); ctx.stroke();
       ctx.restore();
-      // 名札
-      ctx.font = `bold ${isYou ? 14 : 12}px -apple-system, 'Hiragino Sans', system-ui, sans-serif`;
-      ctx.textAlign = "center";
-      const label = isYou
-        ? `${(char && char.icon) || "🎖️"} あなた（${(char && char.name) || ""}）`
-        : `${(char && char.icon) || "🎖️"} ${(char && char.name) || ""}`;
-      // 読みやすいように黒フチを付ける
-      ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.75)";
-      ctx.strokeText(label, x, y - R - 8);
-      ctx.fillStyle = isYou ? YOU_ACCENT : "#e8e8df";
-      ctx.fillText(label, x, y - R - 8);
-      ctx.textAlign = "left";
+      drawGardenLabel(x, y, R, isYou, char);
     },
   };
+
+  // 拠点に立っている人の名札
+  function drawGardenLabel(x, y, R, isYou, char) {
+    ctx.font = `bold ${isYou ? 14 : 12}px -apple-system, 'Hiragino Sans', system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    const label = isYou
+      ? `${(char && char.icon) || "🎖️"} あなた（${(char && char.name) || ""}）`
+      : `${(char && char.icon) || "🎖️"} ${(char && char.name) || ""}`;
+    // 読みやすいように黒フチを付ける
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.75)";
+    ctx.strokeText(label, x, y - R - 8);
+    ctx.fillStyle = isYou ? YOU_ACCENT : "#e8e8df";
+    ctx.fillText(label, x, y - R - 8);
+    ctx.textAlign = "left";
+  }
 
   // 固定シードの乱数。拠点の飾りを毎回おなじ配置にするために使う。
   function mulberry32(seed) {
@@ -8518,6 +9450,7 @@
     el.bench.classList.add("hidden");
     el.forge.classList.add("hidden");
     el.hangar.classList.add("hidden");
+    el.lab.classList.add("hidden");
     el.gacha.classList.add("hidden");
     el.squad.classList.add("hidden");
   }
@@ -8525,7 +9458,8 @@
   const hubPanelOpen = () =>
     !el.shop.classList.contains("hidden") || !el.bench.classList.contains("hidden") ||
     !el.forge.classList.contains("hidden") || !el.gacha.classList.contains("hidden") ||
-    !el.squad.classList.contains("hidden") || !el.hangar.classList.contains("hidden");
+    !el.squad.classList.contains("hidden") || !el.hangar.classList.contains("hidden") ||
+    !el.lab.classList.contains("hidden");
 
   // ============================================================
   //  ゲームループ
@@ -8558,7 +9492,7 @@
         if (inputAcc >= 1 / INPUT_HZ) {
           inputAcc = 0;
           Net.sendInput(localInput);
-          localInput.reloadEdge = false; localInput.grenadeEdge = false; localInput.interactEdge = false; localInput.parryEdge = false; localInput.mineEdge = false; localInput.wireEdge = false;
+          localInput.reloadEdge = false; localInput.grenadeEdge = false; localInput.interactEdge = false; localInput.parryEdge = false; localInput.mineEdge = false; localInput.wireEdge = false; localInput.ultEdge = false;
           localInput.weaponWanted = -1;
         }
         interpClient(dt);
@@ -8627,6 +9561,7 @@
     spawnSwordRock();
     spawnBeasts();
     spawnMedkits();
+    spawnPumpkins();
     el.scoreGoal.textContent = isTraining() ? "練習メニューを順番にこなそう" : "他3軍の基地をすべて破壊";
     resize();
     hideOverlays();
@@ -8650,7 +9585,7 @@
     const me = localSoldier();
     const win = !!me && winnerTeam === me.team;
     commitRun(win);
-    let reward = 0, gotScrap = 0, gotTicket = 0, gotArrows = 0;
+    let reward = 0, gotScrap = 0, gotTicket = 0, gotArrows = 0, unlockedJack = false;
     if (!G.rewardClaimed && !isTraining()) {
       G.rewardClaimed = true;
       if (win) {
@@ -8666,16 +9601,36 @@
       // 標準矢の支給。矢が尽きて何もできなくなるのを防ぐ。
       gotArrows = ARROW_GIFT_PER_MATCH;
       arrowStock.normal = clamp(arrowStock.normal + gotArrows, 0, ARROW_STOCK_MAX);
+      // ハロウィンの森でカボチャを全部集めて勝つと、隠しキャラが仲間になる
+      if (win && G.pumpkins.length && G.pumpkinsTaken >= G.pumpkins.length && !hasChar("jack")) {
+        charRanks.jack = 0;
+        grantCharWeapons("jack");
+        unlockedJack = true;
+        syncMenuClassButtons();
+      }
       saveProgress();
     }
     el.resultTitle.textContent = win ? "勝利！ 🎖" : "敗北…";
     el.resultTitle.style.color = win ? "#8cf06a" : "#ff7a6a";
+    // 勝利の紋章。開くたびにアニメーションを頭から流し直す。
+    el.victoryCrest.classList.toggle("hidden", !win);
+    if (win) {
+      el.victoryCrest.style.animation = "none";
+      void el.victoryCrest.offsetWidth;
+      el.victoryCrest.style.animation = "";
+      el.victoryCrest.querySelectorAll(".vc-shield, .vc-wing").forEach((n) => {
+        n.style.animation = "none";
+        void n.offsetWidth;
+        n.style.animation = "";
+      });
+    }
     const bits = [];
     if (win) bits.push(`勝利報酬 +${reward || WIN_REWARD} G`);
     else bits.push(`勝利すると ${WIN_REWARD} G`);
     if (gotScrap) bits.push(`廃材 +${gotScrap}`);
     if (gotTicket) bits.push(`徴兵チケット +${gotTicket}`);
     if (gotArrows) bits.push(`標準矢 +${gotArrows}`);
+    if (unlockedJack) bits.push("🎃 ジャック・オー・ランタンが仲間になった！");
     el.rewardSummary.textContent = bits.join("　/　");
     el.rewardSummary.classList.toggle("win", win);
 
@@ -8945,6 +9900,7 @@
       spawnSwordRock();
       spawnBeasts();
       spawnMedkits();
+      spawnPumpkins();
       el.scoreGoal.textContent = "他3軍の基地をすべて破壊";
       resize();
       G.running = false; G.over = false;
@@ -9435,7 +10391,7 @@
             mvx: inp.mvx, mvy: inp.mvy, aimAngle: inp.aimAngle, shoot: inp.shoot, dash: inp.dash,
             weaponWanted: inp.weaponWanted, reloadEdge: inp.reloadEdge,
             grenadeEdge: inp.grenadeEdge, interactEdge: inp.interactEdge, mineEdge: inp.mineEdge, wireEdge: inp.wireEdge,
-            parryEdge: inp.parryEdge, shield: inp.shield,
+            parryEdge: inp.parryEdge, shield: inp.shield, ultEdge: inp.ultEdge,
           },
         });
       } catch (e) {}
@@ -9698,13 +10654,14 @@
       renderShop();
     });
     el.shopItems.addEventListener("click", (e) => {
-      const t = e.target.closest && e.target.closest("button[data-shop-buy],button[data-buy-weapon],button[data-buy-attach],button[data-buy-paint],button[data-buy-arrow]");
+      const t = e.target.closest && e.target.closest("button[data-shop-buy],button[data-buy-weapon],button[data-buy-attach],button[data-buy-paint],button[data-buy-arrow],button[data-buy-part]");
       if (!t || t.disabled) return;
       if (t.dataset.shopBuy) buyShopItem(t.dataset.shopBuy);
       else if (t.dataset.buyWeapon) buyWeapon(t.dataset.buyWeapon);
       else if (t.dataset.buyAttach) buyAttachment(t.dataset.buyAttach);
       else if (t.dataset.buyPaint) buyPaint(t.dataset.buyPaint);
       else if (t.dataset.buyArrow) buyArrows(t.dataset.buyArrow);
+      else if (t.dataset.buyPart) buyPart(t.dataset.buyPart);
     });
 
     // ---- 作業台 ----
@@ -9729,6 +10686,24 @@
       const b = e.target.closest && e.target.closest("[data-forge]");
       if (b && !b.disabled) forgeAction(b.dataset.forge);
     });
+
+    // ---- 兵器開発室 ----
+    document.getElementById("btn-lab-close").addEventListener("click", () => el.lab.classList.add("hidden"));
+    el.labParts.addEventListener("click", (e) => {
+      const b = e.target.closest && e.target.closest("[data-lab-part]");
+      if (b && !b.disabled) setLabPart(b.dataset.labSlot, b.dataset.labPart);
+    });
+    el.labList.addEventListener("click", (e) => {
+      const b = e.target.closest && e.target.closest("button");
+      if (!b || b.disabled) return;
+      if (b.dataset.labLoad) loadLabDesign(b.dataset.labLoad);
+      else if (b.dataset.labDel) deleteLabDesign(b.dataset.labDel);
+    });
+    el.labName.addEventListener("input", () => {
+      labDraft.name = el.labName.value.slice(0, 12);
+      renderLab();
+    });
+    el.labMake.addEventListener("click", developWeapon);
 
     // ---- ロボット格納庫 ----
     document.getElementById("btn-hangar-close").addEventListener("click", () => el.hangar.classList.add("hidden"));

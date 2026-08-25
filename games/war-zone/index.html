@@ -98,6 +98,7 @@
           <button id="t-grenade" class="tbtn action">💣 投げる</button>
           <button id="t-mine" class="tbtn action">🧨 地雷</button>
           <button id="t-wire" class="tbtn action hidden">🪤 鉄線</button>
+          <button id="t-ult" class="tbtn ult-btn hidden">✈️ 必殺技</button>
           <button id="t-action" class="tbtn action">アクション</button>
           <button id="t-shield" class="tbtn shield-btn">🛡 盾</button>
           <button id="t-reload" class="tbtn">リロード</button>
@@ -224,6 +225,7 @@
               <li><b>C</b> … 有刺鉄線を張る（罠師のみ）</li>
               <li><b>E</b> … 戦車・ロボット・機関銃座に乗る / 降りる</li>
               <li><b>Q</b> … 攻撃直前に押してパリィ / 長押しで防御</li>
+              <li><b>X</b> … 必殺技（持っているキャラだけ）</li>
               <li><b>1〜3</b> / ホイール … 武器切替（持てる武器はキャラごとに固定）</li>
               <li><b>Shift</b> … ダッシュ</li>
               <li><b>WASD / E</b> … 拠点（庭）を歩く / 建物に入る・ロボットに乗る</li>
@@ -239,6 +241,7 @@
               <li><b>🧨 地雷</b> … 足元に設置</li>
               <li><b>アクション</b> … 近くの戦車・ロボット・機関銃座に乗る / 降りる</li>
               <li><b>🛡 盾</b> … 攻撃直前に押してパリィ / 長押しで防御</li>
+              <li><b>✈️ 必殺技</b> … 必殺技を持つキャラのときだけ出る</li>
               <li><b>リロード / 武器</b> … 右下ボタン</li>
             </ul>
           </div>
@@ -272,6 +275,7 @@
         <p class="help-rpg"><b>戦車</b>は<b>120mm主砲</b>（爆発・対戦車）と<b>同軸機関銃</b>（連射・対歩兵）を積んでいます。数字キーかホイール（スマホは「武器」ボタン）で切り替えてください。</p>
         <p class="help-rpg"><b>機関銃座</b>はマップ上に8つ置かれた中立の設備です。近づいてEキー（スマホは「アクション」ボタン）で取り付けます。動けなくなる代わりに、連射の効く重機関銃を撃て、防盾のおかげで被弾も半分になります。誰でも先に取り付いた者が使えるので、要所の銃座は奪い合いになります。</p>
         <p class="help-rpg"><b>ロボット</b>は拠点の<b>🤖 ロボット格納庫</b>で組み立てる、自分だけの1機です。試合が始まると自軍基地のわき（戦車とは反対がわ）に配備されます。近づいてEキー（スマホは「アクション」ボタン）で乗り込め、もう一度押すと降ります。乗っている間の体力はロボットの装甲になり、攻撃は左右の腕に付けた武器で行います。<b>武器切替（1〜3キー・ホイール、スマホは「武器」ボタン）で右腕と左腕を持ち替えます</b>。壊されても数秒で基地のわきに戻ってきます。</p>
+        <p class="help-rpg">腕の武器のうち<b>🎯 ロックオンミサイル</b>だけは撃ち方が違います。<b>照準に敵を入れたまま1.5秒待つ</b>とロックが完了し、そこで初めて撃てます。撃った弾は<b>壁を越えて相手を追いかける</b>ので、遮蔽に隠れられても当たります。ロックの進み具合は相手に出る輪で分かり、完了すると赤い「LOCK ON」に変わります。狙いを外すとロックはやり直しです。</p>
         <p class="help-rpg">自分が乗っていないあいだ、ロボットは戦車と同じように<b>自分で敵を探して戦います</b>。硬い相手には一撃の重い腕、生身の相手には手数の多い腕、と勝手に持ち替え、射程の短い腕なら間合いまで踏み込みます。前線に置いておくだけでも仕事をしてくれます。</p>
         <p class="help-rpg"><b>隠れる</b>：敵は壁やコンテナの裏にいる相手を見つけられず、正面の視野角の外も見えません。<b>茂み</b>は通り抜けられるのに視線を遮るので、待ち伏せに最適です。ただし至近距離まで近づくと向きに関係なく気づかれます。走ると足音が響くので、忍び寄るときは歩きましょう。</p>
         <p class="help-rpg"><b>昼と夜</b>：時間が進むと朝→昼→夕方→夜と移り変わります。<b>朝のあいだは夜明けの光で戦場全体が見渡せ</b>、敵の位置がすべて分かります。昼は遠くまで見通せ、夜は視界がぐっと狭まるので奇襲のチャンスです。</p>
@@ -285,6 +289,7 @@
           <li><b>⚒ 鍛冶場</b> … <b>廃材</b>と所持金で鎧を作ります。廃材は試合で敵を倒すとたまります。兜・胴鎧・具足の3部位があり、それぞれ1つ装備できます。上の段の鎧は、下の段を作ってからでないと作れません。</li>
           <li><b>🎲 徴兵所</b> … チケットで新しいキャラクターを引きます。チケットは試合に勝つともらえ、お金でも買えます。すでに仲間のキャラが出たら<b>練度</b>が上がり、そのキャラの最大HPと攻撃力が5%ずつ伸びます（最大5回）。仲間にしたキャラの装備武器は、買わなくても使えるようになります。</li>
           <li><b>📋 編成テント</b> … 出撃するキャラクターと、持っていく3つの武器を決めます。数字キーの1〜3がこの並び順に対応します。侍のような近接専門のキャラは銃を選べません。</li>
+          <li><b>🛠 兵器開発室</b> … 部品を組んで、自分で名前を付けた武器を作ります。部品はショップの「開発部品」タブか、戦場の部品箱で手に入ります。</li>
           <li><b>🤖 ロボット格納庫</b> … 自分のロボットを組み立てます。<b>フレーム</b>（体力・速さ・脚の形）、<b>カラー</b>（色）、<b>右腕 / 左腕</b>（武器）をそれぞれ選べて、機体名も付けられます。プレビューがゆっくり回るので、いまの見た目をそのまま確かめられます。フレームと腕は所持金と<b>廃材</b>で作り、カラーは所持金だけで買えます。組んだ機体は格納庫のわきに駐機するので、<b>拠点でも乗って動かせます</b>。</li>
           <li><b>🚩 出撃ゲート</b> … メニューへ戻ります。</li>
         </ul>
@@ -301,6 +306,26 @@
         <h3 style="margin-top:6px">弓と矢</h3>
         <p class="help-rpg"><b>軍用弓</b>と<b>クロスボウ</b>はショップで買えます。弾倉ではなく<b>矢</b>を消費し、<b>撃っても音がしない</b>ので位置がバレません。矢もショップで10本ずつ買い、出撃するときに<b>矢筒の容量ぶんだけ</b>持ち出します。撃たずに残った矢は帰ってくると戻ります。</p>
         <p class="help-rpg">矢は3種類あります。<b>標準矢</b>は安く、<b>貫通矢</b>は敵を2体多く貫き、<b>爆裂矢</b>は当たると爆発して戦車や基地にも効きます。どれを持っていくかは編成テントで選びます。矢筒の容量はショップの<b>大型矢筒</b>で増やせます。試合中に矢が足りなくなったら、<b>自分の基地に戻ると残っている矢を補給</b>できます。試合が終わるたびに標準矢が8本支給されるので、矢が尽きて何もできなくなることはありません。</p>
+
+        <h3 style="margin-top:6px">必殺技</h3>
+        <p class="help-rpg">一部のキャラクターは<b>必殺技</b>を持っています。<b>X キー</b>（スマホは「✈️ 必殺技」ボタン）で撃てて、使うとしばらく再使用待ちになります。残り時間は画面右下の装備欄に出ます。</p>
+        <p class="help-rpg"><b>💣 擲弾兵 ボマー</b>の必殺技は<b>「空爆要請」</b>です。照準の先へ輸送機が飛んできて、その線に沿って爆弾を7発落とします。着弾までは少し間があり、地面に赤い輪が出るので、味方も自分も巻き込まれないよう下がってください。再使用まで42秒。</p>
+
+        <h3 style="margin-top:6px">兵器開発（自分の武器を作る）</h3>
+        <p class="help-rpg">拠点の<b>🛠 兵器開発室</b>では、部品を組み合わせて<b>自分で名前を付けた武器</b>を作れます。部品は4か所です。</p>
+        <ul class="help-classes">
+          <li><b>🔩 銃身</b> … 威力と射程、それにばらつきが決まります。</li>
+          <li><b>⚙ 機関部</b> … 連射の速さと、単発か連射かが決まります。連射が速いものほど1発は軽くなります。</li>
+          <li><b>📦 弾倉</b> … 装弾数とリロードの速さが決まります。</li>
+          <li><b>🪵 銃床</b> … ばらつき・反動・弾速が決まります。上等なものは貫通も付きます。</li>
+        </ul>
+        <p class="help-rpg">部品の手に入れ方は2つあります。<b>ショップの「🧰 開発部品」タブで買う</b>か、<b>戦場に落ちている部品箱を拾う</b>かです。部品箱は工具箱の見た目で、拾えるのは自分だけ。まだ持っていない部品が優先して出ます。一度手に入れた部品は無くならないので、同じ部品で何丁でも設計し直せます。</p>
+        <p class="help-rpg">4か所すべてに部品を入れて名前を決めたら「開発する」で完成です（工賃 260 G）。作った武器は<b>編成テントで持ち出す3つに入れられます</b>。設計は6丁まで保管でき、いつでも作り直せます。なお開発した武器は自分の端末にしか無いので、<b>オンライン対戦では持ち出さず、キャラの初期装備に戻ります</b>。</p>
+
+        <h3 style="margin-top:6px">ステージ「ハロウィンの森」と隠しキャラクター</h3>
+        <p class="help-rpg">月あかりのカボチャ畑です。森じゅうに<b>光るカボチャ</b>が12個ちらばっていて、近づくだけで拾えます（拾えるのは自分だけ）。残りの数は画面上の目標欄に出ます。</p>
+        <p class="help-rpg"><b>カボチャをすべて集めたうえで、その試合に勝つ</b>と、隠しキャラクターの<b>🎃 ジャック・オー・ランタン</b>が仲間になります。徴兵ガチャからは絶対に出ません。頭がカボチャで、目も口も緑に光ります。</p>
+        <p class="help-rpg">専用武器の<b>ジャックランチャー</b>は、<b>狙いがそれていても近くの敵のほうへ向き直って飛び出し</b>、飛びながらもゆるく追いかけます。そのかわり弾はとても遅いので、置くように撃つ武器です。弾の先にはカボチャの顔が乗っています。</p>
 
         <h3 style="margin-top:6px">二丁拳銃と二刀流</h3>
         <p class="help-rpg">ショップで買える<b>二丁拳銃</b>は、撃つたびに右手と左手が入れ替わります。1発は軽いぶん手数が多く、近〜中距離の撃ち合いで押し切る武器です。</p>
@@ -321,6 +346,47 @@
     <!-- ===== 結果 ===== -->
     <div id="result" class="overlay hidden">
       <div class="panel result-panel">
+        <!-- 勝利したときだけ出る紋章。盾が先に出て、少し遅れて左右の羽が現れる。 -->
+        <div id="victory-crest" class="victory-crest hidden" aria-hidden="true">
+          <svg viewBox="0 0 440 200" role="img">
+            <defs>
+              <linearGradient id="vc-gold" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#ffefb0"/>
+                <stop offset="0.45" stop-color="#f5c440"/>
+                <stop offset="1" stop-color="#a9760a"/>
+              </linearGradient>
+              <linearGradient id="vc-shield" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#5b7f3f"/>
+                <stop offset="1" stop-color="#2e4a22"/>
+              </linearGradient>
+            </defs>
+            <g class="vc-wing vc-wing-l">
+              <g transform="translate(178 88)">
+                <ellipse fill="url(#vc-gold)" cx="-46" cy="-40" rx="52" ry="11" transform="rotate(-30 -46 -40)"/>
+                <ellipse fill="url(#vc-gold)" cx="-58" cy="-16" rx="62" ry="12" transform="rotate(-13 -58 -16)"/>
+                <ellipse fill="url(#vc-gold)" cx="-58" cy="8" rx="60" ry="12" transform="rotate(5 -58 8)"/>
+                <ellipse fill="url(#vc-gold)" cx="-46" cy="32" rx="48" ry="11" transform="rotate(21 -46 32)"/>
+                <ellipse fill="url(#vc-gold)" cx="-30" cy="52" rx="32" ry="9" transform="rotate(34 -30 52)"/>
+              </g>
+            </g>
+            <g class="vc-wing vc-wing-r">
+              <g transform="translate(262 88)">
+                <ellipse fill="url(#vc-gold)" cx="46" cy="-40" rx="52" ry="11" transform="rotate(30 46 -40)"/>
+                <ellipse fill="url(#vc-gold)" cx="58" cy="-16" rx="62" ry="12" transform="rotate(13 58 -16)"/>
+                <ellipse fill="url(#vc-gold)" cx="58" cy="8" rx="60" ry="12" transform="rotate(-5 58 8)"/>
+                <ellipse fill="url(#vc-gold)" cx="46" cy="32" rx="48" ry="11" transform="rotate(-21 46 32)"/>
+                <ellipse fill="url(#vc-gold)" cx="30" cy="52" rx="32" ry="9" transform="rotate(-34 30 52)"/>
+              </g>
+            </g>
+            <g class="vc-shield">
+              <path d="M220 20 L278 41 L278 94 Q278 142 220 172 Q162 142 162 94 L162 41 Z"
+                    fill="url(#vc-shield)" stroke="url(#vc-gold)" stroke-width="6" stroke-linejoin="round"/>
+              <path d="M220 34 L267 50 L267 93 Q267 133 220 158 Q173 133 173 93 L173 50 Z"
+                    fill="none" stroke="rgba(255,239,176,0.45)" stroke-width="2"/>
+              <text x="220" y="112" text-anchor="middle" class="vc-text">勝利</text>
+            </g>
+          </svg>
+        </div>
         <h2 id="result-title">勝利！</h2>
         <div id="reward-summary" class="reward-summary"></div>
         <div id="result-stats" class="result-stats"></div>
@@ -379,6 +445,31 @@
         <div id="forge-items" class="forge-items"></div>
         <p id="forge-message" class="shop-message" aria-live="polite"></p>
         <button id="btn-forge-close" class="big-btn primary">とじる</button>
+      </div>
+    </div>
+
+    <!-- ===== 兵器開発室（部品を組んで自分の武器を作る） ===== -->
+    <div id="lab" class="overlay hidden">
+      <div class="panel hub-panel">
+        <div class="hub-head">
+          <h2>🛠 兵器開発室</h2>
+          <div class="wallet-row"><span>💰 <b data-wallet-money>0</b> G</span></div>
+        </div>
+        <p class="shop-note">銃身・機関部・弾倉・銃床の4か所に部品を入れて、自分の武器を作ります。部品はショップの「開発部品」で買うか、戦場に落ちている部品箱から拾えます。一度手に入れた部品は無くならないので、何丁でも設計し直せます。</p>
+        <div class="mech-top">
+          <div class="mech-side">
+            <label class="field"><span>武器の名前</span>
+              <input id="lab-name" type="text" maxlength="12" placeholder="例: ハチドリMk-II">
+            </label>
+            <p id="lab-spec" class="mech-spec"></p>
+          </div>
+        </div>
+        <div id="lab-parts" class="lab-parts"></div>
+        <button id="btn-lab-make" class="big-btn primary">開発する</button>
+        <p id="lab-message" class="shop-message" aria-live="polite"></p>
+        <p class="forge-group">🛠 開発ずみの武器</p>
+        <div id="lab-list" class="shop-items"></div>
+        <button id="btn-lab-close" class="big-btn">とじる</button>
       </div>
     </div>
 
