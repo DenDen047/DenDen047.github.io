@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0c12">
+<title>WALLED WOLVES ― 壁の中の人狼</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ==================== 街 ==================== -->
+  <div id="stage-wrap">
+    <canvas id="game"></canvas>
+    <div id="vignette"></div>
+    <div id="flash"></div>
+
+    <!-- ---------- HUD ---------- -->
+    <div id="hud" class="hidden">
+      <div class="hud-tl">
+        <div id="hud-phase">1日目・昼</div>
+        <div class="hud-sub"><span id="hud-clock">残り 90秒</span></div>
+        <div class="clock-track"><div id="clock-fill"></div></div>
+      </div>
+
+      <div class="hud-tr">
+        <div id="hud-role"><span id="role-icon">🏠</span><span id="role-name">市民</span></div>
+        <div class="hud-sub" id="hud-alive">生存 8人</div>
+        <div class="chore-block">
+          <div class="chore-label">村の仕事</div>
+          <div class="chore-track"><div id="chore-fill"></div></div>
+          <div class="hud-sub" id="hud-chore">0 / 40</div>
+        </div>
+      </div>
+
+      <div class="hud-bl">
+        <div id="my-chores"></div>
+        <div id="hud-keys">
+          <span>［WASD／矢印］歩く</span>
+          <span>［E／Space］調べる</span>
+          <span>［Tab］名簿</span>
+        </div>
+      </div>
+
+      <div id="night-order" class="hidden"></div>
+      <div id="prompt" class="hidden"><span id="prompt-key">E</span><span id="prompt-text"></span></div>
+      <div id="act-bar" class="hidden"><div id="act-fill"></div><span id="act-text"></span></div>
+      <div id="toast"></div>
+      <div id="banner"><div id="banner-main"></div><div id="banner-sub"></div></div>
+      <div id="rotate-hint">📱 横向きにすると遊びやすくなります</div>
+    </div>
+
+    <!-- ---------- タッチ操作 ---------- -->
+    <div id="touch" class="hidden">
+      <div id="tpad"><div id="tpad-knob"></div></div>
+      <div class="tbtns">
+        <button class="tbtn t-act" data-act="use">調べる</button>
+        <button class="tbtn t-list" data-act="list">名簿</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== タイトル ==================== -->
+  <div id="screen-title" class="screen">
+    <div class="bg-wall"></div>
+    <div class="bg-moon"></div>
+    <div class="title-inner">
+      <div class="title-tag">SOCIAL DEDUCTION IN A WALLED TOWN</div>
+      <h1 class="game-title"><span class="t1">WALLED</span><span class="t2">WOLVES</span></h1>
+      <p class="game-sub">壁 の 中 の 人 狼</p>
+      <p class="game-lead">
+        外へは出られない。門は百年前から閉ざされている。<br>
+        この街の誰かが、夜になると獣になる。
+      </p>
+      <div class="title-btns">
+        <button id="btn-start" class="btn btn-main">街に入る</button>
+        <button id="btn-howto" class="btn">遊び方</button>
+      </div>
+      <div class="title-foot">
+        <button id="btn-mute" class="linkbtn">🔊 音 ON</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 人数設定 ==================== -->
+  <div id="screen-setup" class="screen hidden">
+    <div class="bg-wall"></div>
+    <div class="panel">
+      <div class="panel-head">
+        <h2>この街に何人住むか</h2>
+        <button class="btn btn-ghost" data-back="title">戻る</button>
+      </div>
+
+      <div class="count-row">
+        <button id="cnt-minus" class="stepper">−</button>
+        <div class="count-view">
+          <div id="cnt-num">8</div>
+          <div class="count-unit">人</div>
+        </div>
+        <button id="cnt-plus" class="stepper">＋</button>
+      </div>
+      <input id="cnt-range" type="range" min="5" max="16" value="8">
+
+      <div class="setup-grid">
+        <div class="setup-card">
+          <h3>役職の内訳</h3>
+          <div id="role-breakdown" class="breakdown"></div>
+          <p class="note">人数を増やすほど家が増え、街そのものが広くなる。狼の数も増える。</p>
+        </div>
+        <div class="setup-card">
+          <h3>夜の長さ</h3>
+          <div class="seg" id="seg-len">
+            <button data-len="short">短い</button>
+            <button data-len="normal" class="on">ふつう</button>
+            <button data-len="long">長い</button>
+          </div>
+          <h3 style="margin-top:14px">議論の速さ</h3>
+          <div class="seg" id="seg-talk">
+            <button data-talk="fast">速い</button>
+            <button data-talk="normal" class="on">ふつう</button>
+            <button data-talk="slow">じっくり</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-foot btns">
+        <button id="btn-tocards" class="btn btn-main">カードを引く</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== カードを引く ==================== -->
+  <div id="screen-cards" class="screen hidden">
+    <div class="bg-wall"></div>
+    <div class="cards-inner">
+      <h2 class="cards-title">札を一枚、引け</h2>
+      <p class="cards-lead">引いた札がおまえの役だ。誰にも見せるな。</p>
+      <div id="card-fan" class="card-fan"></div>
+      <p class="cards-hint">札をひとつ選んでめくる</p>
+    </div>
+  </div>
+
+  <!-- ==================== 役職お披露目 ==================== -->
+  <div id="screen-role" class="screen hidden">
+    <div class="bg-wall"></div>
+    <div class="role-inner">
+      <div id="role-card" class="role-card">
+        <div class="rc-icon" id="rc-icon">🐺</div>
+        <div class="rc-name" id="rc-name">人狼</div>
+        <div class="rc-card" id="rc-card">牙の札</div>
+      </div>
+      <div class="role-side">
+        <div class="rc-you">
+          <canvas id="rc-avatar" width="120" height="150"></canvas>
+          <div>
+            <div class="rc-youname" id="rc-youname">ラウル</div>
+            <div class="rc-youjob" id="rc-youjob">鍛冶屋</div>
+          </div>
+        </div>
+        <p class="rc-desc" id="rc-desc"></p>
+        <div class="rc-mates hidden" id="rc-mates">
+          <div class="rc-mates-label">夜、隣に立つ仲間</div>
+          <div class="rc-mates-list" id="rc-mates-list"></div>
+        </div>
+        <button id="btn-enter" class="btn btn-main">街へ出る</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 名簿 ==================== -->
+  <div id="screen-roster" class="screen hidden overlay">
+    <div class="panel wide">
+      <div class="panel-head">
+        <h2>住民名簿</h2>
+        <button id="btn-roster-close" class="btn btn-ghost">閉じる</button>
+      </div>
+      <div id="roster-list" class="roster"></div>
+    </div>
+  </div>
+
+  <!-- ==================== 会議 ==================== -->
+  <div id="screen-meeting" class="screen hidden">
+    <div class="bg-wall"></div>
+    <div class="meet">
+      <div class="meet-head">
+        <div>
+          <h2 id="meet-title">緊急招集</h2>
+          <p id="meet-sub" class="meet-sub">鐘楼の下に全員が集まった</p>
+        </div>
+        <div id="meet-timer" class="meet-timer">45</div>
+      </div>
+
+      <div class="meet-body">
+        <div class="meet-log" id="meet-log"></div>
+        <div class="meet-side">
+          <div class="meet-seats" id="meet-seats"></div>
+          <div class="meet-actions">
+            <div id="say-box">
+              <div class="say-label">発言する</div>
+              <div id="say-opts" class="say-opts"></div>
+            </div>
+            <div id="vote-box" class="hidden">
+              <div class="say-label">誰を壁の外へ追放するか</div>
+              <div id="vote-grid" class="vote-grid"></div>
+              <button id="btn-skip" class="btn btn-ghost small">誰にも入れない</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 追放・夜明け ==================== -->
+  <div id="screen-event" class="screen hidden">
+    <div class="bg-wall"></div>
+    <div class="event-inner">
+      <canvas id="ev-canvas" width="220" height="230"></canvas>
+      <h2 id="ev-title">追放</h2>
+      <p id="ev-text"></p>
+      <div id="ev-verdict" class="ev-verdict"></div>
+      <button id="btn-ev-next" class="btn btn-main">続ける</button>
+    </div>
+  </div>
+
+  <!-- ==================== 決着 ==================== -->
+  <div id="screen-result" class="screen hidden">
+    <div class="bg-wall"></div>
+    <div class="panel">
+      <div id="res-band" class="res-band">村の勝利</div>
+      <p id="res-text" class="res-text"></p>
+      <div id="res-roles" class="res-roles"></div>
+      <div class="panel-foot btns">
+        <button id="btn-again" class="btn btn-main">もう一度</button>
+        <button id="btn-totitle" class="btn btn-ghost">タイトルへ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 遊び方 ==================== -->
+  <div id="screen-howto" class="screen hidden">
+    <div class="bg-wall"></div>
+    <div class="panel wide">
+      <div class="panel-head">
+        <h2>遊び方</h2>
+        <button class="btn btn-ghost" data-back="title">タイトルへ</button>
+      </div>
+
+      <div class="howto-grid">
+        <section class="howto-card">
+          <h3>一日の流れ</h3>
+          <ol class="steps">
+            <li><b>昼</b>　街を歩いて仕事を片づける。誰がどこにいたかを覚えておく。</li>
+            <li><b>会議</b>　死体が見つかるか鐘が鳴ると全員が広場へ。話して、投票して、一人を壁の外へ追放する。</li>
+            <li><b>夜</b>　みな自分の家へ帰る。ここで役職の力を使う。牙が使えるのは夜が更けてから。</li>
+          </ol>
+          <p class="note">村人陣営は狼を全員追放すれば勝ち。村の仕事をすべて終わらせても勝てる。狼は村人と同数まで減らせば勝ち。</p>
+        </section>
+
+        <section class="howto-card">
+          <h3>操作</h3>
+          <table class="keytable">
+            <tr><th>歩く</th><td>WASD ／ 矢印キー</td></tr>
+            <tr><th>調べる・使う</th><td>E ／ Space</td></tr>
+            <tr><th>名簿を開く</th><td>Tab</td></tr>
+            <tr><th>一時停止</th><td>Esc</td></tr>
+          </table>
+          <p class="note">画面下に「E ○○する」と出ているときだけ、その場で行動できる。スマホは画面左のパッドと右のボタン。</p>
+        </section>
+
+        <section class="howto-card">
+          <h3>四つの札</h3>
+          <ul class="role-list">
+            <li><span class="chip chip-wolf">🐺 人狼</span>夜、獣の姿になって誰かの家に押し入る。押し入れるのは一晩に一軒。</li>
+            <li><span class="chip chip-seer">🔮 占い師</span>夜、他人の家の窓を覗いて正体を見る。歩き回るので目撃されやすい。</li>
+            <li><span class="chip chip-knight">🛡 騎士</span>夜、選んだ家の玄関先に立つ。その家が襲われたら狼を追い返す。</li>
+            <li><span class="chip chip-vill">🏠 市民</span>力はない。ベッドで寝るか、物置に隠れるかを選べる。隠れれば牙を一度だけかわせる（ゲーム中一度きり）。</li>
+          </ul>
+        </section>
+
+        <section class="howto-card">
+          <h3>夜を生き延びる</h3>
+          <p class="note">
+            夜の街はほとんど見えない。手元のランタンと街灯の輪の中しか目が届かず、
+            家の中は外からは見えない。逆に言えば、<b>外を歩いていれば誰かに見られている</b>。
+            翌朝の会議で「昨夜おまえを見た」と言われたら、それは本当かもしれないし、狼の作り話かもしれない。
+          </p>
+          <p class="note">
+            物置に隠れれば牙を一度だけかわせる。ただし<b>それはゲームを通して一度きり</b>で、
+            隠れた夜は何も見ていないことになる。アリバイを取るか、命を守るかは自分で決める。
+          </p>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 一時停止 ==================== -->
+  <div id="screen-pause" class="screen hidden overlay">
+    <div class="panel narrow">
+      <h2>一時停止</h2>
+      <p id="pause-sub" class="meet-sub">1日目・昼</p>
+      <div class="panel-foot btns col">
+        <button id="btn-resume" class="btn btn-main">戻る</button>
+        <button id="btn-quit" class="btn btn-ghost">街を出る（タイトルへ）</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="cast.js"></script>
+<script src="town.js"></script>
+<script src="render.js"></script>
+<script src="ai.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
