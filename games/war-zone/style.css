@@ -799,6 +799,27 @@ body.touch-ui .garden-help { display: none; }
 .swatch { display: inline-block; width: 22px; height: 12px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.35); vertical-align: middle; }
 
 /* 作業台 */
+/* ===== ロボット格納庫 ===== */
+.mech-top { display: flex; gap: 14px; align-items: stretch; margin: 2px 0 10px; text-align: left; }
+#hangar-preview {
+  flex: none; width: 240px; height: 200px; border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: radial-gradient(circle at 50% 42%, #2f3846, #151b23);
+}
+.mech-side { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mech-side .field { margin: 0 0 10px; }
+.mech-spec { margin: 0; font-size: 11px; color: #d3dcc0; }
+.mech-spec .row {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  padding: 2px 0; border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+}
+.mech-spec .row b { color: var(--you); font-size: 11px; text-align: right; }
+@media (max-width: 560px) {
+  .mech-top { flex-direction: column; align-items: center; }
+  #hangar-preview { width: 100%; max-width: 260px; }
+  .mech-side { width: 100%; }
+}
+
 .bench-weapons { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; margin-bottom: 10px; }
 .bench-weapons button {
   padding: 8px 6px;

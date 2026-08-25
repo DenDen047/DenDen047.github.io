@@ -142,6 +142,10 @@
     { key: "spear",    name: "長槍",           dmg: 72, interval: 520, mag: 1, reload: 0, spread: 0, pellets: 1, auto: false, speed: 0, range: 132, len: 34, kick: 3.0, melee: true, arc: 0.38, style: "spear",      snd: "melee" },
     { key: "greatsword", name: "大剣",         dmg: 124, interval: 830, mag: 1, reload: 0, spread: 0, pellets: 1, auto: false, speed: 0, range: 112, len: 36, kick: 6.2, melee: true, arc: 1.30, style: "greatsword", snd: "melee" },
     { key: "chainsaw", name: "チェーンソー",   dmg: 32, interval: 150, mag: 1, reload: 0, spread: 0, pellets: 1, auto: true,  speed: 0, range: 76,  len: 26, kick: 1.2, melee: true, arc: 0.85, style: "chainsaw",   snd: "melee" },
+    // 二丁拳銃: 左右の手から交互に撃つ。1発ずつだが、とにかく手数が多い。
+    { key: "dualpistol", name: "二丁拳銃", dmg: 21, interval: 105, mag: 24, reload: 1300, spread: 0.062, pellets: 1, auto: true, speed: 1050, range: 580, len: 12, kick: 1.5, dual: true, snd: "pistol" },
+    // 二刀流: 振るたびに右手と左手が入れ替わる。振っている間は飛んできた銃弾を斬り落とす。
+    { key: "twinblade", name: "二刀流", dmg: 64, interval: 300, mag: 1, reload: 0, spread: 0, pellets: 1, auto: true, speed: 0, range: 96, len: 26, kick: 2.6, melee: true, arc: 0.95, style: "twinblade", twin: true, cutsBullets: true, snd: "melee" },
   ];
   const WKEY = {}; WEAPONS.forEach((w, i) => (WKEY[w.key] = i));
 
@@ -239,6 +243,8 @@
     { key: "spear",      cost: 500,  desc: "間合いの長い近接武器。踏み込んで突く。" },
     { key: "greatsword", cost: 940,  desc: "一撃が非常に重い大剣。振りは遅い。" },
     { key: "chainsaw",   cost: 860,  desc: "当て続けて削る近接武器。押し付けている間ずっと斬る。" },
+    { key: "dualpistol", cost: 780,  desc: "左右の手から交互に撃つ拳銃。1発は軽いが手数で押す。" },
+    { key: "twinblade",  cost: 1180, desc: "二本の刀を交互に振る。振っている間は飛んできた銃弾を斬り落とす。" },
   ];
   const WEAPON_SHOP_BY_KEY = {};
   WEAPON_SHOP.forEach((w) => (WEAPON_SHOP_BY_KEY[w.key] = w));
@@ -276,6 +282,69 @@
   ];
   const ARMOR_BY_KEY = {};
   ARMOR_RECIPES.forEach((a) => (ARMOR_BY_KEY[a.key] = a));
+
+  // ============================================================
+  //  ロボット (メック)
+  //  拠点の格納庫で組み立てる自分専用の機体。フレーム・カラー・左右の腕の武器を
+  //  選んで見た目と性能を変えられる。試合では自軍基地のわきに配備され、
+  //  近づいて E で乗り降りできる。乗っていないあいだは戦車と同じように自分で戦う。
+  // ============================================================
+  const MECH_FRAMES = [
+    { key: "hound", name: "軽量機 ハウンド", icon: "🐺", cost: 0, scrap: 0,
+      hp: 1350, speed: 208, scale: 0.86, legs: "biped",
+      desc: "最初から持っている二脚の小型機。装甲は薄いが軽くて速い。" },
+    { key: "guardian", name: "標準機 ガーディアン", icon: "🛡", cost: 1100, scrap: 14,
+      hp: 2400, speed: 158, scale: 1.0, legs: "biped",
+      desc: "装甲と速さのつり合いが取れた二脚機。迷ったらこれ。" },
+    { key: "titan", name: "重装機 タイタン", icon: "🏔", cost: 2400, scrap: 34,
+      hp: 4200, speed: 116, scale: 1.22, legs: "quad",
+      desc: "四脚の動く要塞。とても硬いぶん、動きは鈍い。" },
+    { key: "wraith", name: "浮遊機 レイス", icon: "👻", cost: 3000, scrap: 42,
+      hp: 1900, speed: 250, scale: 0.94, legs: "hover",
+      desc: "地面を離れて滑る高速機。とにかく速いが紙装甲。" },
+  ];
+  const MECH_FRAME_BY_KEY = {};
+  MECH_FRAMES.forEach((f) => (MECH_FRAME_BY_KEY[f.key] = f));
+
+  // 機体の色。見た目だけで、強さは変わらない。
+  const MECH_PAINTS = [
+    { key: "steel",  name: "スチール",       cost: 0,   body: "#5b6470", trim: "#8d99a8", glow: "#9fe8ff" },
+    { key: "olive",  name: "オリーブ",       cost: 150, body: "#4a5730", trim: "#7d8f4e", glow: "#d6f08a" },
+    { key: "sand",   name: "サンド",         cost: 150, body: "#9a8154", trim: "#cbb182", glow: "#ffe9b0" },
+    { key: "snow",   name: "スノーホワイト", cost: 240, body: "#c6ced6", trim: "#eef4fa", glow: "#dff2ff" },
+    { key: "blood",  name: "ブラッドレッド", cost: 300, body: "#7c2820", trim: "#d2543c", glow: "#ff9a7a" },
+    { key: "navy",   name: "ネイビー",       cost: 300, body: "#223a6b", trim: "#5286d8", glow: "#b6d8ff" },
+    { key: "toxic",  name: "トキシック",     cost: 440, body: "#26381c", trim: "#8ff23a", glow: "#c8ff6a" },
+    { key: "neon",   name: "ネオンピンク",   cost: 440, body: "#2e1233", trim: "#ff4fd8", glow: "#ffb0ee" },
+    { key: "gold",   name: "ゴールド",       cost: 820, body: "#6f5514", trim: "#ffd23f", glow: "#fff0a8" },
+  ];
+  const MECH_PAINT_BY_KEY = {};
+  MECH_PAINTS.forEach((p) => (MECH_PAINT_BY_KEY[p.key] = p));
+
+  // 腕に付ける武器。右腕と左腕にそれぞれ1つ。試合中は武器切替で持ち替える。
+  // tip = 腕の付け根から砲口までの長さ (絵と発射位置の両方で使う)。
+  const MECH_ARMS = [
+    { key: "vulcan", name: "バルカン砲", icon: "🔫", cost: 0, scrap: 0, style: "gun", tip: 33,
+      interval: 90, dmg: 17, speed: 1250, range: 720, spread: 0.07, flash: 10, snd: "smg",
+      desc: "最初から持っている速射砲。歩兵をなぎ払う。" },
+    { key: "ripper", name: "リッパークロー", icon: "🪚", cost: 700, scrap: 6, style: "claw", tip: 31,
+      interval: 170, dmg: 48, speed: 900, range: 118, spread: 0.05, flash: 8, snd: "melee",
+      desc: "掴んで削る超近距離の爪。間合いは短いが一番よく削れる。" },
+    { key: "incin", name: "焼却バーナー", icon: "🔥", cost: 820, scrap: 8, style: "flame", tip: 34,
+      interval: 46, dmg: 11, speed: 450, range: 240, spread: 0.19, flame: true, flash: 12, snd: "smg",
+      desc: "至近距離を焼き払う。射程は短いが当て続けられる。" },
+    { key: "cannon", name: "155mm砲", icon: "💥", cost: 900, scrap: 10, style: "cannon", tip: 34,
+      interval: 1350, dmg: 130, speed: 760, range: 940, spread: 0.01, shell: true, flash: 20, snd: "sniper",
+      desc: "着弾すると爆発する主砲。戦車と基地に強い。" },
+    { key: "missile", name: "ミサイルポッド", icon: "🚀", cost: 1250, scrap: 16, style: "pod", tip: 26,
+      interval: 900, dmg: 76, speed: 620, range: 860, spread: 0.09, pellets: 2, shell: true, flash: 16, snd: "sniper",
+      desc: "一度に2発の小型ミサイルをばらまく。集団に強い。" },
+    { key: "beam", name: "レーザーキャノン", icon: "⚡", cost: 1500, scrap: 20, style: "beam", tip: 39,
+      interval: 1500, dmg: 155, speed: 2600, range: 1400, spread: 0.004, pierce: 4, rail: true, flash: 18, snd: "sniper",
+      desc: "壁ごと貫く極太のビーム。4体まで撃ち抜く。" },
+  ];
+  const MECH_ARM_BY_KEY = {};
+  MECH_ARMS.forEach((a) => (MECH_ARM_BY_KEY[a.key] = a));
 
   // ============================================================
   //  キャラクター(兵科)
@@ -397,6 +466,17 @@
       mineArmMul: 1, mineBlastMul: 1, mineStealthMul: 1, seesEnemyMines: false,
       armorBonus: 80, damageTakenMul: 0.88, noiseMul: 1.3,
       weapons: ["minigun", "shotgun", "shovel"],
+    },
+    {
+      key: "merc", name: "黒衣の傭兵 ヴァンタ", icon: "🖤", rarity: 5,
+      bodyStyle: "merc",
+      desc: "二丁拳銃と二刀流だけを持つ黒ずくめの傭兵。刀は振るたび右手と左手が入れ替わり、振っている間は飛んできた銃弾を斬り落とす。傷の治りも異常に速い。",
+      hpBonus: 20, speedMul: 1.16, gunMul: 1, meleeMul: 1.28,
+      grenades: 3, mines: 2, wires: 0,
+      parryWindowMul: 1.5, parryCooldownMul: 0.7,
+      mineArmMul: 1, mineBlastMul: 1, mineStealthMul: 1, seesEnemyMines: false,
+      healMul: 2.6, noiseMul: 0.85,
+      weapons: ["dualpistol", "twinblade"],
     },
     {
       key: "shinobi", name: "影 シノビ", icon: "🥷", rarity: 5,
@@ -637,6 +717,14 @@
     forge: document.getElementById("forge"),
     forgeItems: document.getElementById("forge-items"),
     forgeMessage: document.getElementById("forge-message"),
+    hangar: document.getElementById("hangar"),
+    hangarPreview: document.getElementById("hangar-preview"),
+    hangarName: document.getElementById("hangar-name"),
+    hangarSpec: document.getElementById("hangar-spec"),
+    hangarTabs: document.getElementById("hangar-tabs"),
+    hangarNote: document.getElementById("hangar-note"),
+    hangarItems: document.getElementById("hangar-items"),
+    hangarMessage: document.getElementById("hangar-message"),
     gacha: document.getElementById("gacha"),
     gachaResult: document.getElementById("gacha-result"),
     gachaRoster: document.getElementById("gacha-roster"),
@@ -937,7 +1025,7 @@
   const stickGarden = { x: 0, y: 0, active: false };
   let gardenEnterEdge = false;   // 拠点で「入る」を押した瞬間
   let touchShield = false;
-  let touchInteract = false;   // 「戦車」ボタンを押しっぱなしにしているか
+  let touchInteract = false;   // 「アクション」ボタンを押しっぱなしにしているか
 
   window.addEventListener("keydown", (e) => {
     if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
@@ -1018,7 +1106,7 @@
   document.getElementById("t-mine").addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.mineEdge = true; });
   const wireBtn = document.getElementById("t-wire");
   wireBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); localInput.wireEdge = true; });
-  const tankBtn = document.getElementById("t-tank");
+  const tankBtn = document.getElementById("t-action");
   tankBtn.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     localInput.interactEdge = true;
@@ -1156,6 +1244,11 @@
   let equippedArmor = { head: "", body: "", legs: "" };
   let arrowStock = { normal: 0, pierce: 0, blast: 0 };
   let arrowType = "normal";
+  // ---- 自分のロボット (拠点の格納庫で組む) ----
+  let ownedMechFrames = {};      // フレームkey → true
+  let ownedMechPaints = {};      // カラーkey → true
+  let ownedMechArms = {};        // 腕の武器key → true
+  let mechSetup = { frame: "hound", paint: "steel", arms: ["vulcan", "vulcan"], name: "" };
 
   function emptyState() {
     return {
@@ -1297,9 +1390,12 @@
     { id: "beast-slayer", icon: "🐉", name: "魔物狩り",
       mission: "魔物を通算5体倒す",
       test: (c) => c.life.beastKills >= 5 },
+    { id: "blade-guard", icon: "🌀", name: "斬弾",
+      mission: "1試合で二刀流で銃弾を10発斬り落とす",
+      test: (c) => c.run.bulletsCut >= 10 },
     { id: "all-class", icon: "🏆", name: "皆伝",
       mission: "4つの兵科すべてで勝利する",
-      test: (c) => CLASSES.every((cl) => (c.life.winClasses[cl.key] || 0) >= 1) },
+      test: (c) => CLASSES.filter((cl) => cl.starter).every((cl) => (c.life.winClasses[cl.key] || 0) >= 1) },
   ];
 
   let medals = {};       // 実績id → 獲得日
@@ -1316,7 +1412,7 @@
   function emptyRunStats() {
     return {
       kills: 0, meleeKills: 0, blastKills: 0, deaths: 0, basesDestroyed: 0,
-      parries: 0, tankKills: 0, beastKills: 0, swordPulls: 0,
+      parries: 0, tankKills: 0, beastKills: 0, swordPulls: 0, bulletsCut: 0,
       trainedAll: false, won: false, committed: false,
     };
   }
@@ -1525,6 +1621,24 @@
       }
     }
     arrowType = ARROW_BY_KEY[inv.arrowType] ? inv.arrowType : "normal";
+
+    // ロボット。無料のフレーム・カラー・腕は最初から持っている。
+    ownedMechFrames = keep(inv.mechFrames, (k) => !!MECH_FRAME_BY_KEY[k]);
+    ownedMechPaints = keep(inv.mechPaints, (k) => !!MECH_PAINT_BY_KEY[k]);
+    ownedMechArms = keep(inv.mechArms, (k) => !!MECH_ARM_BY_KEY[k]);
+    for (const f of MECH_FRAMES) if (!f.cost && !f.scrap) ownedMechFrames[f.key] = true;
+    for (const c of MECH_PAINTS) if (!c.cost) ownedMechPaints[c.key] = true;
+    for (const a of MECH_ARMS) if (!a.cost && !a.scrap) ownedMechArms[a.key] = true;
+    const m = (inv.mech && typeof inv.mech === "object") ? inv.mech : {};
+    mechSetup = {
+      frame: ownedMechFrames[m.frame] ? m.frame : MECH_FRAMES[0].key,
+      paint: ownedMechPaints[m.paint] ? m.paint : MECH_PAINTS[0].key,
+      arms: [0, 1].map((i) => {
+        const k = Array.isArray(m.arms) ? m.arms[i] : null;
+        return ownedMechArms[k] ? k : MECH_ARMS[0].key;
+      }),
+      name: typeof m.name === "string" ? m.name.slice(0, 12) : "",
+    };
   }
 
   function saveProgress() {
@@ -1537,6 +1651,7 @@
       weapons: ownedWeapons, attachments: ownedAttachments, paints: ownedPaints,
       armor: ownedArmor, chars: charRanks, attach: weaponAttach, paint: weaponPaint,
       loadout: charLoadout, wearing: equippedArmor, arrows: arrowStock, arrowType,
+      mechFrames: ownedMechFrames, mechPaints: ownedMechPaints, mechArms: ownedMechArms, mech: mechSetup,
     }));
     refreshWallets();
   }
@@ -2122,6 +2237,185 @@
   }
 
   // ============================================================
+  //  ロボット格納庫 (フレーム・カラー・腕の武器)
+  // ============================================================
+  const HANGAR_TABS = [
+    { key: "frame", label: "🦿 フレーム", note: "機体の土台です。体力・速さ・脚の形が変わります。" },
+    { key: "paint", label: "🎨 カラー",   note: "機体の色です。強さはいっさい変わりません。" },
+    { key: "arm0",  label: "🔫 右腕",     note: "右腕に付ける武器です。試合中は武器切替（1〜3キー・ホイール）で左右を持ち替えます。" },
+    { key: "arm1",  label: "🔧 左腕",     note: "左腕に付ける武器です。右腕と別のものにすると、間合いに応じて撃ち分けられます。" },
+  ];
+  let hangarTab = "frame";
+  let previewAngle = -Math.PI / 2, previewPhase = 0;
+
+  const mechFrame = () => MECH_FRAME_BY_KEY[mechSetup.frame] || MECH_FRAMES[0];
+  const mechArm = (slot) => MECH_ARM_BY_KEY[mechSetup.arms[slot]] || MECH_ARMS[0];
+
+  // 機体名。付けていなければフレームの名前をそのまま使う。
+  function mechDisplayName() {
+    const custom = (mechSetup.name || "").trim();
+    return custom || mechFrame().name;
+  }
+
+  function openHangar() {
+    hangarTab = "frame";
+    el.hangarName.value = mechSetup.name || "";
+    renderHangar();
+    el.hangar.classList.remove("hidden");
+  }
+
+  function renderHangar(message = "", isError = false) {
+    refreshWallets();
+    el.hangarTabs.innerHTML = HANGAR_TABS.map((t) =>
+      `<button data-hangar-tab="${t.key}" class="${t.key === hangarTab ? "on" : ""}">${t.label}</button>`).join("");
+    const tab = HANGAR_TABS.find((t) => t.key === hangarTab) || HANGAR_TABS[0];
+    el.hangarNote.textContent = tab.note;
+    el.hangarItems.innerHTML = renderHangarTab(hangarTab);
+    el.hangarMessage.textContent = message;
+    el.hangarMessage.classList.toggle("err", isError);
+    renderHangarSpec();
+  }
+
+  function renderHangarSpec() {
+    const f = mechFrame();
+    const row = (label, value) => `<span class="row"><span>${label}</span><b>${value}</b></span>`;
+    const armRow = (slot) => {
+      const a = mechArm(slot);
+      const rate = (1000 / a.interval).toFixed(1);
+      return row(slot === 0 ? "右腕" : "左腕", `${a.icon} ${esc(a.name)}`) +
+        row("　威力 / 射程", `${a.dmg}${a.pellets ? `×${a.pellets}` : ""} / ${a.range}`) +
+        row("　連射", `毎秒 ${rate} 発`);
+    };
+    el.hangarSpec.innerHTML =
+      row("機体名", esc(mechDisplayName())) +
+      row("フレーム", `${f.icon} ${esc(f.name)}`) +
+      row("装甲（体力）", f.hp) +
+      row("移動速度", f.speed) +
+      armRow(0) + armRow(1);
+  }
+
+  // 買うか、持っていれば装備するかのボタン1つで済ませる
+  function hangarBtn(tab, key, owned, equipped, cost, scrapCost) {
+    const label = equipped ? "装備中" : owned ? "装備する"
+      : `${cost} G${scrapCost ? `<br>🔩 ${scrapCost}` : ""}`;
+    return `<button class="shop-buy${equipped ? " owned" : ""}" data-hangar="${key}" ` +
+      `data-hangar-tab="${tab}"${equipped ? " disabled" : ""}>${label}</button>`;
+  }
+
+  function renderHangarTab(key) {
+    if (key === "frame") {
+      return MECH_FRAMES.map((f) => {
+        const owned = !!ownedMechFrames[f.key], on = mechSetup.frame === f.key;
+        const tag = on ? '<span class="tag own">装備中</span>' : owned ? '<span class="tag own">所持</span>' : "";
+        const mat = owned ? "" : `<br>材料: ${f.cost} G ・ 廃材 ${f.scrap}`;
+        return shopCard(f.icon, `${esc(f.name)}${tag}`,
+          `${esc(f.desc)}<br>装甲 ${f.hp} ・ 速度 ${f.speed}${mat}`,
+          hangarBtn("frame", f.key, owned, on, f.cost, f.scrap));
+      }).join("");
+    }
+    if (key === "paint") {
+      return MECH_PAINTS.map((c) => {
+        const owned = !!ownedMechPaints[c.key], on = mechSetup.paint === c.key;
+        const chip = `<span class="swatch big" style="background:${c.body};border-color:${c.trim}"></span>`;
+        const tag = on ? '<span class="tag own">使用中</span>' : owned ? '<span class="tag own">所持</span>' : "";
+        return shopCard(chip, `${esc(c.name)}${tag}`,
+          c.cost ? "機体をこの色に塗り替えます。" : "はじめから持っている色です。",
+          hangarBtn("paint", c.key, owned, on, c.cost, 0));
+      }).join("");
+    }
+    const slot = key === "arm1" ? 1 : 0;
+    return MECH_ARMS.map((a) => {
+      const owned = !!ownedMechArms[a.key], on = mechSetup.arms[slot] === a.key;
+      const other = mechSetup.arms[1 - slot] === a.key ? '<span class="tag">反対の腕にも装備</span>' : "";
+      const tag = on ? '<span class="tag own">装備中</span>' : owned ? '<span class="tag own">所持</span>' : "";
+      const mat = owned ? "" : `<br>材料: ${a.cost} G ・ 廃材 ${a.scrap}`;
+      const rate = (1000 / a.interval).toFixed(1);
+      return shopCard(a.icon, `${esc(a.name)}${tag}${other}`,
+        `${esc(a.desc)}<br>威力 ${a.dmg}${a.pellets ? `×${a.pellets}` : ""} ・ 射程 ${a.range} ・ 毎秒 ${rate} 発${mat}`,
+        hangarBtn(key, a.key, owned, on, a.cost, a.scrap));
+    }).join("");
+  }
+
+  // 廃材と所持金をまとめて払う。足りなければ何も減らさずに false。
+  function payMaterials(gold, scrapCost, render) {
+    if (scrap < scrapCost) {
+      render(`廃材が足りません（あと ${scrapCost - scrap}）。試合で敵を倒すとたまります。`, true);
+      return false;
+    }
+    if (!spendMoney(gold, render)) return false;
+    scrap -= scrapCost;
+    return true;
+  }
+
+  function hangarAction(tab, key) {
+    if (tab === "frame") {
+      const f = MECH_FRAME_BY_KEY[key];
+      if (!f) return;
+      if (!ownedMechFrames[key]) {
+        if (!payMaterials(f.cost, f.scrap, renderHangar)) return;
+        ownedMechFrames[key] = true;
+        Audio.levelup();
+      }
+      mechSetup.frame = key;
+      saveProgress();
+      renderHangar(`${f.name}を組み上げました。`);
+      return;
+    }
+    if (tab === "paint") {
+      const c = MECH_PAINT_BY_KEY[key];
+      if (!c) return;
+      if (!ownedMechPaints[key]) {
+        if (!spendMoney(c.cost, renderHangar)) return;
+        ownedMechPaints[key] = true;
+      }
+      mechSetup.paint = key;
+      saveProgress();
+      renderHangar(`機体を${c.name}に塗り替えました。`);
+      return;
+    }
+    const slot = tab === "arm1" ? 1 : 0;
+    const a = MECH_ARM_BY_KEY[key];
+    if (!a) return;
+    if (!ownedMechArms[key]) {
+      if (!payMaterials(a.cost, a.scrap, renderHangar)) return;
+      ownedMechArms[key] = true;
+      Audio.levelup();
+    }
+    mechSetup.arms[slot] = key;
+    saveProgress();
+    renderHangar(`${slot === 0 ? "右腕" : "左腕"}に${a.name}を取り付けました。`);
+  }
+
+  // 格納庫のプレビュー。ゆっくり回して、どこから見ても分かるようにする。
+  function drawHangarPreview(dt) {
+    const cv = el.hangarPreview;
+    if (!cv) return;
+    const w = cv.clientWidth || 240, h = cv.clientHeight || 200;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+      cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    }
+    const c = cv.getContext("2d");
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, w, h);
+    const cx = w / 2, cy = h / 2;
+    // 整備用の床
+    c.fillStyle = "rgba(255,255,255,0.05)";
+    c.beginPath(); c.ellipse(cx, cy + 6, w * 0.34, h * 0.28, 0, 0, 6.283); c.fill();
+    c.strokeStyle = "rgba(255,210,63,0.28)"; c.lineWidth = 1.5;
+    c.beginPath(); c.ellipse(cx, cy + 6, w * 0.34, h * 0.28, 0, 0, 6.283); c.stroke();
+    previewAngle += dt * 0.55;
+    previewPhase += dt * 5;
+    c.fillStyle = "rgba(0,0,0,0.3)";
+    c.beginPath(); c.ellipse(cx + 4, cy + 12, 44, 20, 0, 0, 6.283); c.fill();
+    drawMechShape(c, {
+      x: cx, y: cy, angle: previewAngle, turretAngle: previewAngle,
+      frame: mechSetup.frame, paint: mechSetup.paint, arms: mechSetup.arms,
+      moving: true, phase: previewPhase, accent: teamDef(playerTeam).flag,
+      scale: 1.4, muzzleSide: -1, muzzleAge: 999,
+    });
+  }
+
+  // ============================================================
   //  徴兵ガチャ
   // ============================================================
   function openGacha() {
@@ -2571,7 +2865,7 @@
       reloading: false, reloadUntil: 0, lastShot: 0,
       kills: 0, deaths: 0,
       grenades: 3, maxGrenades: 3, lastGrenade: -99999, vehicleId: -1, turretId: -1,
-      dropUntil: 0, sweepAt: 0,
+      dropUntil: 0, sweepAt: 0, bladeSide: 0, gunSide: 0,
       mines: 2, maxMines: 2, lastMine: -99999,
       lastBaseSupplyAt: -99999,
       lastFootstepAt: -99999, noiseRadius: 0, heardUntil: 0,
@@ -2708,7 +3002,7 @@
     });
   }
 
-  function findTankSpawn(team) {
+  function findTankSpawn(team, lateral = 0) {
     const spot = BASE_SPOTS[team];
     // 練習場の無人戦車は動かないので、兵士の湧き位置(基地の正面)を塞がない真横に駐める。
     // 重なった状態で湧くと、戦車に押し戻されて兵士が動けなくなる。
@@ -2717,14 +3011,23 @@
       const side = { x: spot.x + Math.cos(a) * 150, y: spot.y + Math.sin(a) * 150 };
       if (!G.obstacles.some((o) => isSolid(o) && circleRect(side.x, side.y, TANK_R + 8, o.x, o.y, o.w, o.h))) return side;
     }
-    // 基地からマップ中央寄りに少しずらした位置を基準にする
-    const home = { x: spot.x + Math.cos(spot.heading) * 55, y: spot.y + Math.sin(spot.heading) * 55 };
+    // 基地からマップ中央寄りに少しずらした位置を基準にする。
+    // lateral はそこからさらに横へずらす量 (戦車とロボットを離して置くために使う)。
+    const side = spot.heading + Math.PI / 2;
+    const home = {
+      x: spot.x + Math.cos(spot.heading) * 55 + Math.cos(side) * lateral,
+      y: spot.y + Math.sin(spot.heading) * 55 + Math.sin(side) * lateral,
+    };
     for (let i = 0; i < 50; i++) {
-      const x = clamp(home.x + rand(-150, 150), 70, WORLD_W - 70);
-      const y = clamp(home.y + rand(-150, 150), 70, WORLD_H - 70);
-      if (!G.obstacles.some((o) => isSolid(o) && circleRect(x, y, TANK_R + 8, o.x, o.y, o.w, o.h))) return { x, y };
+      const x = clamp(home.x + rand(-120, 120), 70, WORLD_W - 70);
+      const y = clamp(home.y + rand(-120, 120), 70, WORLD_H - 70);
+      if (G.obstacles.some((o) => isSolid(o) && circleRect(x, y, TANK_R + 8, o.x, o.y, o.w, o.h))) continue;
+      // すでに置いた車輌と重ならない場所だけを使う (重なると動けなくなる)
+      if ((G.tanks || []).some((t) => dist2(x, y, t.x, t.y) < (TANK_R * 2 + 24) ** 2)) continue;
+      return { x, y };
     }
-    return home;
+    // どこも空いていなければ基準位置そのまま (場外に出ないよう丸める)
+    return { x: clamp(home.x, 70, WORLD_W - 70), y: clamp(home.y, 70, WORLD_H - 70) };
   }
 
   function spawnTanks() {
@@ -2737,11 +3040,29 @@
         kind: "tank", id, team, name: `${teamDef(team).name}の戦車`,
         x: sp.x, y: sp.y, rx: sp.x, ry: sp.y, spawnX: sp.x, spawnY: sp.y,
         angle: heading, turretAngle: heading,
-        hp: 420, maxHp: 420, dead: false, respawnAt: 0, driverId: -1,
+        hp: 1400, maxHp: 1400, dead: false, respawnAt: 0, driverId: -1,
         speed: 105, lastShot: -99999, muzzle: 0, kills: 0, weapon: 0,
         ai: { think: 0, targetId: -1 },
       };
     });
+    // 自分のロボットは、自軍の戦車とぶつからないよう横へずらして配備する
+    G.tanks.push(makeMechUnit(playerTeam, G.tanks.length));
+  }
+
+  // 格納庫で組んだ設定から、試合に出す1機を作る
+  function makeMechUnit(team, id) {
+    const frame = mechFrame();
+    const sp = findTankSpawn(team, 230);
+    const heading = BASE_SPOTS[team].heading;
+    return {
+      kind: "tank", mech: true, id, team, name: mechDisplayName(),
+      frame: frame.key, paint: mechSetup.paint, arms: mechSetup.arms.slice(0, 2),
+      x: sp.x, y: sp.y, rx: sp.x, ry: sp.y, spawnX: sp.x, spawnY: sp.y,
+      angle: heading, turretAngle: heading, legPhase: 0, moving: false,
+      hp: frame.hp, maxHp: frame.hp, dead: false, respawnAt: 0, driverId: -1,
+      speed: frame.speed, lastShot: -99999, muzzle: 0, kills: 0, weapon: 0,
+      ai: { think: 0, targetId: -1 },
+    };
   }
 
   // ============================================================
@@ -3285,8 +3606,14 @@
     s.lastShot = t;
     s.recoil = Math.min(8, s.recoil + w.kick);
     s.muzzle = t;
-    const mx = s.x + Math.cos(s.aimAngle) * (SOLDIER_R + 14);
-    const my = s.y + Math.sin(s.aimAngle) * (SOLDIER_R + 14);
+    // 二丁拳銃は撃つたびに構える手を入れ替える。銃口の位置も左右にずれる。
+    let handOff = 0;
+    if (w.dual) {
+      s.gunSide = s.gunSide ? 0 : 1;
+      handOff = (s.gunSide ? 1 : -1) * DUAL_HAND_OFFSET;
+    }
+    const mx = s.x + Math.cos(s.aimAngle) * (SOLDIER_R + 14) + Math.cos(s.aimAngle + Math.PI / 2) * handOff;
+    const my = s.y + Math.sin(s.aimAngle) * (SOLDIER_R + 14) + Math.sin(s.aimAngle + Math.PI / 2) * handOff;
     const paintTracer = w.paint && w.paint.tracer;
     for (let p = 0; p < w.pellets; p++) {
       const a = s.aimAngle + (Math.random() - 0.5) * w.spread * 2;
@@ -3340,6 +3667,19 @@
   const KATANA_SWEEP_DMG_MUL = 0.72;
   const SWEEP_GUARD_MS = 230;   // 薙ぎ払い中に銃弾を弾ける時間
 
+  // 二丁拳銃・二刀流 (左右の手を交互に使う武器)
+  const DUAL_HAND_OFFSET = 6.5;   // 銃口・刀を左右へずらす量
+  const BLADE_CUT_MS = 220;       // 刀を振っている間、飛んできた弾を斬れる時間
+  const BLADE_CUT_R = 54;         // 斬り落とせる距離
+  const BLADE_CUT_ARC = 1.5;      // 斬り落とせる正面の角度(片側)
+  const BLADE_SWING_OFFSET = 0.24; // 振っている手の側へ攻撃範囲をずらす量
+
+  // 二刀流を振っている最中か。この間だけ銃弾を斬り落とせる。
+  function bladeGuardActive(s) {
+    const w = wstat(s);
+    return !!(w && w.cutsBullets) && !s.dead && !s.shieldRaised && now() - s.muzzle < BLADE_CUT_MS;
+  }
+
   // 足を止めた薙ぎ払いの最中か。この間は刀が銃弾を弾く。
   const isSweeping = (s) => !!s.sweepAt && now() - s.sweepAt < SWEEP_GUARD_MS;
 
@@ -3349,6 +3689,11 @@
     s.recoil = Math.min(8, s.recoil + w.kick);
     const sweep = w.key === "katana" && !s.moving;
     s.sweepAt = sweep ? t : 0;   // 描画で刀を一回転させるかの判定に使う
+    // 二刀流は振るたびに右手と左手が入れ替わる。当たる向きも振った手の側へ寄る。
+    if (w.twin) s.bladeSide = s.bladeSide ? 0 : 1;
+    const swingAngle = w.twin
+      ? s.aimAngle + (s.bladeSide ? 1 : -1) * BLADE_SWING_OFFSET
+      : s.aimAngle;
     const arc = w.arc || 0.82;
     const range = sweep ? w.range * KATANA_SWEEP_RANGE_MUL : w.range;
     const dmg = w.dmg * s.dmgMul * (s.meleeMul || 1) * (sweep ? KATANA_SWEEP_DMG_MUL : 1);
@@ -3360,7 +3705,7 @@
       if (d2v > (range + reach) ** 2 || !lineClear(s.x, s.y, target.x, target.y)) return;
       if (!sweep) {
         const a = Math.atan2(target.y - s.y, target.x - s.x);
-        const gap = Math.abs(((a - s.aimAngle + Math.PI) % (Math.PI * 2)) - Math.PI);
+        const gap = Math.abs(((a - swingAngle + Math.PI) % (Math.PI * 2)) - Math.PI);
         if (gap >= arc) return;
       }
       hits.push({ target, d2v });
@@ -3390,9 +3735,9 @@
       targets = [best.target];
     }
 
-    const sx = s.x + Math.cos(s.aimAngle) * 28, sy = s.y + Math.sin(s.aimAngle) * 28;
+    const sx = s.x + Math.cos(swingAngle) * 28, sy = s.y + Math.sin(swingAngle) * 28;
     if (sweep) addParticle(s.x, s.y, { kind: "slash", life: 210, size: range * 0.92, a: s.aimAngle, arc: Math.PI });
-    else addParticle(sx, sy, { kind: "slash", life: 150, size: w.range * 0.44, a: s.aimAngle, arc });
+    else addParticle(sx, sy, { kind: "slash", life: 150, size: w.range * 0.44, a: swingAngle, arc });
 
     for (const target of targets) {
       if (target.kind === "base") {
@@ -3426,23 +3771,45 @@
     { name: "同軸機関銃", interval: 85, dmg: 16, speed: 1250, range: 720, spread: 0.055, shell: false, flash: 10, snd: "smg" },
   ];
 
+  // 戦車・ロボットが「いま構えている武器」。ロボットは腕の武器を使う。
+  function tankWeaponOf(tank) {
+    if (tank && tank.mech) return MECH_ARM_BY_KEY[(tank.arms || [])[tank.weapon || 0]] || MECH_ARMS[0];
+    return TANK_WEAPONS[(tank && tank.weapon) || 0];
+  }
+
   function tryTankShoot(tank, t) {
     if (tank.dead) return;
-    const w = TANK_WEAPONS[tank.weapon || 0];
+    const w = tankWeaponOf(tank);
     if (t - tank.lastShot < w.interval) return;
     tank.lastShot = t;
     tank.muzzle = t;
-    const a = tank.turretAngle + (Math.random() - 0.5) * w.spread * 2;
-    const mx = tank.x + Math.cos(a) * 48;
-    const my = tank.y + Math.sin(a) * 48;
+    const base = tank.turretAngle;
+    // 戦車は砲身の先から、ロボットは構えている側の腕の先から撃つ
+    let mx, my;
+    if (tank.mech) {
+      const sc = (MECH_FRAME_BY_KEY[tank.frame] || MECH_FRAMES[0]).scale;
+      const fwd = (w.tip + 6) * sc, lat = ((tank.weapon || 0) === 0 ? 1 : -1) * 18 * sc;
+      mx = tank.x + Math.cos(base) * fwd + Math.cos(base + Math.PI / 2) * lat;
+      my = tank.y + Math.sin(base) * fwd + Math.sin(base + Math.PI / 2) * lat;
+    } else {
+      mx = tank.x + Math.cos(base) * 48;
+      my = tank.y + Math.sin(base) * 48;
+    }
     const driver = G.soldiers.find((s) => s.id === tank.driverId) || null;
-    G.bullets.push({
-      kind: w.shell ? "shell" : "bullet", x: mx, y: my,
-      vx: Math.cos(a) * w.speed, vy: Math.sin(a) * w.speed,
-      dmg: w.dmg, team: tank.team, owner: driver ? driver.id : -1, tankOwner: tank.id,
-      range: w.range, traveled: 0, pierce: 0, col: w.shell ? "#ffcf62" : "#ffe49a", len: w.shell ? 12 : 15,
-    });
-    addParticle(mx, my, { kind: "flash", life: w.shell ? 100 : 55, size: w.flash, a });
+    for (let i = 0; i < (w.pellets || 1); i++) {
+      if (G.bullets.length >= MAX_BULLETS) break;
+      const a = base + (Math.random() - 0.5) * w.spread * 2;
+      G.bullets.push({
+        kind: w.shell ? "shell" : "bullet", x: mx, y: my,
+        vx: Math.cos(a) * w.speed, vy: Math.sin(a) * w.speed,
+        dmg: w.dmg, team: tank.team, owner: driver ? driver.id : -1, tankOwner: tank.id,
+        range: w.range, traveled: 0, pierce: w.pierce || 0,
+        flame: !!w.flame, rail: !!w.rail,
+        col: w.flame ? "#ff9a3c" : w.rail ? "#c8b0ff" : w.shell ? "#ffcf62" : "#ffe49a",
+        len: w.rail ? 26 : w.shell ? 12 : 15,
+      });
+    }
+    addParticle(mx, my, { kind: "flash", life: w.shell ? 100 : 55, size: w.flash, a: base });
     if (driver && driver.id === G.localId) shake = Math.min(14, shake + (w.shell ? 8 : 1.2));
     if (dist2(tank.x, tank.y, camX + viewW() / 2, camY + viewH() / 2) < 850 * 850) Audio.shot(w.snd);
   }
@@ -3594,6 +3961,7 @@
   }
 
   let lastSweepGuardAudioAt = 0;
+  let lastBladeCutAudioAt = 0;
 
   function damageSoldier(target, dmg, attacker, hit) {
     if (target.dead) return;
@@ -4401,6 +4769,8 @@
       tank.angle = angLerp(tank.angle, moveAngle, clamp(dtGlobal * 4.5, 0, 1));
       resolveTankMovement(tank, tank.x + inp.mvx * tank.speed * dtGlobal, tank.y + inp.mvy * tank.speed * dtGlobal);
     }
+    if (tank.mech && m > 0.05) tank.legPhase = (tank.legPhase || 0) + dtGlobal * 9;
+    tank.moving = m > 0.05;
     if (inp.shoot) tryTankShoot(tank, t);
     inp.reloadEdge = false;
     inp.grenadeEdge = false;
@@ -4450,17 +4820,32 @@
       const d = Math.hypot(dx, dy) || 1;
       const aim = Math.atan2(dy, dx);
       tank.turretAngle = angLerp(tank.turretAngle, aim, clamp(dt * 2.7, 0, 1));
-      if (d > (target.kind === "base" ? 420 : 360)) {
+      // 相手が装甲なら重い一撃、生身の歩兵や犬なら手数の多いほうに持ち替える
+      const armored = target.kind === "tank" || target.kind === "base";
+      tank.weapon = tank.mech ? pickMechArm(tank, armored) : (armored ? 0 : 1);
+      const w = tankWeaponOf(tank);
+      // 射程の短い腕を積んでいるロボットは、その間合いまで詰めに行く
+      const stop = target.kind === "base" ? 420 : 360;
+      const keep = tank.mech ? Math.min(stop, w.range * 0.7) : stop;
+      tank.moving = d > keep;
+      if (tank.moving) {
         tank.angle = angLerp(tank.angle, aim, clamp(dt * 2.2, 0, 1));
+        if (tank.mech) tank.legPhase = (tank.legPhase || 0) + dt * 9;
         resolveTankMovement(tank, tank.x + Math.cos(tank.angle) * tank.speed * 0.7 * dt, tank.y + Math.sin(tank.angle) * tank.speed * 0.7 * dt);
       }
-      // 相手が装甲なら主砲、生身の歩兵や犬なら機関銃に持ち替える
-      const armored = target.kind === "tank" || target.kind === "base";
-      tank.weapon = armored ? 0 : 1;
       const aimGap = Math.abs(((aim - tank.turretAngle + Math.PI) % (Math.PI * 2)) - Math.PI);
-      const gapNeeded = tank.weapon === 0 ? 0.09 : 0.2;
-      if (d < 880 + (target.kind === "base" ? BASE_CORE_R : 0) && aimGap < gapNeeded && lineClear(tank.x, tank.y, target.x, target.y)) tryTankShoot(tank, t);
+      const gapNeeded = w.shell ? 0.09 : 0.2;
+      if (d < w.range + (target.kind === "base" ? BASE_CORE_R : 0) && aimGap < gapNeeded && lineClear(tank.x, tank.y, target.x, target.y)) tryTankShoot(tank, t);
     }
+  }
+
+  // 無人のロボットが自分で戦うときの腕えらび。
+  // 装甲相手は一撃の重い腕、生身相手は手数(毎秒ダメージ)の多い腕。
+  function pickMechArm(tank, armored) {
+    const a0 = MECH_ARM_BY_KEY[(tank.arms || [])[0]] || MECH_ARMS[0];
+    const a1 = MECH_ARM_BY_KEY[(tank.arms || [])[1]] || MECH_ARMS[0];
+    const score = (a) => armored ? a.dmg * (a.pellets || 1) : a.dmg * (a.pellets || 1) / a.interval;
+    return score(a1) > score(a0) ? 1 : 0;
   }
 
   function updateDogs(dt, t) {
@@ -4868,6 +5253,24 @@
             }
             dead = true; break;
           }
+        }
+      }
+      if (!dead && b.kind !== "shell") {
+        // 二刀流を振っている兵士は、正面に飛んできた銃弾と矢を斬り落とす。
+        // 斬った弾はそこで消える (跳ね返さない)。
+        for (const s of G.soldiers) {
+          if (s.dead || s.vehicleId >= 0 || s.team === b.team || s.id === b.owner) continue;
+          if (!bladeGuardActive(s)) continue;
+          if (dist2(b.x, b.y, s.x, s.y) > BLADE_CUT_R * BLADE_CUT_R) continue;
+          const toBullet = Math.atan2(b.y - s.y, b.x - s.x);
+          const gap = Math.abs(((toBullet - s.aimAngle + Math.PI) % (Math.PI * 2)) - Math.PI);
+          if (gap > BLADE_CUT_ARC) continue;
+          addParticle(b.x, b.y, { kind: "parry", life: 200, size: 20, a: toBullet + Math.PI });
+          addParticle(b.x, b.y, { kind: "spark", vx: rand(-120, 120), vy: rand(-120, 120), life: 200, size: 2.6 });
+          if (now() - lastBladeCutAudioAt > 80) { lastBladeCutAudioAt = now(); Audio.parry(); }
+          if (s.id === G.localId) noteStat("bulletsCut");
+          dead = true;
+          break;
         }
       }
       if (!dead) {
@@ -5468,6 +5871,12 @@
   }
 
   function drawTankShadow(tank) {
+    if (tank.mech) {
+      const sc = (MECH_FRAME_BY_KEY[tank.frame] || MECH_FRAMES[0]).scale;
+      ctx.fillStyle = "rgba(0,0,0,0.34)";
+      ctx.beginPath(); ctx.ellipse(tank.x + 5, tank.y + 9, 30 * sc, 24 * sc, 0, 0, 6.283); ctx.fill();
+      return;
+    }
     ctx.save();
     ctx.translate(tank.x + 5, tank.y + 8);
     ctx.rotate(tank.angle);
@@ -5476,7 +5885,178 @@
     ctx.restore();
   }
 
+  // ロボットの絵。腕・脚・コクピットを分けて描く。
+  // c は描画先のコンテキスト。拠点のプレビューでも同じ絵を使うので ctx 直書きにしない。
+  // o = { x, y, angle(脚の向き), turretAngle(上半身の向き), frame, paint, arms,
+  //       moving, phase, accent(チーム色), scale, muzzleSide, muzzleAge }
+  function drawMechShape(c, o) {
+    const frame = MECH_FRAME_BY_KEY[o.frame] || MECH_FRAMES[0];
+    const paint = MECH_PAINT_BY_KEY[o.paint] || MECH_PAINTS[0];
+    const s = (frame.scale || 1) * (o.scale || 1);
+    const body = paint.body, trim = paint.trim, glow = paint.glow;
+    const phase = o.phase || 0;
+    const swing = o.moving ? Math.sin(phase) * 7 * s : 0;
+
+    // ---- 脚 (機体そのものの向き) ----
+    // 脚は暗い金属色にして、塗装した胴と見分けがつくようにする。
+    // 位置も少し後ろへ下げて、前へ突き出す腕と重ならないようにする。
+    c.save();
+    c.translate(o.x, o.y);
+    c.rotate(o.angle);
+    if (frame.legs === "hover") {
+      // 浮遊機は脚の代わりに推進リングが光る
+      c.fillStyle = "rgba(120,220,255,0.13)";
+      c.beginPath(); c.ellipse(0, 0, 33 * s, 27 * s, 0, 0, 6.283); c.fill();
+      c.strokeStyle = glow; c.lineWidth = 2.4 * s; c.globalAlpha = 0.75;
+      c.beginPath(); c.ellipse(0, 0, 29 * s, 23 * s, 0, 0, 6.283); c.stroke();
+      c.globalAlpha = 1;
+      const jet = 0.55 + 0.45 * Math.abs(Math.sin(phase * 0.9));
+      c.fillStyle = glow;
+      for (const side of [-1, 1]) {
+        c.beginPath();
+        c.moveTo(-20 * s, side * 12 * s);
+        c.lineTo(-(20 + 20 * jet) * s, side * 6 * s);
+        c.lineTo(-20 * s, side * 2 * s);
+        c.closePath(); c.fill();
+      }
+    } else {
+      const feet = frame.legs === "quad"
+        ? [[9, -21], [9, 21], [-15, -21], [-15, 21]]
+        : [[-5, -21], [-5, 21]];
+      feet.forEach(([fx, fy], i) => {
+        const sw = (i % 2 === 0 ? swing : -swing);
+        // 腰から脚へのアーム
+        c.fillStyle = "#23262a";
+        c.fillRect((fx - 3) * s, (fy > 0 ? 4 : -18) * s, 9 * s, 14 * s);
+        // 足そのもの
+        c.fillStyle = "#3d434a";
+        c.fillRect((fx - 13) * s + sw, (fy - 7) * s, 26 * s, 14 * s);
+        c.fillStyle = trim;
+        c.fillRect((fx + 6) * s + sw, (fy - 5.5) * s, 6 * s, 11 * s);
+        c.strokeStyle = "rgba(0,0,0,0.55)"; c.lineWidth = 1.6;
+        c.strokeRect((fx - 13) * s + sw, (fy - 7) * s, 26 * s, 14 * s);
+      });
+    }
+    c.restore();
+
+    // ---- 上半身と腕 (照準の向き) ----
+    c.save();
+    c.translate(o.x, o.y);
+    c.rotate(o.turretAngle);
+    [0, 1].forEach((slot) => {
+      const arm = MECH_ARM_BY_KEY[(o.arms || [])[slot]] || MECH_ARMS[0];
+      const side = slot === 0 ? 1 : -1;         // 0 = 右腕
+      c.save();
+      c.translate(0, side * 18 * s);
+      drawMechArm(c, arm, s, body, trim, glow, o.muzzleSide === slot ? (o.muzzleAge || 0) : 9999);
+      c.restore();
+    });
+    // 肩当て。胴と同じ塗装で、外側だけ差し色を入れる。
+    for (const side of [-1, 1]) {
+      c.fillStyle = body;
+      c.beginPath();
+      c.moveTo(-4 * s, side * 9 * s); c.lineTo(10 * s, side * 10 * s);
+      c.lineTo(9 * s, side * 23 * s); c.lineTo(-6 * s, side * 21 * s);
+      c.closePath(); c.fill();
+      c.strokeStyle = "rgba(0,0,0,0.55)"; c.lineWidth = 1.6; c.stroke();
+      c.fillStyle = trim;
+      c.fillRect(-2 * s, side * 15 * s - (side > 0 ? 0 : 5 * s), 9 * s, 5 * s);
+    }
+    // 胴
+    c.fillStyle = body;
+    c.beginPath();
+    c.moveTo(18 * s, 0); c.lineTo(10 * s, -14 * s); c.lineTo(-12 * s, -13 * s);
+    c.lineTo(-18 * s, 0); c.lineTo(-12 * s, 13 * s); c.lineTo(10 * s, 14 * s);
+    c.closePath(); c.fill();
+    c.strokeStyle = "rgba(0,0,0,0.6)"; c.lineWidth = 2; c.stroke();
+    // 背中のチーム色ライン (味方と敵を見分けるため)
+    if (o.accent) {
+      c.fillStyle = o.accent;
+      c.fillRect(-15 * s, -5 * s, 5 * s, 10 * s);
+    }
+    // コクピットと単眼
+    c.fillStyle = "#20242a";
+    c.beginPath(); c.arc(3 * s, 0, 9 * s, 0, 6.283); c.fill();
+    c.fillStyle = trim;
+    c.beginPath(); c.arc(3 * s, 0, 6.5 * s, 0, 6.283); c.fill();
+    c.fillStyle = glow;
+    c.shadowColor = glow; c.shadowBlur = 8;
+    c.beginPath(); c.ellipse(7 * s, 0, 3 * s, 4.4 * s, 0, 0, 6.283); c.fill();
+    c.shadowBlur = 0;
+    c.restore();
+  }
+
+  // 腕1本ぶん。原点は肩、+X が前。
+  function drawMechArm(c, arm, s, body, trim, glow, muzzleAge) {
+    // 肩から前へ伸びるアーム。脚と重ならないよう前寄りに置く。
+    c.fillStyle = "#3d434a";
+    c.fillRect(-4 * s, -7 * s, 15 * s, 14 * s);
+    c.strokeStyle = "rgba(0,0,0,0.55)"; c.lineWidth = 1.6;
+    c.strokeRect(-4 * s, -7 * s, 15 * s, 14 * s);
+    if (arm.style === "cannon") {
+      c.fillStyle = "#22262b"; c.fillRect(9 * s, -5 * s, 25 * s, 10 * s);
+      c.fillStyle = trim; c.fillRect(27 * s, -6.5 * s, 7 * s, 13 * s);
+      c.strokeRect(9 * s, -5 * s, 25 * s, 10 * s);
+    } else if (arm.style === "pod") {
+      c.fillStyle = trim; c.fillRect(9 * s, -10 * s, 17 * s, 20 * s);
+      c.strokeRect(9 * s, -10 * s, 17 * s, 20 * s);
+      c.fillStyle = "#15181c";
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) c.fillRect((14 + j * 7) * s, (-8 + i * 6) * s, 6 * s, 5 * s);
+    } else if (arm.style === "beam") {
+      c.fillStyle = "#22262b"; c.fillRect(9 * s, -6 * s, 23 * s, 12 * s);
+      c.strokeRect(9 * s, -6 * s, 23 * s, 12 * s);
+      c.globalAlpha = 0.9; c.fillStyle = glow; c.fillRect(12 * s, -2 * s, 20 * s, 4 * s); c.globalAlpha = 1;
+      c.fillStyle = trim;
+      c.beginPath(); c.arc(33 * s, 0, 6 * s, 0, 6.283); c.fill();
+      c.stroke();
+    } else if (arm.style === "flame") {
+      c.fillStyle = trim; c.fillRect(2 * s, -10 * s, 8 * s, 20 * s);
+      c.fillStyle = "#22262b"; c.fillRect(10 * s, -5 * s, 15 * s, 10 * s);
+      c.strokeRect(10 * s, -5 * s, 15 * s, 10 * s);
+      c.fillStyle = "#c04d31";
+      c.beginPath(); c.moveTo(24 * s, -8 * s); c.lineTo(34 * s, 0); c.lineTo(24 * s, 8 * s); c.closePath(); c.fill();
+      c.stroke();
+    } else if (arm.style === "claw") {
+      c.fillStyle = trim; c.fillRect(9 * s, -8 * s, 9 * s, 16 * s);
+      c.strokeRect(9 * s, -8 * s, 9 * s, 16 * s);
+      c.fillStyle = "#e4ebef";
+      for (const side of [-1, 1]) {
+        c.beginPath();
+        c.moveTo(17 * s, side * 7 * s); c.lineTo(30 * s, side * 11 * s);
+        c.lineTo(31 * s, side * 4 * s); c.lineTo(18 * s, side * 1 * s);
+        c.closePath(); c.fill(); c.stroke();
+      }
+    } else {
+      // gun = 3連装のバルカン
+      c.fillStyle = "#22262b"; c.fillRect(9 * s, -7 * s, 17 * s, 14 * s);
+      c.strokeRect(9 * s, -7 * s, 17 * s, 14 * s);
+      c.fillStyle = trim; c.fillRect(22 * s, -7 * s, 5 * s, 14 * s);
+      c.fillStyle = "#101215";
+      for (let i = -1; i <= 1; i++) c.fillRect(26 * s, (i * 4 - 1.6) * s, 7 * s, 3.2 * s);
+    }
+    if (muzzleAge < 90) {
+      c.fillStyle = "rgba(255,225,140,0.95)";
+      const tip = arm.tip || 34;
+      c.beginPath();
+      c.moveTo(tip * s, 0); c.lineTo((tip + 13) * s, -7 * s);
+      c.lineTo((tip + 20) * s, 0); c.lineTo((tip + 13) * s, 7 * s);
+      c.closePath(); c.fill();
+    }
+  }
+
+  function drawMech(tank) {
+    const def = teamDef(tank.team);
+    drawMechShape(ctx, {
+      x: tank.x, y: tank.y, angle: tank.angle, turretAngle: tank.turretAngle,
+      frame: tank.frame, paint: tank.paint, arms: tank.arms,
+      moving: !!tank.moving, phase: tank.legPhase || 0,
+      accent: tank.driverId === G.localId ? YOU_ACCENT : def.flag,
+      muzzleSide: tank.weapon || 0, muzzleAge: now() - tank.muzzle,
+    });
+  }
+
   function drawTank(tank) {
+    if (tank.mech) { drawMech(tank); return; }
     const body = teamDef(tank.team).tankBody;
     const light = teamDef(tank.team).tankLight;
     ctx.save();
@@ -5648,7 +6228,8 @@
     if (skin && skin.glow) { ctx.shadowColor = skin.glow; ctx.shadowBlur = 11; }
     // 降下中は高度のぶんだけ上へずらして描く(影は地面に残る)
     ctx.translate(s.x, s.y - dropAltitude(s));
-    const style = skin ? skin.style : null;
+    // 専用の見た目を持つキャラは、スキンより先にそちらの体つきで描く
+    const style = classDef(s.classKey).bodyStyle || (skin ? skin.style : null);
     // 脚 (歩行)
     const legSwing = s.moving ? Math.sin(s.legPhase) * 5 : 0;
     ctx.save();
@@ -5660,7 +6241,7 @@
     const recoilBack = s.recoil * 0.6;
     drawSkinTorso(style, skin, s, c, recoilBack);
     // 防弾鎧プレート (ホログラムとボクセルは体の作りが違うので付けない)
-    if (s.armor > 0 && style !== "hologram" && style !== "voxel") {
+    if (s.armor > 0 && style !== "hologram" && style !== "voxel" && style !== "merc") {
       const ar = clamp(s.armor / s.maxArmor, 0, 1);
       ctx.fillStyle = `rgba(126,165,194,${0.35 + ar * 0.45})`;
       ctx.fillRect(-10 - recoilBack, -12, 13, 8); ctx.fillRect(-10 - recoilBack, 4, 13, 8);
@@ -5684,16 +6265,33 @@
       // 刀の範囲攻撃だけは、全方位に届くことが分かるよう1回転させる。
       const sweeping = !!s.sweepAt && s.sweepAt === s.muzzle;
       const swingSpan = sweeping ? Math.PI * 2
-        : w.style === "shovel" ? 2.5 : w.style === "hatchet" ? 2.1 : w.style === "katana" ? 2.3 : w.style === "bayonet" ? 0.5 : 1.9;
+        : w.style === "shovel" ? 2.5 : w.style === "hatchet" ? 2.1 : w.style === "katana" ? 2.3
+        : w.style === "twinblade" ? 2.2 : w.style === "bayonet" ? 0.5 : 1.9;
       const swingMs = w.style === "bayonet" ? 110 : sweeping ? 230 : 180;
       const swing = attackAge < swingMs ? -swingSpan / 2 + (attackAge / swingMs) * swingSpan : 0;
       // 銃剣だけは振らずに前へ突き出す
       const thrust = w.style === "bayonet" && attackAge < swingMs ? 10 * (1 - attackAge / swingMs) : 0;
-      ctx.save();
-      ctx.translate(SOLDIER_R - 4 - recoilBack + thrust, 0); ctx.rotate(swing);
-      drawMeleeWeapon(w.style, w.paint);
-      ctx.fillStyle = "#caa06b"; ctx.beginPath(); ctx.arc(1, 1, 3.5, 0, Math.PI * 2); ctx.fill();
-      ctx.restore();
+      if (w.style === "twinblade") {
+        // 二刀流。振っている手だけが大きく動き、もう片方は構えたまま。
+        // 振るたびに s.bladeSide が入れ替わるので、左右が交互に出る。
+        const active = s.bladeSide ? 1 : -1;
+        for (const side of [-1, 1]) {
+          ctx.save();
+          ctx.translate(SOLDIER_R - 3 - recoilBack, side * 9.5);
+          ctx.rotate(side === active ? side * swing : side * 0.9);
+          ctx.scale(0.9, 0.9);
+          drawMeleeWeapon("katana", w.paint);
+          ctx.restore();
+        }
+      } else {
+        ctx.save();
+        ctx.translate(SOLDIER_R - 4 - recoilBack + thrust, 0); ctx.rotate(swing);
+        drawMeleeWeapon(w.style, w.paint);
+        ctx.fillStyle = "#caa06b"; ctx.beginPath(); ctx.arc(1, 1, 3.5, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+    } else if (w.dual) {
+      drawDualGuns(s, w, recoilBack);
     } else if (w.bow) {
       drawBow(s, w, recoilBack);
     } else {
@@ -5703,13 +6301,15 @@
     drawSkinHead(style, skin, c);
     // マズルフラッシュ
     if (!s.shieldRaised && !w.melee && !w.bow && now() - s.muzzle < 55) {
-      const ml = SOLDIER_R + w.len - recoilBack;
+      // 二丁拳銃は、いま撃った側の銃口から火を噴く
+      const ml = SOLDIER_R + w.len - recoilBack - (w.dual ? 6 : 0);
+      const fy = w.dual ? (s.gunSide ? 1 : -1) * DUAL_HAND_OFFSET : 0;
       ctx.fillStyle = "rgba(255,220,120,0.95)";
       ctx.beginPath();
-      ctx.moveTo(ml, 0);
-      ctx.lineTo(ml + 13, -6);
-      ctx.lineTo(ml + 20, 0);
-      ctx.lineTo(ml + 13, 6);
+      ctx.moveTo(ml, fy);
+      ctx.lineTo(ml + 13, fy - 6);
+      ctx.lineTo(ml + 20, fy);
+      ctx.lineTo(ml + 13, fy + 6);
       ctx.closePath(); ctx.fill();
     }
     // 被弾フラッシュ
@@ -5720,6 +6320,29 @@
     ctx.restore();
   }
 
+
+  // 二丁拳銃。左右の手に1丁ずつ持ち、撃った側だけが反動で少し下がる。
+  function drawDualGuns(s, w, recoilBack) {
+    const paint = w.paint || PAINTS[0];
+    const age = now() - s.muzzle;
+    const firingSide = s.gunSide ? 1 : -1;
+    for (const side of [-1, 1]) {
+      const kick = (side === firingSide && age < 90) ? 2.6 * (1 - age / 90) : 0;
+      const x0 = SOLDIER_R - 6 - recoilBack - kick;
+      ctx.save();
+      ctx.translate(0, side * DUAL_HAND_OFFSET);
+      // 黒い体の上でも輪郭が見えるよう、上面にハイライトを入れる
+      ctx.fillStyle = paint.body;
+      ctx.fillRect(x0, -2.6, w.len + 3, 5.2);
+      ctx.fillStyle = "rgba(232,238,244,0.55)";
+      ctx.fillRect(x0 + 1, -2.2, w.len + 1, 1.4);
+      ctx.fillStyle = paint.trim;
+      ctx.fillRect(x0 + 2, 0.2, 5, 1.6);
+      ctx.fillStyle = "#caa06b";
+      ctx.beginPath(); ctx.arc(x0 - 1.5, 0, 3.2, 0, 6.283); ctx.fill();
+      ctx.restore();
+    }
+  }
 
   // 銃の描画。塗装で色が変わり、付けたアタッチメントが実際に生えて見える。
   // ctx は照準方向へ回転済み (+x が銃口の向き)。
@@ -6145,6 +6768,16 @@
       ctx.fillRect(-5, 9 + legSwing * 0.3, 11, 3);
       return;
     }
+    if (style === "merc") {
+      // 黒のボディスーツに濃いグレーのブーツ
+      ctx.fillStyle = "#141416";
+      ctx.fillRect(-5, -11 - legSwing * 0.3, 11, 7);
+      ctx.fillRect(-5, 4 + legSwing * 0.3, 11, 7);
+      ctx.fillStyle = "#3a3e45";
+      ctx.fillRect(2, -11 - legSwing * 0.3, 4, 7);
+      ctx.fillRect(2, 4 + legSwing * 0.3, 4, 7);
+      return;
+    }
     ctx.fillStyle = "#2a2a22";
     ctx.fillRect(-4, -10 - legSwing * 0.3, 9, 6);
     ctx.fillRect(-4, 4 + legSwing * 0.3, 9, 6);
@@ -6229,6 +6862,36 @@
       ctx.strokeRect(-13 - back, -13, 27, 27);
       return;
     }
+    if (style === "merc") {
+      // 全身黒のボディスーツ。差し色はいっさい入れず、濃淡だけで作る。
+      // 背中には二本の刀を交差させて背負っている。
+      ctx.strokeStyle = "#2f333a"; ctx.lineWidth = 3.6; ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(-3 - back, -12); ctx.lineTo(-18 - back, 8);
+      ctx.moveTo(-3 - back, 12); ctx.lineTo(-18 - back, -8);
+      ctx.stroke();
+      ctx.lineCap = "butt";
+      ctx.fillStyle = "#141416";
+      ctx.beginPath();
+      ctx.ellipse(-back, 0, SOLDIER_R - 1, SOLDIER_R + 1, 0, 0, 6.283);
+      ctx.fill();
+      ctx.strokeStyle = "#4c525b"; ctx.lineWidth = 1.4; ctx.stroke();
+      // 肩当て
+      ctx.fillStyle = "#33373e";
+      ctx.beginPath(); ctx.ellipse(-1 - back, -10.5, 6, 4.6, 0.35, 0, 6.283); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(-1 - back, 10.5, 6, 4.6, -0.35, 0, 6.283); ctx.fill();
+      // 胸のクロスベルト
+      ctx.strokeStyle = "#0a0a0b"; ctx.lineWidth = 2.8;
+      ctx.beginPath();
+      ctx.moveTo(7 - back, -9); ctx.lineTo(-9 - back, 8);
+      ctx.moveTo(7 - back, 9); ctx.lineTo(-9 - back, -8);
+      ctx.stroke();
+      // 肩章だけチーム色。頭で隠れない位置に置いて、敵味方をここで見分ける。
+      ctx.fillStyle = c.a;
+      ctx.fillRect(-4 - back, -13, 7, 3.4);
+      ctx.fillRect(-4 - back, 9.6, 7, 3.4);
+      return;
+    }
     // 標準・迷彩系: 従来のシルエットに、スキンごとの模様を足す
     ctx.fillStyle = c.u;
     ctx.beginPath();
@@ -6306,6 +6969,21 @@
       ctx.fillStyle = "#1c1430";
       ctx.fillRect(1, -4, 6, 3);
       ctx.fillRect(1, 1, 6, 3);
+      return;
+    }
+    if (style === "merc") {
+      // 黒い覆面。目だけが白く抜けている。
+      ctx.fillStyle = "#141416";
+      ctx.beginPath(); ctx.arc(0, 0, 8.8, 0, 6.283); ctx.fill();
+      ctx.strokeStyle = "#3a3e45"; ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.arc(0, 0, 8.8, 0, 6.283); ctx.stroke();
+      // 覆面の縫い目
+      ctx.beginPath(); ctx.moveTo(-7, 0); ctx.lineTo(7.5, 0); ctx.stroke();
+      for (const side of [-1, 1]) {
+        ctx.fillStyle = "#f2f5f8";
+        ctx.beginPath(); ctx.ellipse(3.6, side * 4, 3.6, 2.4, side * 0.5, 0, 6.283); ctx.fill();
+        ctx.strokeStyle = "#0a0a0b"; ctx.lineWidth = 1.2; ctx.stroke();
+      }
       return;
     }
     ctx.fillStyle = c.a;
@@ -6730,7 +7408,8 @@
       ctx.fillStyle = "rgba(0,0,0,0.62)"; ctx.fillRect(tx - bw / 2 - 1, ty + 3, bw + 2, 7);
       ctx.fillStyle = def.tankBar; ctx.fillRect(tx - bw / 2, ty + 4, bw * ratio, 5);
       ctx.font = "bold 12px -apple-system, sans-serif";
-      const label = driver ? `▣ ${driver.name}の戦車` : `▣ ${tank.name}`;
+      const kindName = tank.mech ? "ロボット" : "戦車";
+      const label = driver ? `▣ ${driver.name}の${kindName}` : `▣ ${tank.mech ? "🤖 " : ""}${tank.name}`;
       ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.82)"; ctx.strokeText(label, tx, ty);
       ctx.fillStyle = def.text; ctx.fillText(label, tx, ty);
     }
@@ -6916,7 +7595,7 @@
       el.armorText.textContent = Math.ceil(me.armor || 0);
       el.shieldText.textContent = Math.ceil(me.shield || 0);
       if (me.dead) el.shieldState.textContent = "装備を再支給中";
-      else if (tank) el.shieldState.textContent = "装備は車内に保管";
+      else if (tank) el.shieldState.textContent = tank.mech ? "装備は機内に保管" : "装備は車内に保管";
       else if (me.shield <= 0) el.shieldState.textContent = "盾破損・基地で修理";
       else if (me.parryUntil > 0 && now() <= me.parryUntil) el.shieldState.textContent = "PARRY受付中！";
       else if (me.shieldRaised) el.shieldState.textContent = "盾展開中・正面防御";
@@ -6931,7 +7610,7 @@
         el.recovery.textContent = "基地陥落・次に倒れたら脱落";
         el.recovery.classList.add("waiting");
       } else if (tank) {
-        el.recovery.textContent = "戦車装甲";
+        el.recovery.textContent = tank.mech ? "ロボット装甲" : "戦車装甲";
         el.recovery.classList.remove("waiting");
       } else if (inFriendlyBase(me) && me.hp < me.maxHp - 0.05) {
         el.recovery.textContent = `基地で回復中 +${BASE_HEAL_PER_SEC}/秒`;
@@ -6950,12 +7629,18 @@
       el.xpFill.style.width = clamp(me.xp / (me.level * 3), 0, 1) * 100 + "%";
       const turret = me.turretId >= 0 ? G.turrets.find((x) => x.id === me.turretId && !x.dead) : null;
       if (tank) {
-        const tw = TANK_WEAPONS[tank.weapon || 0];
+        const tw = tankWeaponOf(tank);
         const ready = now() - tank.lastShot >= tw.interval;
-        el.wName.textContent = `戦車・${tw.name}`;
+        el.wName.textContent = `${tank.mech ? "ロボット" : "戦車"}・${tw.name}`;
         el.ammo.textContent = ready ? "READY" : "装填中";
         el.ammo.classList.toggle("low", !ready);
-        el.grenade.textContent = isTouch ? "「武器」で主砲 / 機関銃を切替" : "数字キー・ホイールで主砲 / 機関銃";
+        if (tank.mech) {
+          const other = MECH_ARM_BY_KEY[(tank.arms || [])[(tank.weapon || 0) ? 0 : 1]];
+          const swap = other ? `${other.icon} ${other.name}` : "反対の腕";
+          el.grenade.textContent = isTouch ? `「武器」で${swap}に持ち替え` : `数字キー・ホイールで${swap}に持ち替え`;
+        } else {
+          el.grenade.textContent = isTouch ? "「武器」で主砲 / 機関銃を切替" : "数字キー・ホイールで主砲 / 機関銃";
+        }
       } else if (turret) {
         el.wName.textContent = "機関銃座・重機関銃";
         el.ammo.textContent = "∞";
@@ -6992,14 +7677,18 @@
         const left = Math.max(0, (SWORD_PULL_MS - rock.progress) / 1000);
         hint = rock.progress > 0
           ? `剣を抜いている… あと ${left.toFixed(1)} 秒`
-          : (isTouch ? "「戦車」を押し続けて剣を抜く" : "E を押し続けて剣を抜く");
-      } else if (!me.dead && tank) hint = isTouch ? "「戦車」で降りる" : "E：戦車から降りる";
-      else if (!me.dead && me.turretId >= 0) hint = isTouch ? "「戦車」で銃座から離れる" : "E：銃座から離れる";
+          : (isTouch ? "「アクション」を押し続けて剣を抜く" : "E を押し続けて剣を抜く");
+      } else if (!me.dead && tank) {
+        const kindName = tank.mech ? "ロボット" : "戦車";
+        hint = isTouch ? `「アクション」で${kindName}から降りる` : `E：${kindName}から降りる`;
+      } else if (!me.dead && me.turretId >= 0) hint = isTouch ? "「アクション」で銃座から離れる" : "E：銃座から離れる";
       else if (!me.dead) {
-        const nearby = G.tanks.some((x) => !x.dead && x.team === me.team && x.driverId < 0 && dist2(me.x, me.y, x.x, x.y) < 78 ** 2);
+        const nearby = G.tanks.find((x) => !x.dead && x.team === me.team && x.driverId < 0 && dist2(me.x, me.y, x.x, x.y) < 78 ** 2);
         const nearTurret = G.turrets.some((x) => !x.dead && x.gunnerId < 0 && dist2(me.x, me.y, x.x, x.y) < TURRET_MOUNT_R ** 2);
-        if (nearby) hint = isTouch ? "「戦車」で乗り込む" : "E：戦車に乗る";
-        else if (nearTurret) hint = isTouch ? "「戦車」で銃座に取り付く" : "E：機関銃座に取り付く";
+        if (nearby) {
+          const kindName = nearby.mech ? "ロボット" : "戦車";
+          hint = isTouch ? `「アクション」で${kindName}に乗る` : `E：${kindName}に乗る`;
+        } else if (nearTurret) hint = isTouch ? "「アクション」で銃座に取り付く" : "E：機関銃座に取り付く";
       }
       el.vehicleHint.textContent = hint;
       el.vehicleHint.classList.toggle("hidden", !hint);
@@ -7134,14 +7823,20 @@
     {
       key: "turret", label: "機関銃座に取り付く",
       hint: "射撃場のまわりに3つあります。近づいて E キーです。",
-      hintTouch: "射撃場のまわりに3つあります。近づいて「戦車」ボタンです。",
+      hintTouch: "射撃場のまわりに3つあります。近づいて「アクション」ボタンです。",
       done: (c, me) => me.turretId >= 0,
     },
     {
       key: "tank", label: "戦車に乗る",
       hint: "自分の基地のそばにあります。近づいて E キーです。",
-      hintTouch: "自分の基地のそばにあります。近づいて「戦車」ボタンです。",
-      done: (c, me) => me.vehicleId >= 0,
+      hintTouch: "自分の基地のそばにあります。近づいて「アクション」ボタンです。",
+      done: (c, me) => !!ridingVehicle(me, false),
+    },
+    {
+      key: "mech", label: "ロボットに乗る",
+      hint: "戦車とは反対がわの基地わきに配備されています。近づいて E キーです。",
+      hintTouch: "戦車とは反対がわの基地わきに配備されています。近づいて「アクション」ボタンです。",
+      done: (c, me) => !!ridingVehicle(me, true),
     },
     {
       key: "base", label: "自分の基地に戻る",
@@ -7151,6 +7846,14 @@
   ];
 
   let training = null;
+
+  // いま乗っている乗り物。wantMech が true ならロボットのときだけ返す。
+  function ridingVehicle(me, wantMech) {
+    if (!me || me.vehicleId < 0) return null;
+    const v = G.tanks.find((x) => x.id === me.vehicleId);
+    if (!v) return null;
+    return !!v.mech === wantMech ? v : null;
+  }
 
   // 試合の開始時に、実績の集計と練習メニューをまとめて初期化する
   function beginMatchTracking() {
@@ -7269,6 +7972,7 @@
   //  試合とは完全に別のループで動く (G には触らない)。
   // ============================================================
   const GARDEN_W = 1480, GARDEN_H = 1000;
+  const MECH_PAD = { x: 985, y: 395 };   // 格納庫のわきの駐機場
 
   const Garden = {
     ready: false,
@@ -7279,6 +7983,9 @@
     props: [],
     npcs: [],
     near: null,
+    // 駐機してあるロボット。乗るとプレイヤーがこの位置になる。
+    mech: { x: MECH_PAD.x, y: MECH_PAD.y, angle: -Math.PI / 2, phase: 0 },
+    riding: false,
 
     init() {
       if (this.ready) { this.syncNpcs(); return; }
@@ -7294,6 +8001,8 @@
           x: 1100, y: 520, w: 250, h: 150, roof: "#4a3068", wall: "#6f4a9c", open: () => openGacha() },
         { id: "squad", icon: "📋", label: "編成テント",   sub: "キャラクターと武器を決める",
           x: 300, y: 800, w: 230, h: 130, roof: "#2f5a3c", wall: "#3f7d53", open: () => openSquad() },
+        { id: "hangar", icon: "🤖", label: "ロボット格納庫", sub: "ロボットのフレーム・色・武器を変える",
+          x: 590, y: 110, w: 290, h: 170, roof: "#39404a", wall: "#697585", open: () => openHangar() },
         { id: "sortie", icon: "🚩", label: "出撃ゲート",  sub: "メニューへ戻って戦いに行く",
           x: 950, y: 800, w: 230, h: 130, roof: "#5a5320", wall: "#8a7c30", open: () => { leaveGarden(); openMenu(); } },
       ];
@@ -7305,6 +8014,7 @@
         const y = 90 + seedRand() * (GARDEN_H - 150);
         if (this.overlaps(x, y, 80)) continue;
         if (Math.abs(x - GARDEN_W / 2) < 120 && y > 560) continue;   // 中央の広場は空けておく
+        if (dist2(x, y, MECH_PAD.x, MECH_PAD.y) < 120 * 120) continue; // ロボットの駐機場も空けておく
         const r = seedRand();
         const kind = r < 0.34 ? "tree" : r < 0.58 ? "bush" : r < 0.76 ? "crate" : r < 0.9 ? "sandbag" : "barrel";
         this.props.push({ kind, x, y, s: 0.82 + seedRand() * 0.5 });
@@ -7325,7 +8035,7 @@
     syncNpcs() {
       const spots = [
         { x: 520, y: 660 }, { x: 640, y: 720 }, { x: 840, y: 700 }, { x: 950, y: 640 },
-        { x: 470, y: 420 }, { x: 1010, y: 400 }, { x: 700, y: 480 }, { x: 780, y: 360 },
+        { x: 470, y: 420 }, { x: 1180, y: 400 }, { x: 700, y: 480 }, { x: 780, y: 400 },
         { x: 380, y: 260 }, { x: 1150, y: 300 },
       ];
       const keys = CLASSES.map((c) => c.key).filter((k) => hasChar(k) && k !== playerClass);
@@ -7352,7 +8062,9 @@
       const m = Math.hypot(mvx, mvy);
       if (m > 1) { mvx /= m; mvy /= m; }
       p.moving = m > 0.05;
-      const speed = 235 * (keys["shift"] ? 1.5 : 1);
+      // ロボットに乗っている間はその機体の速さで歩く
+      const baseSpeed = this.riding ? mechFrame().speed * 1.15 : 235;
+      const speed = baseSpeed * (keys["shift"] ? 1.5 : 1);
       let nx = clamp(p.x + mvx * speed * dt, 42, GARDEN_W - 42);
       let ny = clamp(p.y + mvy * speed * dt, 96, GARDEN_H - 42);
       // 建物の中には入り込めない (入口の前で止まる)
@@ -7388,17 +8100,36 @@
         }
       }
 
-      // 近くの施設をさがす (入口の前に立つと入れる)
-      let near = null, bestD = 130 * 130;
-      for (const f of this.facilities) {
-        const dx = p.x - (f.x + f.w / 2), dy = p.y - (f.y + f.h + 26);
-        const d = dx * dx + dy * dy;
-        if (d < bestD) { bestD = d; near = f; }
+      // 乗っているロボットを自分と同じ位置に置いておく
+      if (this.riding) {
+        this.mech.x = p.x; this.mech.y = p.y; this.mech.angle = p.angle;
+        if (p.moving) this.mech.phase += dt * 9;
       }
+
+      // 近くの「入れるもの」をさがす。ロボットに乗っている間は降りることだけできる。
+      let near = null;
+      if (this.riding) {
+        near = { icon: "🤖", label: mechDisplayName(), sub: "地面に降りる", verb: "降りる",
+          open: () => this.dismountMech() };
+      } else {
+        let bestD = 130 * 130;
+        for (const f of this.facilities) {
+          const dx = p.x - (f.x + f.w / 2), dy = p.y - (f.y + f.h + 26);
+          const d = dx * dx + dy * dy;
+          if (d < bestD) { bestD = d; near = f; }
+        }
+        const md = dist2(p.x, p.y, this.mech.x, this.mech.y + 22);
+        if (md < bestD) {
+          near = { icon: "🤖", label: mechDisplayName(), sub: "乗って拠点で動かしてみる", verb: "乗る",
+            open: () => this.mountMech() };
+        }
+      }
+      // 施設のときだけ入口を光らせたいので、施設以外は near に入れても照合されない
       this.near = near;
       if (near) {
         el.gardenPrompt.innerHTML =
-          `${near.icon} ${esc(near.label)}　<span class="key">${isTouch ? "「入る」" : "E"}</span>で入る<em>${esc(near.sub)}</em>`;
+          `${near.icon} ${esc(near.label)}　<span class="key">${isTouch ? "「アクション」" : "E"}</span>で` +
+          `${near.verb || "入る"}<em>${esc(near.sub)}</em>`;
         el.gardenPrompt.classList.remove("hidden");
       } else {
         el.gardenPrompt.classList.add("hidden");
@@ -7413,6 +8144,20 @@
       // カメラ
       this.cam.x = clamp(p.x - viewW() / 2, 0, Math.max(0, GARDEN_W - viewW()));
       this.cam.y = clamp(p.y - viewH() / 2, 0, Math.max(0, GARDEN_H - viewH()));
+    },
+
+    mountMech() {
+      this.riding = true;
+      const p = this.player;
+      p.x = this.mech.x; p.y = this.mech.y; p.angle = this.mech.angle;
+    },
+
+    // 降りた機体はその場に残る。自分は横へ一歩ずれる。
+    dismountMech() {
+      this.riding = false;
+      const p = this.player;
+      p.x = clamp(p.x + Math.cos(p.angle + Math.PI / 2) * 54, 42, GARDEN_W - 42);
+      p.y = clamp(p.y + Math.sin(p.angle + Math.PI / 2) * 54, 96, GARDEN_H - 42);
     },
 
     render() {
@@ -7430,7 +8175,12 @@
       for (const pr of this.props) drawables.push({ y: pr.y, draw: () => this.drawProp(pr) });
       for (const n of this.npcs) drawables.push({ y: n.y, draw: () => this.drawPerson(n.x, n.y, n.angle, n.legPhase, n.moving, CLASS_BY_KEY[n.key], false) });
       const p = this.player;
-      drawables.push({ y: p.y, draw: () => this.drawPerson(p.x, p.y, p.angle, p.legPhase, p.moving, CLASS_BY_KEY[playerClass], true) });
+      if (this.riding) {
+        drawables.push({ y: p.y, draw: () => this.drawMech(p.x, p.y, p.angle, this.mech.phase, p.moving) });
+      } else {
+        drawables.push({ y: this.mech.y, draw: () => this.drawMech(this.mech.x, this.mech.y, this.mech.angle, 0, false) });
+        drawables.push({ y: p.y, draw: () => this.drawPerson(p.x, p.y, p.angle, p.legPhase, p.moving, CLASS_BY_KEY[playerClass], true) });
+      }
       drawables.sort((a, b) => a.y - b.y);
       for (const d of drawables) d.draw();
       ctx.restore();
@@ -7602,11 +8352,33 @@
       ctx.restore();
     },
 
+    // 駐機中 / 乗っているロボット
+    drawMech(x, y, angle, phase, moving) {
+      const frame = mechFrame();
+      ctx.fillStyle = "rgba(0,0,0,0.3)";
+      ctx.beginPath(); ctx.ellipse(x + 4, y + 9, 30 * frame.scale, 23 * frame.scale, 0, 0, 6.283); ctx.fill();
+      drawMechShape(ctx, {
+        x, y, angle, turretAngle: angle,
+        frame: mechSetup.frame, paint: mechSetup.paint, arms: mechSetup.arms,
+        moving, phase, accent: YOU_ACCENT, muzzleSide: -1, muzzleAge: 9999,
+      });
+      const label = `🤖 ${mechDisplayName()}`;
+      ctx.font = "bold 13px -apple-system, 'Hiragino Sans', system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.75)";
+      ctx.strokeText(label, x, y - 34 * frame.scale);
+      ctx.fillStyle = YOU_ACCENT;
+      ctx.fillText(label, x, y - 34 * frame.scale);
+      ctx.textAlign = "left";
+    },
+
     // 拠点に立っている人。戦場の兵士と同じ作りで、拠点では少し大きめに描く。
     drawPerson(x, y, angle, legPhase, moving, char, isYou) {
       const def = teamDef(playerTeam);
-      const uniform = isYou ? YOU_UNIFORM : def.uniform;
-      const accent = isYou ? YOU_ACCENT : def.accent;
+      // 専用の見た目を持つキャラは、拠点でもその配色で立たせる
+      const merc = !!(char && char.bodyStyle === "merc");
+      const uniform = merc ? "#141416" : isYou ? YOU_UNIFORM : def.uniform;
+      const accent = merc ? "#33373e" : isYou ? YOU_ACCENT : def.accent;
       const R = 19;
       ctx.save();
       ctx.translate(x, y);
@@ -7661,11 +8433,18 @@
         ctx.fillStyle = "#caa06b";
         ctx.beginPath(); ctx.arc(R * 0.82, R * 0.14, R * 0.19, 0, 6.283); ctx.fill();
       }
-      // 頭 (ヘルメット)
-      ctx.fillStyle = accent;
+      // 頭 (ヘルメット。黒衣の傭兵だけは覆面に白い目)
+      ctx.fillStyle = merc ? "#141416" : accent;
       ctx.beginPath(); ctx.arc(R * 0.1, 0, R * 0.46, 0, 6.283); ctx.fill();
-      ctx.fillStyle = "rgba(0,0,0,0.28)";
-      ctx.beginPath(); ctx.arc(R * 0.1, 0, R * 0.46, -0.75, 0.75); ctx.fill();
+      if (merc) {
+        for (const side of [-1, 1]) {
+          ctx.fillStyle = "#eef1f4";
+          ctx.beginPath(); ctx.ellipse(R * 0.32, side * R * 0.19, R * 0.15, R * 0.1, side * 0.55, 0, 6.283); ctx.fill();
+        }
+      } else {
+        ctx.fillStyle = "rgba(0,0,0,0.28)";
+        ctx.beginPath(); ctx.arc(R * 0.1, 0, R * 0.46, -0.75, 0.75); ctx.fill();
+      }
       ctx.strokeStyle = "rgba(0,0,0,0.35)"; ctx.lineWidth = 1.2;
       ctx.beginPath(); ctx.arc(R * 0.1, 0, R * 0.46, 0, 6.283); ctx.stroke();
       ctx.restore();
@@ -7705,6 +8484,7 @@
     spectating = false;
     Garden.init();
     Garden.syncNpcs();
+    Garden.riding = false;
     clearGameInput();
     localInput.interactEdge = false;
     gardenEnterEdge = false;
@@ -7724,6 +8504,7 @@
 
   function leaveGarden() {
     scene = "menu";
+    Garden.riding = false;
     el.gardenHud.classList.add("hidden");
     el.gardenTouch.classList.add("hidden");
     el.gardenPrompt.classList.add("hidden");
@@ -7736,6 +8517,7 @@
     el.shop.classList.add("hidden");
     el.bench.classList.add("hidden");
     el.forge.classList.add("hidden");
+    el.hangar.classList.add("hidden");
     el.gacha.classList.add("hidden");
     el.squad.classList.add("hidden");
   }
@@ -7743,7 +8525,7 @@
   const hubPanelOpen = () =>
     !el.shop.classList.contains("hidden") || !el.bench.classList.contains("hidden") ||
     !el.forge.classList.contains("hidden") || !el.gacha.classList.contains("hidden") ||
-    !el.squad.classList.contains("hidden");
+    !el.squad.classList.contains("hidden") || !el.hangar.classList.contains("hidden");
 
   // ============================================================
   //  ゲームループ
@@ -7762,6 +8544,7 @@
       if (!hubPanelOpen()) Garden.update(dt);
       else { localInput.interactEdge = false; gardenEnterEdge = false; }
       Garden.render();
+      if (!el.hangar.classList.contains("hidden")) drawHangarPreview(dt);
       return;
     }
 
@@ -7805,6 +8588,7 @@
     for (const tank of G.tanks) {
       tank.x = lerp(tank.x, tank.rx, clamp(dt * 11, 0, 1));
       tank.y = lerp(tank.y, tank.ry, clamp(dt * 11, 0, 1));
+      if (tank.mech && tank.moving) tank.legPhase = (tank.legPhase || 0) + dt * 9;
     }
     for (const dog of G.dogs) {
       dog.x = lerp(dog.x, dog.rx, clamp(dt * 14, 0, 1));
@@ -8461,6 +9245,7 @@
         s.lastDamagedAt = now() - (AUTO_HEAL_DELAY_MS - (ns.rh || 0));
         s.kills = ns.ki || 0; s.deaths = ns.de || 0;
         s.moving = ns.mv ? true : false; s.noiseRadius = ns.nr || 0;
+        s.bladeSide = ns.bs || 0; s.gunSide = ns.gs || 0;
         if (ns.fl) s.muzzle = now();
         s.rx = ns.x; s.ry = ns.y;
         if (s.x == null) { s.x = ns.x; s.y = ns.y; }
@@ -8492,7 +9277,11 @@
         tank.team = nt.tm; tank.name = nt.n; tank.hp = nt.hp; tank.maxHp = nt.mh;
         tank.dead = !!nt.d; tank.angle = nt.a; tank.turretAngle = nt.ta; tank.driverId = nt.dr;
         tank.rx = nt.x; tank.ry = nt.y;
-        tank.lastShot = now() - (1450 - (nt.cd || 0));
+        tank.weapon = nt.w || 0;
+        tank.moving = !!nt.mv;
+        tank.mech = !!nt.mc;
+        if (nt.mc) { tank.frame = nt.mf; tank.paint = nt.mp; tank.arms = nt.ma || []; }
+        tank.lastShot = now() - ((nt.iv || 1450) - (nt.cd || 0));
         if (nt.fl) tank.muzzle = now();
       }
       G.tanks = G.tanks.filter((tank) => tankSeen.has(tank.id));
@@ -8567,6 +9356,7 @@
         pr: Math.max(0, o.parryUntil - stamp), pc: Math.max(0, o.parryCooldownUntil - stamp), st: Math.max(0, o.stunnedUntil - stamp),
         rh: Math.max(0, AUTO_HEAL_DELAY_MS - (stamp - o.lastDamagedAt)),
         ki: o.kills, de: o.deaths, mv: o.moving ? 1 : 0, nr: o.noiseRadius || 0,
+        bs: o.bladeSide || 0, gs: o.gunSide || 0,
         fl: (stamp - o.muzzle < (WEAPONS[o.weapon].melee ? 190 : 60)) ? 1 : 0,
       }));
       const dg = G.dogs.map((dog) => ({
@@ -8574,11 +9364,17 @@
         a: +dog.angle.toFixed(2), hp: Math.round(dog.hp), mh: dog.maxHp, d: dog.dead ? 1 : 0,
         mv: dog.moving ? 1 : 0, bt: stamp - dog.biteAt < 180 ? 1 : 0,
       }));
-      const tn = G.tanks.map((tank) => ({
-        id: tank.id, tm: tank.team, n: tank.name, x: Math.round(tank.x), y: Math.round(tank.y),
-        a: +tank.angle.toFixed(2), ta: +tank.turretAngle.toFixed(2), hp: Math.round(tank.hp), mh: tank.maxHp,
-        d: tank.dead ? 1 : 0, dr: tank.driverId, cd: Math.max(0, 1450 - (stamp - tank.lastShot)), fl: stamp - tank.muzzle < 90 ? 1 : 0,
-      }));
+      const tn = G.tanks.map((tank) => {
+        const tw = tankWeaponOf(tank);
+        const o = {
+          id: tank.id, tm: tank.team, n: tank.name, x: Math.round(tank.x), y: Math.round(tank.y),
+          a: +tank.angle.toFixed(2), ta: +tank.turretAngle.toFixed(2), hp: Math.round(tank.hp), mh: tank.maxHp,
+          d: tank.dead ? 1 : 0, dr: tank.driverId, w: tank.weapon || 0, mv: tank.moving ? 1 : 0,
+          iv: tw.interval, cd: Math.max(0, tw.interval - (stamp - tank.lastShot)), fl: stamp - tank.muzzle < 90 ? 1 : 0,
+        };
+        if (tank.mech) { o.mc = 1; o.mf = tank.frame; o.mp = tank.paint; o.ma = tank.arms; }
+        return o;
+      });
       const b = G.bullets.map((x) => ({
         x: Math.round(x.x), y: Math.round(x.y), vx: Math.round(x.vx), vy: Math.round(x.vy),
         sn: x.len > 20 ? 1 : 0, sh: x.kind === "shell" ? 1 : 0,
@@ -8934,6 +9730,24 @@
       if (b && !b.disabled) forgeAction(b.dataset.forge);
     });
 
+    // ---- ロボット格納庫 ----
+    document.getElementById("btn-hangar-close").addEventListener("click", () => el.hangar.classList.add("hidden"));
+    el.hangarTabs.addEventListener("click", (e) => {
+      const b = e.target.closest && e.target.closest("[data-hangar-tab]");
+      if (!b) return;
+      hangarTab = b.dataset.hangarTab;
+      renderHangar();
+    });
+    el.hangarItems.addEventListener("click", (e) => {
+      const b = e.target.closest && e.target.closest("button[data-hangar]");
+      if (b && !b.disabled) hangarAction(b.dataset.hangarTab, b.dataset.hangar);
+    });
+    el.hangarName.addEventListener("input", () => {
+      mechSetup.name = el.hangarName.value.slice(0, 12);
+      saveProgress();
+      renderHangarSpec();
+    });
+
     // ---- 徴兵ガチャ ----
     document.getElementById("btn-gacha-close").addEventListener("click", () => el.gacha.classList.add("hidden"));
     document.getElementById("btn-gacha-one").addEventListener("click", () => doGacha(1));
@@ -8973,8 +9787,8 @@
     });
 
     el.menuHint.textContent = isTouch
-      ? "スマホ: 左で移動・右で照準＆射撃・専用ボタンでグレネード/戦車"
-      : "PC: WASDで移動・マウスで射撃・Gでグレネード・Eで戦車";
+      ? "スマホ: 左で移動・右で照準＆射撃・専用ボタンでグレネード/乗り物"
+      : "PC: WASDで移動・マウスで射撃・Gでグレネード・Eで乗り降り";
   }
 
   function openMenu() {
