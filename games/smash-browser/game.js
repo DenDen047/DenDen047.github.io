@@ -252,6 +252,17 @@ const COUNTER_MIN_DMG = 10;   // 反撃ダメージの最低値
 const COUNTER_HITSTOP = 8;    // カウンター成功時の停止フレーム (演出)
 let hitstop = 0;              // > 0 の間はゲーム進行を停止 (フリーズ演出)
 
+// 強攻撃の溜め (チャージ)
+const CHARGE_MAX = 66;        // 最大まで溜まるフレーム数 (約 1.1 秒)
+const CHARGE_HOLD_MAX = 48;   // 最大溜め到達後、自動で放つまでのフレーム数
+const CHARGE_DMG_BONUS = 0.9; // 満溜めのダメージ倍率 = 1 + この値
+const CHARGE_KB_BONUS = 0.45; // 満溜めのノックバック倍率 = 1 + この値
+
+// 弱攻撃の連打 (ボタン長押し)
+const JAB_RAPID_FROM = 2;     // 連続 N 発目から高速の刻みに移行
+const JAB_FINISH_AT = 10;     // 刻み N 発でフィニッシュを出してチェーン終了
+const JAB_LINK_FRAMES = 20;   // 次の一撃までにこのフレーム数を超えるとチェーン切れ
+
 // =============================================================
 // 入力管理
 // =============================================================
@@ -394,6 +405,12 @@ const sfx = {
   fireball:    () => { blip({ type: 'sawtooth', freq: 220, freqEnd: 90, duration: 0.28, volume: 0.5 });
                        noiseBurst({ duration: 0.25, volume: 0.4, lowpass: 700 }); },
   laser:       () => blip({ type: 'square', freq: 1400, freqEnd: 600, duration: 0.12, volume: 0.4 }),
+  jab:         () => blip({ type: 'square', freq: 900, freqEnd: 620, duration: 0.04, volume: 0.22 }),
+  charge:      () => blip({ type: 'triangle', freq: 260, freqEnd: 700, duration: 0.16, volume: 0.2 }),
+  chargeFull:  () => { blip({ type: 'square', freq: 1200, freqEnd: 1800, duration: 0.09, volume: 0.35 });
+                       blip({ type: 'triangle', freq: 600, freqEnd: 1200, duration: 0.14, volume: 0.25 }); },
+  chargeShot:  () => { blip({ type: 'sawtooth', freq: 420, freqEnd: 80, duration: 0.26, volume: 0.6 });
+                       noiseBurst({ duration: 0.22, volume: 0.5, lowpass: 1100 }); },
 };
 
 // =============================================================
@@ -409,10 +426,17 @@ function calculateKnockback(damage, attackPower) {
 // キャラクター描画 (Canvas プリミティブで合成)
 // 各関数: draw(ctx, x, y, w, h, facing, tint)
 // =============================================================
+// 体の前方向へ伸びる矩形 (facing = 1 なら右、-1 なら左へ伸びる)
+function fwdRect(ctx, x0, y, len, thick, facing) {
+  const l = Math.max(0, len);
+  ctx.fillRect(facing === 1 ? x0 : x0 - l, y, l, thick);
+}
+
 function drawKnight(ctx, x, y, w, h, facing, tint, state = {}) {
   const bob = state.bob || 0;
   const legShift = state.legShift || 0;
   const armShift = state.armShift || 0;
+  const armLift = state.armLift || 0;
   // 脚 (前後にスライド)
   ctx.fillStyle = '#7a8395';
   ctx.fillRect(x + 6 + legShift,    y + h - 8, 10, 8);
@@ -435,14 +459,15 @@ function drawKnight(ctx, x, y, w, h, facing, tint, state = {}) {
   // 剣 (持つ手は腕と一緒に振れる)
   ctx.fillStyle = '#dfe6f0';
   const sx = facing === 1 ? x + w + armShift : x - 4 - armShift;
-  ctx.fillRect(sx, y + 30 + bob, 4, 18);
+  ctx.fillRect(sx, y + 30 + bob + armLift, 4, 18);
   ctx.fillStyle = '#daa520';
-  ctx.fillRect(sx - 2, y + 28 + bob, 8, 3);
+  ctx.fillRect(sx - 2, y + 28 + bob + armLift, 8, 3);
 }
 function drawNinja(ctx, x, y, w, h, facing, tint, state = {}) {
   const bob = state.bob || 0;
   const legShift = state.legShift || 0;
   const armShift = state.armShift || 0;
+  const armLift = state.armLift || 0;
   const t = performance.now() / 100;
   const scarfWave = Math.sin(t) * 2 + (state.walking ? Math.sin(state.walking ? state.legShift * 2 : 0) * 2 : 0);
   // 脚 (色濃いめ・スライド)
@@ -470,12 +495,13 @@ function drawNinja(ctx, x, y, w, h, facing, tint, state = {}) {
   // クナイ (腕と一緒に振れる)
   ctx.fillStyle = '#bbb';
   const kx = facing === 1 ? x + w + armShift : x - 6 - armShift;
-  ctx.fillRect(kx, y + 32 + bob, 6, 3);
+  ctx.fillRect(kx, y + 32 + bob + armLift, 6, 3);
 }
 function drawRobot(ctx, x, y, w, h, facing, tint, state = {}) {
   const bob = state.bob || 0;
   const legShift = state.legShift || 0;
   const armShift = state.armShift || 0;
+  const armLift = state.armLift || 0;
   // メカ脚 (高さも変化させてピストン感)
   ctx.fillStyle = '#445566';
   const lH1 = 8 - Math.max(0, legShift);
@@ -510,6 +536,7 @@ function drawWizard(ctx, x, y, w, h, facing, tint, state = {}) {
   const bob = state.bob || 0;
   const legShift = state.legShift || 0;
   const armShift = state.armShift || 0;
+  const armLift = state.armLift || 0;
   // ローブ (台形 — 歩行時に裾が左右に揺れる)
   ctx.fillStyle = tint;
   ctx.beginPath();
@@ -549,15 +576,27 @@ function drawWizard(ctx, x, y, w, h, facing, tint, state = {}) {
   // 杖 (腕の振りに同期)
   ctx.fillStyle = '#7a4a1e';
   const wx = facing === 1 ? x + w + armShift : x - 8 - armShift;
-  ctx.fillRect(wx, y + 28 + bob, 8, 3);
+  ctx.fillRect(wx, y + 28 + bob + armLift, 8, 3);
   ctx.fillStyle = '#f1c40f';
-  ctx.fillRect(wx + (facing === 1 ? 6 : -2), y + 24 + bob, 4, 4);
-  ctx.fillRect(wx + (facing === 1 ? 4 : 0), y + 26 + bob, 8, 4);
+  ctx.fillRect(wx + (facing === 1 ? 6 : -2), y + 24 + bob + armLift, 4, 4);
+  ctx.fillRect(wx + (facing === 1 ? 4 : 0), y + 26 + bob + armLift, 8, 4);
 }
 
 function drawSumo(ctx, x, y, w, h, facing, tint, state = {}) {
   const bob = state.bob || 0;
   const legShift = state.legShift || 0;
+  const armShift = state.armShift || 0;
+  const armLift = state.armLift || 0;
+  // 突っ張り: 攻撃のたびに左右の手を入れ替えて押し出す
+  const altHand = (state.attackSeq || 0) % 2 === 0;
+  const reach = Math.max(-6, armShift * 1.3);
+  const ext1 = altHand ? reach : reach * 0.3;   // 手前の手
+  const ext2 = altHand ? reach * 0.3 : reach;   // 奥の手
+  const front = facing === 1 ? x + w - 14 : x + 14;
+  const armY1 = y + 22 + bob + armLift;
+  const armY2 = y + 36 + bob + armLift * 0.6;
+  // 奥の腕と張り手 (体より後ろに描く)
+  drawSumoArm(ctx, front, armY2, ext2, facing, '#d9a273', '#f0c69c');
   // 太い脚
   ctx.fillStyle = '#f5d0a0';
   ctx.fillRect(x + 2 + legShift,    y + h - 14, 14, 14);
@@ -583,15 +622,32 @@ function drawSumo(ctx, x, y, w, h, facing, tint, state = {}) {
   const eo = facing === 1 ? 1 : -1;
   ctx.fillRect(x + 14 + eo, y + 10 + bob, 3, 2);
   ctx.fillRect(x + w - 17 + eo, y + 10 + bob, 3, 2);
-  // 口
+  // 口 (攻撃中は気合いの声で開く)
   ctx.fillStyle = '#440';
-  ctx.fillRect(x + 16, y + 15 + bob, w - 32, 2);
+  ctx.fillRect(x + 16, y + 15 + bob, w - 32, state.attacking ? 4 : 2);
+  // 手前の腕と張り手 (突っ張りの押し手)
+  drawSumoArm(ctx, front, armY1, ext1, facing, '#e8bc8c', '#fff0da');
+}
+
+// 力士の腕 + 開いた手のひら (張り手)。ext が大きいほど前へ押し出す
+function drawSumoArm(ctx, front, y, ext, facing, armColor, palmColor) {
+  const len = 14 + ext;
+  ctx.fillStyle = armColor;
+  fwdRect(ctx, front, y + 2, len, 8, facing);
+  // 手のひら (指を割って開いた形)
+  const px = front + facing * Math.max(0, len - 2);
+  ctx.fillStyle = palmColor;
+  fwdRect(ctx, px, y - 3, 9, 14, facing);
+  ctx.fillStyle = armColor;
+  fwdRect(ctx, px + facing * 4, y + 1, 5, 1, facing);
+  fwdRect(ctx, px + facing * 4, y + 6, 5, 1, facing);
 }
 
 function drawPirate(ctx, x, y, w, h, facing, tint, state = {}) {
   const bob = state.bob || 0;
   const legShift = state.legShift || 0;
   const armShift = state.armShift || 0;
+  const armLift = state.armLift || 0;
   // 脚 (ブーツ)
   ctx.fillStyle = '#3a2a18';
   ctx.fillRect(x + 6 + legShift, y + h - 10, 10, 10);
@@ -636,14 +692,16 @@ function drawPirate(ctx, x, y, w, h, facing, tint, state = {}) {
   // フリントロック銃
   const px = facing === 1 ? x + w + armShift : x - 12 - armShift;
   ctx.fillStyle = '#3a2a18';
-  ctx.fillRect(px, y + 32 + bob, 12, 3);
+  ctx.fillRect(px, y + 32 + bob + armLift, 12, 3);
   ctx.fillStyle = '#444';
-  ctx.fillRect(px + (facing === 1 ? 8 : 0), y + 30 + bob, 4, 6);
+  ctx.fillRect(px + (facing === 1 ? 8 : 0), y + 30 + bob + armLift, 4, 6);
 }
 
 function drawDragon(ctx, x, y, w, h, facing, tint, state = {}) {
   const bob = state.bob || 0;
   const legShift = state.legShift || 0;
+  const armShift = state.armShift || 0;
+  const armLift = state.armLift || 0;
   // 尻尾
   ctx.fillStyle = tint;
   const tx = facing === 1 ? x - 10 : x + w;
@@ -689,12 +747,23 @@ function drawDragon(ctx, x, y, w, h, facing, tint, state = {}) {
   ctx.fillStyle = '#ff3030';
   const eyeX = facing === 1 ? x + w - 14 : x + 6;
   ctx.fillRect(eyeX, y + 8 + bob, 4, 4);
+  // 前脚 (攻撃時に爪を前へ突き出す)
+  const claw = Math.max(-4, armShift);
+  const clawX = facing === 1 ? x + w - 8 : x + 8;
+  const clawY = y + 28 + bob + armLift;
+  ctx.fillStyle = '#2a4a3a';
+  fwdRect(ctx, clawX, clawY, 12 + claw, 8, facing);
+  ctx.fillStyle = '#dccc60';
+  for (let i = 0; i < 3; i++) {
+    fwdRect(ctx, clawX + facing * (10 + Math.max(0, claw)), clawY - 2 + i * 5, 7, 2, facing);
+  }
 }
 
 function drawAlien(ctx, x, y, w, h, facing, tint, state = {}) {
   const bob = state.bob || 0;
   const legShift = state.legShift || 0;
   const armShift = state.armShift || 0;
+  const armLift = state.armLift || 0;
   // 脚 (細い)
   ctx.fillStyle = '#7c5b50';
   ctx.fillRect(x + 12 + legShift, y + h - 10, 5, 10);
@@ -735,13 +804,14 @@ function drawAlien(ctx, x, y, w, h, facing, tint, state = {}) {
   // 腕
   ctx.fillStyle = '#9bc99b';
   const aX = facing === 1 ? x + w - 10 + armShift : x + 5 - armShift;
-  ctx.fillRect(aX, y + 32 + bob, 5, 10);
+  ctx.fillRect(aX, y + 32 + bob + armLift, 5, 10);
 }
 
 function drawBoxer(ctx, x, y, w, h, facing, tint, state = {}) {
   const bob = state.bob || 0;
   const legShift = state.legShift || 0;
   const armShift = state.armShift || 0;
+  const armLift = state.armLift || 0;
   // 太もも (肌色)
   ctx.fillStyle = '#f5d0a0';
   ctx.fillRect(x + 6 + legShift, y + h - 18, 10, 8);
@@ -783,22 +853,31 @@ function drawBoxer(ctx, x, y, w, h, facing, tint, state = {}) {
   // マウスピース
   ctx.fillStyle = '#fff';
   ctx.fillRect(x + 14, y + 19 + bob, w - 28, 2);
-  // ボクシンググローブ (両手・前後にスウィング)
+  // ボクシンググローブ (攻撃中は左右交互のストレート)
+  const altGlove = (state.attackSeq || 0) % 2 === 0;
+  const leadMul = state.attacking ? (altGlove ? 1.5 : 0.45) : 1.5;
+  const rearMul = state.attacking ? (altGlove ? 0.45 : 1.5) : 0.5;
+  const gFront = facing === 1 ? x + w - 6 : x - 6;
   ctx.fillStyle = '#c0392b';
-  const gx1 = facing === 1 ? x + w - 6 + armShift * 1.5 : x - 6 - armShift * 1.5;
-  const gx2 = facing === 1 ? x - 4 - armShift * 0.5 : x + w - 6 + armShift * 0.5;
-  ctx.fillRect(gx1, y + 28 + bob, 12, 12);
-  ctx.fillRect(gx2, y + 32 + bob, 10, 10);
+  const gx1 = gFront + facing * armShift * leadMul;
+  const gx2 = state.attacking
+    ? gFront + facing * armShift * rearMul
+    : (facing === 1 ? x - 4 - armShift * 0.5 : x + w - 6 + armShift * 0.5);
+  const gy1 = y + 28 + bob + armLift;
+  const gy2 = y + 32 + bob + armLift * 0.7;
+  ctx.fillRect(gx1, gy1, 12, 12);
+  ctx.fillRect(gx2, gy2, 10, 10);
   // グローブの白ライン (手首)
   ctx.fillStyle = '#fff';
-  ctx.fillRect(gx1, y + 32 + bob, 12, 2);
-  ctx.fillRect(gx2, y + 35 + bob, 10, 2);
+  ctx.fillRect(gx1, gy1 + 4, 12, 2);
+  ctx.fillRect(gx2, gy2 + 3, 10, 2);
 }
 
 function drawIceMage(ctx, x, y, w, h, facing, tint, state = {}) {
   const bob = state.bob || 0;
   const legShift = state.legShift || 0;
   const armShift = state.armShift || 0;
+  const armLift = state.armLift || 0;
   // ローブ (台形・歩行で揺れる)
   ctx.fillStyle = tint;
   ctx.beginPath();
@@ -843,11 +922,11 @@ function drawIceMage(ctx, x, y, w, h, facing, tint, state = {}) {
   // 杖
   ctx.fillStyle = '#7a4a1e';
   const wx = facing === 1 ? x + w + armShift : x - 8 - armShift;
-  ctx.fillRect(wx, y + 28 + bob, 8, 3);
+  ctx.fillRect(wx, y + 28 + bob + armLift, 8, 3);
   // 氷クリスタル (菱形)
   ctx.fillStyle = '#80ddff';
   const cxIce = wx + 4;
-  const cyIce = y + 28 + bob;
+  const cyIce = y + 28 + bob + armLift;
   ctx.beginPath();
   ctx.moveTo(cxIce, cyIce - 6);
   ctx.lineTo(cxIce + 5, cyIce);
@@ -863,6 +942,7 @@ function drawVampire(ctx, x, y, w, h, facing, tint, state = {}) {
   const bob = state.bob || 0;
   const legShift = state.legShift || 0;
   const armShift = state.armShift || 0;
+  const armLift = state.armLift || 0;
   // マント (背景・台形)
   ctx.fillStyle = '#1a0a14';
   ctx.beginPath();
@@ -920,13 +1000,14 @@ function drawVampire(ctx, x, y, w, h, facing, tint, state = {}) {
   // 手 (前に出る)
   ctx.fillStyle = '#e8d8e0';
   const hx = facing === 1 ? x + w - 4 + armShift : x - 4 - armShift;
-  ctx.fillRect(hx, y + 30 + bob, 6, 8);
+  ctx.fillRect(hx, y + 30 + bob + armLift, 6, 8);
 }
 
 function drawSamurai(ctx, x, y, w, h, facing, tint, state = {}) {
   const bob = state.bob || 0;
   const legShift = state.legShift || 0;
   const armShift = state.armShift || 0;
+  const armLift = state.armLift || 0;
   // 袴 (台形)
   ctx.fillStyle = '#2a3040';
   ctx.beginPath();
@@ -973,13 +1054,13 @@ function drawSamurai(ctx, x, y, w, h, facing, tint, state = {}) {
   // 刀 (帯に差してある — 振りに同期)
   ctx.fillStyle = '#dfe6f0';
   const sx = facing === 1 ? x + w + armShift : x - 18 - armShift;
-  ctx.fillRect(sx, y + 30 + bob, 18, 3);
+  ctx.fillRect(sx, y + 30 + bob + armLift, 18, 3);
   // 鍔 (黒)
   ctx.fillStyle = '#0a0a14';
-  ctx.fillRect(sx + (facing === 1 ? -3 : 18), y + 28 + bob, 4, 7);
+  ctx.fillRect(sx + (facing === 1 ? -3 : 18), y + 28 + bob + armLift, 4, 7);
   // 柄 (赤)
   ctx.fillStyle = '#aa2030';
-  ctx.fillRect(sx + (facing === 1 ? -10 : 17), y + 30 + bob, 7, 3);
+  ctx.fillRect(sx + (facing === 1 ? -10 : 17), y + 30 + bob + armLift, 7, 3);
 }
 
 // =============================================================
@@ -1091,25 +1172,69 @@ class Player {
     this.manaCharge = 0;       // 魔導士のマナ充填カウンタ
     this.drainHits = 0;        // 吸血鬼のヒット蓄積
     this.frame = 0;            // 経過フレーム (コンボ判定用)
+    this.charging = false;     // 強攻撃を溜めている最中か
+    this.chargeFrames = 0;     // 溜めの経過フレーム
+    this.chargeHold = 0;       // 最大溜め到達後の保持フレーム
+    this.prevStrongKey = false;
+    this.prevLightKey = false;
+    this.jabChain = 0;         // 弱攻撃の連打段数
+    this.jabTimer = 0;         // 連打チェーンの残り猶予フレーム
+    this.attackSeq = 0;        // 攻撃回数 (突っ張りの左右交互などに使う)
     if (initial) this.hitCount = 0; // 必殺ゲージ。死亡しても引き継ぐ
   }
   computeAnimState() {
     const walking = this.onGround && Math.abs(this.vx) > 0.5;
     const airborne = !this.onGround;
     const phase = this.animPhase;
+    // 歩行の基本モーション
+    let bob = walking ? Math.abs(Math.sin(phase * 2)) * -2 : 0;   // 縦バウンド
+    let legShift = walking ? Math.sin(phase) * 3 : 0;             // 脚オフセット
+    let armShift = walking ? -Math.sin(phase) * 3 : 0;            // 腕の振り (正 = 前方向)
+    let armLift = 0;                                              // 腕の上下 (上攻撃/下攻撃)
+    let lunge = 0;                                                // 体ごとの踏み込み
+    const charging = this.charging;
+    const chargeRatio = charging ? this.chargeRatio() : 0;
+    const a = this.attackBox;
+    let swing = 0;
+    if (charging) {
+      // 溜め: 腕を引いて沈み込み、溜まるほど小刻みに震える
+      const tremor = Math.sin(this.frame * (0.5 + chargeRatio)) * (0.6 + chargeRatio * 1.8);
+      armShift = -5 - chargeRatio * 6 + tremor;
+      legShift = -2 - chargeRatio * 2;
+      bob = 1 + chargeRatio * 2 + tremor * 0.3;
+      lunge = -2 - chargeRatio * 3 + tremor * 0.4;
+    } else if (a) {
+      // 攻撃: 素早く押し出してゆっくり戻す
+      const maxLife = Math.max(1, a.maxLife || a.life || 1);
+      const prog = Math.min(1, Math.max(0, (maxLife - a.life + 1) / maxLife));
+      swing = prog < 0.35 ? prog / 0.35 : 1 - ((prog - 0.35) / 0.65) * 0.7;
+      const charge = a.charge || 0;
+      const reach = a.strong ? 18 + charge * 14 : (a.rapid ? 14 : a.finisher ? 20 : 15);
+      armShift = swing * reach;
+      legShift = swing * (a.strong ? 7 : 3);
+      bob = swing * (a.strong ? 2 : 1);
+      lunge = swing * (a.strong ? 5 + charge * 5 : (a.rapid ? 2 : 3));
+      if (a.dir === 'up') armLift = -swing * (14 + charge * 6);
+      else if (a.dir === 'down' || a.dir === 'spike' || a.dir === 'sweep') armLift = swing * (10 + charge * 4);
+    }
     return {
       walking,
       airborne,
-      // 縦バウンド (歩行時に体が上下)
-      bob: walking ? Math.abs(Math.sin(phase * 2)) * -2 : 0,
-      // 脚オフセット (片脚前/後 ±3px)
-      legShift: walking ? Math.sin(phase) * 3 : 0,
-      // 腕の振り (脚と逆位相)
-      armShift: walking ? -Math.sin(phase) * 3 : 0,
-      // 着地直後/シールド時は静止
+      bob,
+      legShift,
+      armShift,
+      armLift,
+      lunge,
       shielding: this.shielding,
       hitstun: this.hitstun,
-      attacking: !!this.attackBox,
+      attacking: !!a,
+      attackDir: a ? a.dir : null,
+      attackStrong: !!(a && a.strong),
+      attackRapid: !!(a && a.rapid),
+      attackSwing: swing,
+      attackSeq: this.attackSeq,
+      charging,
+      chargeRatio,
     };
   }
   update(opponent) {
@@ -1141,7 +1266,16 @@ class Player {
     }
     this.prevAttackKey = keys[c.attack] || keys[c.strong];
 
-    if (canControl && !this.shielding) {
+    // 溜めの維持・解放 (被弾やシールドで中断)
+    if (this.charging && (!canControl || this.shielding)) this.cancelCharge();
+    else if (this.charging) this.tickCharge();
+
+    if (canControl && !this.shielding && this.charging) {
+      // 溜め中は足を止めて構える。向きだけは変えられる
+      if (keys[c.left])  this.facing = -1;
+      if (keys[c.right]) this.facing = 1;
+      this.vx *= 0.7;
+    } else if (canControl && !this.shielding) {
       if (keys[c.left])  { this.vx -= MOVE_ACCEL * slowMul; this.facing = -1; }
       if (keys[c.right]) { this.vx += MOVE_ACCEL * slowMul; this.facing = 1; }
       // 必殺技 (相手に5回当てたら発動可)
@@ -1171,26 +1305,24 @@ class Player {
       if (keys[c.down] && !this.onGround && this.vy > -2) {
         this.vy += 0.6;
       }
-      // 攻撃 (方向判定: 上→上攻撃, 下→下攻撃, それ以外→横)
-      const wantStrong = keys[c.strong];
+      // 攻撃入力 (強は押した瞬間から溜め、弱は長押しで連打)
+      const strongHeld = keys[c.strong];
       const wantLight  = keys[c.attack];
       const wantRanged = keys[c.ranged] && this.character.ranged;
       if (wantRanged && this.attackCooldown <= 0) {
         this.fireRanged();
-      } else if ((wantStrong || wantLight) && this.attackCooldown <= 0) {
-        let dir = 'side';
-        if (keys[c.up]) dir = 'up';
-        else if (keys[c.down]) dir = 'down';
-        this.startAttack(wantStrong, dir);
-        sfx.swing();
-        this.syncAttackBox();
-        if (dir === 'up' || dir === 'down') {
-          spawnDirectionalSlash(this, this.attackBox, dir);
-        } else {
-          spawnSlash(this, this.attackBox);
-        }
+      } else if (strongHeld && !this.prevStrongKey && this.attackCooldown <= 0) {
+        this.beginCharge();
+      } else if (wantLight && this.attackCooldown <= 0) {
+        this.doLightAttack();
       }
     }
+    // 攻撃ボタンの立ち上がり検出用 (操作不能中も更新する)
+    this.prevStrongKey = keys[c.strong];
+    this.prevLightKey = keys[c.attack];
+    // 連打チェーンの寿命 (ボタンを離すか間が空いたら 1 発目に戻る)
+    if (this.jabTimer > 0) this.jabTimer--;
+    if (this.jabTimer <= 0 || !keys[c.attack]) this.jabChain = 0;
 
     // シールド消費/回復
     if (this.shielding) {
@@ -1314,7 +1446,8 @@ class Player {
           }
         } else {
           opponent.takeHit(this);
-          this.hitCount = Math.min(5, (this.hitCount || 0) + 1);
+          // 連打の刻みは必殺ゲージの溜まりを抑える
+          this.hitCount = Math.min(5, (this.hitCount || 0) + (a.rapid ? 0.34 : 1));
           if (a.lifesteal) {
             this.damage = Math.max(0, this.damage - a.lifesteal);
           }
@@ -1324,7 +1457,8 @@ class Player {
           else if (a.strong) sfx.strongHit();
           else sfx.weakHit();
           spawnHitSpark(hx, hy, a.strong, a.dir);
-          shake(a.strong ? 7 : 2, a.strong ? 18 : 6);
+          shake(a.strong ? 5 + (a.charge || 0) * 7 : (a.rapid ? 1 : 2),
+                a.strong ? 14 + Math.round((a.charge || 0) * 14) : 6);
         }
         if (this.attackBox) { // カウンターで消えていなければヒット消費を記録
           if (this.attackBox.multihit) this.attackBox.rehit = 8;
@@ -1347,7 +1481,19 @@ class Player {
       if (this.stocks > 0) this.respawn(false);
     }
   }
-  startAttack(strong, dir) {
+  startAttack(strong, dir, opts = {}) {
+    // 溜め量 (0〜1) と連打の段階
+    const charge = strong ? Math.min(1, opts.charge || 0) : 0;
+    const rapid = !strong && !!opts.rapid;
+    const finisher = !strong && !!opts.finisher;
+    // 飛び道具を持たないキャラは衝撃波が飛ばない分、溜めで間合いと威力が伸びる
+    const meleeOnly = !this.character.ranged;
+    const dmgMul = 1 + charge * (CHARGE_DMG_BONUS + (meleeOnly ? 0.2 : 0));
+    const reachMul = meleeOnly ? 1.9 : 1.0;
+    const kbMul = 1 + charge * CHARGE_KB_BONUS;
+    const jabDmg = rapid ? 0.40 : finisher ? 1.4 : 1;
+    const jabKb = rapid ? 0.35 : finisher ? 1.35 : 1;
+    const lightCD = rapid ? 7 : finisher ? 30 : 22;
     const sp = this.character.special || {};
     // 力士の怒り: 自ダメージが閾値を超えると攻撃力 +bonus
     let atk = this.character.atkMul;
@@ -1362,45 +1508,186 @@ class Player {
     let box;
     if (dir === 'up') {
       box = {
-        offsetX: -4, offsetY: -28,
-        w: this.w + 8, h: 32,
-        damage: (strong ? 18 : 8) * atk,
-        kbBonus: strong ? 1.5 : 1.0,
-        life: strong ? 12 : 9,
+        offsetX: -4 - charge * 5 * reachMul, offsetY: -28 - charge * 8 * reachMul,
+        w: this.w + 8 + charge * 10 * reachMul, h: 32 + charge * 10 * reachMul,
+        damage: (strong ? 18 : 8) * atk * dmgMul * jabDmg,
+        kbBonus: (strong ? 1.5 : 1.0) * kbMul * jabKb,
+        life: (strong ? 12 : rapid ? 6 : 9) + Math.round(charge * 5),
         dir: 'up',
         strong,
       };
-      this.attackCooldown = Math.max(6, (strong ? 42 : 22) - cdBonus);
+      this.attackCooldown = strong
+        ? Math.max(10, 42 + Math.round(charge * 10) - cdBonus)
+        : Math.max(5, lightCD - cdBonus);
     } else if (dir === 'down') {
       box = {
-        offsetX: -8, offsetY: this.h - 4,
-        w: this.w + 16, h: 26,
-        damage: (strong ? 16 : 9) * atk,
-        kbBonus: strong ? 1.4 : 1.0,
-        life: strong ? 12 : 9,
+        offsetX: -8 - charge * 5 * reachMul, offsetY: this.h - 4,
+        w: this.w + 16 + charge * 10 * reachMul, h: 26 + charge * 8 * reachMul,
+        damage: (strong ? 16 : 9) * atk * dmgMul * jabDmg,
+        kbBonus: (strong ? 1.4 : 1.0) * kbMul * jabKb,
+        life: (strong ? 12 : rapid ? 6 : 9) + Math.round(charge * 5),
         dir: this.onGround ? 'sweep' : 'spike', // 空中の下攻撃 = メテオ
         strong,
       };
-      this.attackCooldown = Math.max(6, (strong ? 42 : 22) - cdBonus);
+      this.attackCooldown = strong
+        ? Math.max(10, 42 + Math.round(charge * 10) - cdBonus)
+        : Math.max(5, lightCD - cdBonus);
     } else {
+      const sw = strong ? 56 + charge * 16 * reachMul : 34;
       box = {
-        offsetX: this.facing === 1 ? this.w - 4 : (strong ? -52 : -34),
+        offsetX: this.facing === 1 ? this.w - 4 : (strong ? -(sw - 4) : -34),
         offsetY: strong ? 6 : 12,
-        w: strong ? 56 : 34,
-        h: strong ? 46 : 34,
-        damage: (strong ? 22 : 9) * atk,
-        kbBonus: strong ? 1.6 : 1.0,
-        life: strong ? 14 : 10,
+        w: sw,
+        h: strong ? 46 + charge * 10 * reachMul : 34,
+        damage: (strong ? 22 : 9) * atk * dmgMul * jabDmg,
+        kbBonus: (strong ? 1.6 : 1.0) * kbMul * jabKb,
+        life: (strong ? 14 : rapid ? 6 : 10) + Math.round(charge * 5),
         dir: 'side',
         strong,
       };
-      this.attackCooldown = Math.max(6, (strong ? 45 : 22) - cdBonus);
-      if (strong) this.vx -= this.facing * 1.5;
+      this.attackCooldown = strong
+        ? Math.max(10, 45 + Math.round(charge * 10) - cdBonus)
+        : Math.max(5, lightCD - cdBonus);
+      if (strong) this.vx -= this.facing * (1.5 + charge * 2.5);
     }
+    box.charge = charge;
+    box.rapid = rapid;
+    box.finisher = finisher;
+    box.maxLife = box.life;
+    this.attackSeq++;
     this.attackBox = box;
+  }
+  // ---- 弱攻撃: ボタン長押しで連打 (刻み → フィニッシュ) ----
+  doLightAttack() {
+    const c = this.controls;
+    // 押しっぱなしで繋がっている間はチェーンが伸びる
+    if (this.prevLightKey && this.jabTimer > 0) this.jabChain++;
+    else this.jabChain = 1;
+    const rapid = this.jabChain >= JAB_RAPID_FROM && this.jabChain < JAB_FINISH_AT;
+    const finisher = this.jabChain >= JAB_FINISH_AT;
+    let dir = 'side';
+    if (keys[c.up]) dir = 'up';
+    else if (keys[c.down]) dir = 'down';
+    this.startAttack(false, dir, { rapid, finisher });
+    if (rapid) sfx.jab();
+    else sfx.swing();
+    this.syncAttackBox();
+    if (dir === 'up' || dir === 'down') spawnDirectionalSlash(this, this.attackBox, dir);
+    else spawnSlash(this, this.attackBox);
+    if (finisher) {
+      // 締めの一撃でチェーン終了
+      shake(4, 10);
+      this.jabChain = 0;
+      this.jabTimer = 0;
+      return;
+    }
+    this.jabTimer = this.attackCooldown + JAB_LINK_FRAMES;
+  }
+  // ---- 強攻撃: 溜め (チャージ) ----
+  chargeRatio() {
+    return Math.min(1, this.chargeFrames / CHARGE_MAX);
+  }
+  beginCharge() {
+    this.charging = true;
+    this.chargeFrames = 0;
+    this.chargeHold = 0;
+    this.jabChain = 0;
+    sfx.charge();
+    addParticle({
+      x: this.x + this.w / 2, y: this.y + this.h / 2,
+      vx: 0, vy: 0, life: 16, maxLife: 16,
+      size: 34, color: '#6fd6ff', shape: 'ring', gravity: 0,
+    });
+  }
+  cancelCharge() {
+    this.charging = false;
+    this.chargeFrames = 0;
+    this.chargeHold = 0;
+  }
+  tickCharge() {
+    const c = this.controls;
+    if (this.chargeFrames < CHARGE_MAX) {
+      this.chargeFrames++;
+      if (this.chargeFrames % 12 === 0) sfx.charge();
+      if (this.chargeFrames === CHARGE_MAX) sfx.chargeFull();
+    } else {
+      this.chargeHold++;
+    }
+    const ratio = this.chargeRatio();
+    // 吸い込まれる青い粒子
+    if (this.frame % 2 === 0) {
+      const ang = Math.random() * Math.PI * 2;
+      const rad = 44 + Math.random() * 30;
+      const pull = 2.2 + ratio * 2.6;
+      addParticle({
+        x: this.x + this.w / 2 + Math.cos(ang) * rad,
+        y: this.y + this.h / 2 + Math.sin(ang) * rad,
+        vx: -Math.cos(ang) * pull, vy: -Math.sin(ang) * pull,
+        life: 16, maxLife: 16, size: 3 + ratio * 3,
+        color: ratio >= 1 ? '#ffffff' : '#6fd6ff',
+        shape: 'streak', gravity: 0,
+      });
+    }
+    // 足元から広がる青いリング
+    if (this.chargeFrames % 14 === 0) {
+      addParticle({
+        x: this.x + this.w / 2, y: this.y + this.h / 2,
+        vx: 0, vy: 0, life: 18, maxLife: 18,
+        size: 24 + ratio * 18, color: '#4fc3ff', shape: 'ring', gravity: 0,
+      });
+    }
+    // ボタンを離す or 最大溜めのまま保持しきると発射
+    if (!keys[c.strong] || this.chargeHold >= CHARGE_HOLD_MAX) this.releaseCharge();
+  }
+  releaseCharge() {
+    const c = this.controls;
+    const ratio = this.chargeRatio();
+    this.charging = false;
+    this.chargeFrames = 0;
+    this.chargeHold = 0;
+    let dir = 'side';
+    if (keys[c.up]) dir = 'up';
+    else if (keys[c.down]) dir = 'down';
+    this.startAttack(true, dir, { charge: ratio });
+    sfx.chargeShot();
+    this.syncAttackBox();
+    if (dir === 'up' || dir === 'down') spawnDirectionalSlash(this, this.attackBox, dir);
+    else spawnSlash(this, this.attackBox);
+    const style = CHARGE_WAVE_STYLES[this.character.id];
+    spawnChargeBurst(this, ratio, style);
+    if (style) this.fireChargeWave(dir, ratio, style);
+    else spawnChargeImpact(this, ratio);
+    shake(3 + ratio * 6, 10 + Math.round(ratio * 12));
+  }
+  // 飛び道具を持つキャラの溜め攻撃だけ、キャラ固有の衝撃波が前方へ飛ぶ
+  fireChargeWave(dir, ratio, style) {
+    const box = this.attackBox;
+    const speed = (6.5 + ratio * 4.5) * style.speed;
+    let vx = this.facing * speed, vy = 0;
+    if (dir === 'up') { vx = this.facing * speed * 0.25; vy = -speed; }
+    else if (dir === 'down') { vx = this.facing * speed * 0.55; vy = speed * 0.8; }
+    const scale = 0.7 + ratio * 0.55;
+    const sw = style.w * scale;
+    const sh = style.h * scale;
+    projectiles.push(new Projectile({
+      owner: this,
+      x: this.x + this.w / 2 - sw / 2,
+      y: this.y + this.h / 2 - sh / 2,
+      vx, vy,
+      type: 'charge_wave',
+      style,
+      damage: box.damage * (0.28 + ratio * 0.22),
+      life: Math.round(22 + ratio * 46),
+      knockbackBonus: 0.55 + ratio * 0.6,
+      strong: ratio >= 0.5,
+      w: sw, h: sh,
+      // 近接判定と二重に当たらないよう、近接の持続が切れるまでは無効
+      armDelay: box.life,
+    }));
   }
   syncAttackBox() {
     if (!this.attackBox) return;
+    if (this.attackBox.maxLife === undefined) this.attackBox.maxLife = this.attackBox.life;
     this.attackBox.x = this.x + this.attackBox.offsetX;
     this.attackBox.y = this.y + this.attackBox.offsetY;
   }
@@ -1572,6 +1859,7 @@ class Player {
     });
   }
   takeHit(attacker) {
+    this.cancelCharge();
     const a = attacker.attackBox;
     const power = a.damage;
     const bonus = a.kbBonus || 1.0;
@@ -1600,12 +1888,63 @@ class Player {
     if (sp.armor) stun = Math.floor(stun * sp.armor);
     this.hitstun = stun;
   }
+  // 溜め中に体の後ろへ広がる青い光
+  drawChargeGlow(ratio) {
+    const cx = this.x + this.w / 2;
+    const cy = this.y + this.h / 2;
+    const pulse = 1 + Math.sin(this.frame * (0.18 + ratio * 0.24)) * (0.05 + ratio * 0.08);
+    const r = (this.w + 24 + ratio * 26) * pulse;
+    const grad = ctx.createRadialGradient(cx, cy, r * 0.2, cx, cy, r);
+    grad.addColorStop(0, `rgba(200,244,255,${0.30 + ratio * 0.35})`);
+    grad.addColorStop(0.55, `rgba(64,176,255,${0.22 + ratio * 0.30})`);
+    grad.addColorStop(1, 'rgba(20,80,220,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // 溜め中の輪郭ハイライトと頭上の溜めゲージ
+  drawChargeOverlay(ratio) {
+    const full = ratio >= 1;
+    const glow = full ? 0.55 + Math.sin(this.frame * 0.5) * 0.35 : 0.35 + ratio * 0.45;
+    ctx.strokeStyle = full ? `rgba(255,255,255,${glow})` : `rgba(130,220,255,${glow})`;
+    ctx.lineWidth = 2 + ratio * 2;
+    ctx.strokeRect(this.x - 3, this.y - 3, this.w + 6, this.h + 6);
+    const bw = this.w + 8;
+    ctx.fillStyle = 'rgba(8,18,38,0.7)';
+    ctx.fillRect(this.x - 4, this.y - 16, bw, 5);
+    ctx.fillStyle = full ? '#ffffff' : '#5fd0ff';
+    ctx.fillRect(this.x - 4, this.y - 16, bw * ratio, 5);
+    ctx.strokeStyle = 'rgba(160,230,255,0.9)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(this.x - 4.5, this.y - 16.5, bw + 1, 6);
+  }
   draw() {
+    const charge = this.charging ? this.chargeRatio() : 0;
+    if (this.charging) this.drawChargeGlow(charge);
+    // 攻撃判定 (攻撃モーションが隠れないようキャラの後ろに敷く)
+    if (this.attackBox) {
+      const a = this.attackBox;
+      const cg = a.charge || 0;
+      // 溜めるほど判定は大きくなるので、その分だけ薄くして塊に見えないようにする
+      const alpha = a.rapid ? 0.45 : 0.65 - cg * 0.28;
+      ctx.fillStyle = a.strong ? `rgba(${Math.round(255 - cg * 150)},${Math.round(80 + cg * 90)},${Math.round(60 + cg * 195)},${alpha})`
+                  : a.dir === 'up'    ? `rgba(140,255,140,${alpha})`
+                  : a.dir === 'spike' ? `rgba(180,80,255,${alpha + 0.05})`
+                  : a.dir === 'sweep' ? `rgba(255,200,80,${alpha})`
+                  : `rgba(255,230,0,${alpha})`;
+      ctx.fillRect(a.x, a.y, a.w, a.h);
+    }
     const flicker = this.invincible > 0 && Math.floor(this.invincible / 4) % 2;
     if (flicker) ctx.globalAlpha = 0.4;
     const state = this.computeAnimState();
+    // 攻撃/溜めに合わせて体ごと前後へ踏み込む (見た目のみ)
+    ctx.save();
+    ctx.translate(this.facing * (state.lunge || 0), 0);
     this.character.draw(ctx, this.x, this.y, this.w, this.h, this.facing, this.tint, state);
+    ctx.restore();
     ctx.globalAlpha = 1;
+    if (this.charging) this.drawChargeOverlay(charge);
     // 凍結中の冷気オーラ (氷使いから減速を受けている時)
     if (this.slowFrames > 0) {
       ctx.fillStyle = `rgba(128,221,255,${0.18 + Math.sin(this.frame * 0.3) * 0.06})`;
@@ -1618,16 +1957,6 @@ class Player {
       ctx.strokeStyle = `rgba(255,80,40,${pulse})`;
       ctx.lineWidth = 4;
       ctx.strokeRect(this.x - 4, this.y - 4, this.w + 8, this.h + 8);
-    }
-    // 攻撃判定
-    if (this.attackBox) {
-      const a = this.attackBox;
-      ctx.fillStyle = a.strong ? 'rgba(255,80,60,0.7)'
-                  : a.dir === 'up'    ? 'rgba(140,255,140,0.7)'
-                  : a.dir === 'spike' ? 'rgba(180,80,255,0.75)'
-                  : a.dir === 'sweep' ? 'rgba(255,200,80,0.7)'
-                  : 'rgba(255,230,0,0.7)';
-      ctx.fillRect(a.x, a.y, a.w, a.h);
     }
     // シールド (バブル + シマー)
     if (this.shielding) {
@@ -1984,10 +2313,24 @@ const SUPER_HANDLERS = {
 // =============================================================
 // 飛び道具 (Projectile)
 // =============================================================
+// 溜め攻撃で飛ばす衝撃波の見た目。飛び道具を持つキャラだけが撃てる。
+// 素手・近接キャラ (騎士・力士・ボクサー) はここに載せず、代わりに間合いと威力が伸びる。
+const CHARGE_WAVE_STYLES = {
+  ninja:   { kind: 'star',   core: '#ffffff', main: '#d8dee8', rgb: [200, 220, 255], w: 40, h: 40, speed: 1.15 },
+  robot:   { kind: 'beam',   core: '#ffffff', main: '#80ffff', rgb: [120, 255, 255], w: 74, h: 18, speed: 1.40 },
+  wizard:  { kind: 'orb',    core: '#fff2c0', main: '#ff6420', rgb: [255, 120,  30], w: 44, h: 44, speed: 0.85 },
+  pirate:  { kind: 'cannon', core: '#666666', main: '#141414', rgb: [255, 190,  90], w: 38, h: 38, speed: 1.30 },
+  dragon:  { kind: 'flame',  core: '#fff0a0', main: '#ff5020', rgb: [255,  90,  20], w: 62, h: 34, speed: 0.95 },
+  alien:   { kind: 'bolt',   core: '#ffffff', main: '#a040ff', rgb: [160,  64, 255], w: 48, h: 32, speed: 1.10 },
+  icemage: { kind: 'shard',  core: '#ffffff', main: '#80ddff', rgb: [128, 221, 255], w: 46, h: 30, speed: 1.05 },
+  vampire: { kind: 'swarm',  core: '#ff3050', main: '#1a0a14', rgb: [170,  32,  80], w: 52, h: 36, speed: 1.00 },
+  samurai: { kind: 'blade',  core: '#ffffff', main: '#ffe070', rgb: [255, 224, 112], w: 54, h: 22, speed: 1.35 },
+};
+
 const projectiles = [];
 
 class Projectile {
-  constructor({ owner, x, y, vx, vy, type, damage, life = 90, homing = 0, wave = null, knockbackBonus = 0.7, strong = false, lifesteal = 0 }) {
+  constructor({ owner, x, y, vx, vy, type, damage, life = 90, homing = 0, wave = null, knockbackBonus = 0.7, strong = false, lifesteal = 0, w = 0, h = 0, armDelay = 0, style = null }) {
     this.owner = owner;
     this.x = x; this.y = y;
     this.vx = vx; this.vy = vy;
@@ -2003,6 +2346,8 @@ class Projectile {
     this.lifesteal = lifesteal;
     this.alive = true;
     this.rot = 0;
+    this.armDelay = armDelay;  // このフレーム数を過ぎるまで当たり判定を持たない
+    this.style = style;        // 溜め攻撃の衝撃波の見た目 (キャラ別)
     if (type === 'laser')          { this.w = 28; this.h = 6; }
     else if (type === 'fireball')  { this.w = 22; this.h = 22; }
     else if (type === 'flame')     { this.w = 18; this.h = 18; }
@@ -2015,7 +2360,10 @@ class Projectile {
     else if (type === 'bat')       { this.w = 18; this.h = 12; }
     else if (type === 'slash')     { this.w = 36; this.h = 14; }
     else if (type === 'sword_wave'){ this.w = 64; this.h = 20; }
+    else if (type === 'charge_wave'){ this.w = 34; this.h = 22; }
     else                           { this.w = 14; this.h = 14; }
+    if (w) this.w = w;
+    if (h) this.h = h;
   }
   update(opponent) {
     this.t++;
@@ -2092,6 +2440,18 @@ class Projectile {
         vx: 0, vy: 0, life: 14, maxLife: 14, size: 12,
         color: Math.random() < 0.5 ? '#ffe070' : '#fff', shape: 'flash', gravity: 0,
       });
+    } else if (this.type === 'charge_wave' && this.style && this.t > this.armDelay) {
+      const st = this.style;
+      addParticle({
+        x: this.x + this.w / 2 + (Math.random() - 0.5) * this.w * 0.6,
+        y: this.y + this.h / 2 + (Math.random() - 0.5) * this.h * 0.6,
+        vx: -this.vx * 0.12, vy: -this.vy * 0.12,
+        life: st.kind === 'beam' ? 8 : 14, maxLife: st.kind === 'beam' ? 8 : 14,
+        size: st.kind === 'beam' ? 10 : 7,
+        color: Math.random() < 0.5 ? st.core : st.main,
+        shape: st.kind === 'star' || st.kind === 'shard' ? 'rect' : 'flash',
+        gravity: st.kind === 'flame' ? -0.06 : 0,
+      });
     }
 
     if (this.x < -50 || this.x > STAGE_W + 50 ||
@@ -2100,7 +2460,7 @@ class Projectile {
       return;
     }
 
-    if (opponent.invincible <= 0 && hitTest(this, opponent)) {
+    if (this.t > this.armDelay && opponent.invincible <= 0 && hitTest(this, opponent)) {
       const cx = opponent.x + opponent.w / 2;
       const cy = opponent.y + opponent.h / 2;
       if (opponent.shielding && opponent.counterWindow > 0 && this.owner) {
@@ -2142,7 +2502,8 @@ class Projectile {
           this.owner.damage = Math.max(0, this.owner.damage - this.lifesteal);
         }
         const big = this.type === 'fireball' || this.type === 'meteor' || this.type === 'cannonball'
-                 || this.type === 'sword_wave' || this.type === 'ice';
+                 || this.type === 'sword_wave' || this.type === 'ice'
+                 || (this.type === 'charge_wave' && this.strong);
         spawnHitSpark(cx, cy, big, 'side');
         if (big) sfx.strongHit();
         else sfx.weakHit();
@@ -2308,6 +2669,8 @@ class Projectile {
       ctx.fill();
       ctx.fillStyle = '#fff';
       ctx.fillRect(-this.w/2, -3, this.w, 6);
+    } else if (this.type === 'charge_wave') {
+      drawChargeWave(ctx, this);
     }
     ctx.restore();
   }
@@ -2442,6 +2805,304 @@ function spawnSlash(player, box) {
       gravity: 0,
     });
   }
+}
+
+// 溜めを放った瞬間の爆発。飛び道具キャラはその衝撃波の色、近接キャラは青白で光る
+function spawnChargeBurst(player, ratio, style) {
+  const cx = player.x + player.w / 2;
+  const cy = player.y + player.h / 2;
+  const core = style ? style.core : '#ffffff';
+  const main = style ? style.main : '#6fd6ff';
+  addParticle({
+    x: cx, y: cy, vx: 0, vy: 0,
+    life: style ? 18 : 12, maxLife: style ? 18 : 12,
+    size: style ? 60 + ratio * 60 : 30 + ratio * 24,
+    color: style ? main : '#8fe3ff', shape: 'flash', gravity: 0,
+  });
+  addParticle({
+    x: cx, y: cy, vx: 0, vy: 0,
+    life: 22, maxLife: 22, size: style ? 26 + ratio * 34 : 18 + ratio * 16,
+    color: style ? core : '#4fc3ff', shape: 'ring', gravity: 0,
+  });
+  const n = style ? 10 + Math.round(ratio * 14) : 6 + Math.round(ratio * 6);
+  for (let i = 0; i < n; i++) {
+    const ang = (i / n) * Math.PI * 2;
+    const sp = 4 + ratio * 6;
+    addParticle({
+      x: cx, y: cy,
+      vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+      life: 20, maxLife: 20, size: 3 + ratio * 3,
+      color: i % 2 ? core : main,
+      shape: 'streak', gravity: 0,
+    });
+  }
+}
+
+// 飛び道具を持たないキャラの溜め解放。飛ばさず、拳/掌の先で前方へ空気が弾ける
+function spawnChargeImpact(player, ratio) {
+  const box = player.attackBox;
+  const f = player.facing;
+  // 拳/掌の先 (攻撃判定の前端寄り) から出す
+  const cx = box ? (f === 1 ? box.x + box.w * 0.72 : box.x + box.w * 0.28)
+                 : player.x + player.w / 2;
+  const cy = box ? box.y + box.h / 2 : player.y + player.h / 2;
+  const rot = f === 1 ? 0 : Math.PI;
+  // 前方へ広がる空気の壁を 3 枚、少しずつ遅らせて重ねる
+  for (let i = 0; i < 3; i++) {
+    addParticle({
+      x: cx + f * i * 6, y: cy,
+      vx: f * (2.2 + ratio * 2.6 - i * 0.4), vy: 0,
+      life: 15 + i * 4, maxLife: 15 + i * 4,
+      size: (16 + ratio * 20) * (1 + i * 0.3),
+      color: i === 0 ? '#ffffff' : '#bfe6ff',
+      shape: 'shockarc', rot, gravity: 0,
+    });
+  }
+  // 拳先のフラッシュ (小さめ・鋭く)
+  addParticle({
+    x: cx, y: cy, vx: 0, vy: 0,
+    life: 10, maxLife: 10, size: 26 + ratio * 26,
+    color: '#ffffff', shape: 'flash', gravity: 0,
+  });
+  // 圧を表す横向きの線 (溜めるほど遠くまで伸びる)
+  const n = 7 + Math.round(ratio * 7);
+  for (let i = 0; i < n; i++) {
+    addParticle({
+      x: cx, y: cy + (Math.random() - 0.5) * (box ? box.h * 0.9 : 40),
+      vx: f * (9 + Math.random() * 8 + ratio * 8), vy: (Math.random() - 0.5) * 1.2,
+      life: 13, maxLife: 13, size: 2 + Math.random() * 2.5,
+      color: i % 3 ? '#ffffff' : '#bfe6ff', shape: 'streak', gravity: 0,
+    });
+  }
+  // 接地していれば足元の砂埃
+  if (player.onGround) {
+    for (let i = 0; i < 9; i++) {
+      addParticle({
+        x: player.x + player.w / 2, y: player.y + player.h - 2,
+        vx: f * (2 + Math.random() * 6), vy: -Math.random() * 2.5,
+        life: 24, maxLife: 24, size: 3 + Math.random() * 3,
+        color: '#d8d0b8', shape: 'rect', gravity: 0.18,
+      });
+    }
+  }
+}
+
+// 溜め攻撃の衝撃波をキャラ別に描く (呼び出し側で中心へ translate 済み)
+function drawChargeWave(ctx, p) {
+  const st = p.style || CHARGE_WAVE_STYLES.samurai;
+  const [cr, cg, cb] = st.rgb;
+  const rgba = (a) => `rgba(${cr},${cg},${cb},${a})`;
+  const w = p.w, h = p.h;
+  const heading = Math.atan2(p.vy, p.vx);
+  ctx.globalAlpha = 0.45 + 0.55 * Math.min(1, p.life / 14);
+
+  if (st.kind === 'beam') {
+    // ロボ: 太い収束レーザー
+    ctx.rotate(heading);
+    ctx.fillStyle = rgba(0.22);
+    ctx.fillRect(-w / 2 - 12, -h, w + 24, h * 2);
+    ctx.fillStyle = st.main;
+    ctx.fillRect(-w / 2, -h / 2, w, h);
+    ctx.fillStyle = st.core;
+    ctx.fillRect(-w / 2, -h / 5, w, h * 0.4);
+    ctx.beginPath();
+    ctx.moveTo(w / 2, -h / 2);
+    ctx.lineTo(w / 2 + 16, 0);
+    ctx.lineTo(w / 2, h / 2);
+    ctx.closePath();
+    ctx.fill();
+  } else if (st.kind === 'star') {
+    // 忍者: 高速回転する大手裏剣
+    ctx.rotate(p.rot * 2.2);
+    ctx.fillStyle = rgba(0.28);
+    ctx.beginPath();
+    ctx.arc(0, 0, w * 0.62, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = st.main;
+    for (let i = 0; i < 4; i++) {
+      ctx.rotate(Math.PI / 2);
+      ctx.beginPath();
+      ctx.moveTo(0, -w * 0.56);
+      ctx.lineTo(w * 0.17, -w * 0.13);
+      ctx.lineTo(-w * 0.17, -w * 0.13);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.fillStyle = st.core;
+    ctx.beginPath();
+    ctx.arc(0, 0, w * 0.13, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (st.kind === 'orb') {
+    // 魔導士: 揺らめく大火球
+    const grad = ctx.createRadialGradient(0, 0, 2, 0, 0, w * 0.7);
+    grad.addColorStop(0, st.core);
+    grad.addColorStop(0.45, st.main);
+    grad.addColorStop(1, rgba(0));
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, w * 0.7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = rgba(0.7);
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + p.t * 0.22;
+      const len = w * (0.52 + 0.2 * Math.sin(p.t * 0.5 + i));
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * w * 0.26, Math.sin(a) * w * 0.26);
+      ctx.lineTo(Math.cos(a + 0.32) * len, Math.sin(a + 0.32) * len);
+      ctx.lineTo(Math.cos(a - 0.32) * len, Math.sin(a - 0.32) * len);
+      ctx.closePath();
+      ctx.fill();
+    }
+  } else if (st.kind === 'cannon') {
+    // 海賊: 砲炎を引く砲弾
+    ctx.rotate(heading);
+    const fg = ctx.createLinearGradient(-w * 1.6, 0, 0, 0);
+    fg.addColorStop(0, rgba(0));
+    fg.addColorStop(1, rgba(0.85));
+    ctx.fillStyle = fg;
+    ctx.beginPath();
+    ctx.moveTo(-w * 1.6, 0);
+    ctx.lineTo(0, -h * 0.5);
+    ctx.lineTo(0, h * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = st.main;
+    ctx.beginPath();
+    ctx.arc(0, 0, w * 0.42, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = st.core;
+    ctx.beginPath();
+    ctx.arc(-w * 0.13, -w * 0.13, w * 0.15, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (st.kind === 'flame') {
+    // ドラゴン: 尾を引く炎の帯
+    ctx.rotate(heading);
+    for (let i = 4; i >= 0; i--) {
+      const t2 = i / 5;
+      const flick = Math.sin(p.t * 0.55 + i * 1.6) * h * 0.16;
+      const rx = w * (0.46 - t2 * 0.1);
+      const ry = h * (0.46 - t2 * 0.09);
+      const ox = w * (0.34 - t2 * 0.95);
+      const grad = ctx.createRadialGradient(ox, flick, 1, ox, flick, Math.max(rx, ry) * 1.15);
+      grad.addColorStop(0, i === 0 ? '#ffffff' : (i === 1 ? st.core : st.main));
+      grad.addColorStop(1, rgba(0));
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.ellipse(ox, flick, rx, ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // 先端の尖り (進行方向に噴き出す形)
+    ctx.fillStyle = st.core;
+    ctx.beginPath();
+    ctx.moveTo(w * 0.82, 0);
+    ctx.lineTo(w * 0.3, -h * 0.26);
+    ctx.lineTo(w * 0.3, h * 0.26);
+    ctx.closePath();
+    ctx.fill();
+  } else if (st.kind === 'bolt') {
+    // 宇宙人: electric なプラズマ球
+    ctx.rotate(heading);
+    const grad = ctx.createRadialGradient(0, 0, 1, 0, 0, w * 0.55);
+    grad.addColorStop(0, st.core);
+    grad.addColorStop(0.4, st.main);
+    grad.addColorStop(1, rgba(0));
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, w * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = st.core;
+    ctx.lineWidth = 2;
+    for (let k = -1; k <= 1; k += 2) {
+      ctx.beginPath();
+      ctx.moveTo(-w * 0.55, 0);
+      for (let i = 1; i <= 4; i++) {
+        const bx = -w * 0.55 + w * 1.1 * (i / 4);
+        const by = k * (i % 2 ? h * 0.45 : -h * 0.3) * (0.6 + 0.4 * Math.sin(p.t * 0.7 + i));
+        ctx.lineTo(bx, by);
+      }
+      ctx.stroke();
+    }
+  } else if (st.kind === 'shard') {
+    // 氷使い: 突き進む氷柱
+    ctx.rotate(heading);
+    ctx.fillStyle = rgba(0.26);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, w * 0.62, h * 0.7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    for (let i = -1; i <= 1; i++) {
+      const oy = i * h * 0.32;
+      const len = w * (i === 0 ? 0.6 : 0.4);
+      ctx.fillStyle = st.main;
+      ctx.beginPath();
+      ctx.moveTo(len, oy);
+      ctx.lineTo(-len * 0.5, oy - h * 0.17);
+      ctx.lineTo(-len * 0.8, oy);
+      ctx.lineTo(-len * 0.5, oy + h * 0.17);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = st.core;
+      ctx.fillRect(-len * 0.4, oy - 1, len * 0.9, 2);
+    }
+  } else if (st.kind === 'swarm') {
+    // 吸血鬼: 黒い霧をまとった蝙蝠の群れ
+    const grad = ctx.createRadialGradient(0, 0, 2, 0, 0, w * 0.65);
+    grad.addColorStop(0, rgba(0.5));
+    grad.addColorStop(1, rgba(0));
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, w * 0.65, 0, Math.PI * 2);
+    ctx.fill();
+    for (let i = 0; i < 3; i++) {
+      const a = p.t * 0.2 + i * (Math.PI * 2 / 3);
+      const bx = Math.cos(a) * w * 0.28;
+      const by = Math.sin(a) * h * 0.3;
+      const flap = Math.sin(p.t * 0.6 + i) * 4;
+      ctx.fillStyle = st.main;
+      ctx.fillRect(bx - 3, by - 3, 6, 6);
+      ctx.beginPath();
+      ctx.moveTo(bx - 3, by);
+      ctx.lineTo(bx - 13, by - 3 - flap);
+      ctx.lineTo(bx - 8, by + 4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(bx + 3, by);
+      ctx.lineTo(bx + 13, by - 3 - flap);
+      ctx.lineTo(bx + 8, by + 4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = st.core;
+      ctx.fillRect(bx - 2, by - 2, 2, 2);
+      ctx.fillRect(bx + 1, by - 2, 2, 2);
+    }
+  } else {
+    // 侍: 金色の斬撃波
+    ctx.rotate(heading);
+    ctx.fillStyle = rgba(0.4);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, w * 0.72, h * 1.05, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineCap = 'round';
+    // 二重の斬撃 (前が太く、後ろに残光)
+    for (let i = 0; i < 2; i++) {
+      const ox = w * (0.18 - i * 0.34);
+      const rx = w * (0.42 - i * 0.08);
+      const ry = h * (1.0 - i * 0.22);
+      ctx.strokeStyle = st.main;
+      ctx.lineWidth = 9 - i * 4;
+      ctx.beginPath();
+      ctx.ellipse(ox, 0, rx, ry, 0, -Math.PI / 2.05, Math.PI / 2.05);
+      ctx.stroke();
+      ctx.strokeStyle = st.core;
+      ctx.lineWidth = 3 - i;
+      ctx.beginPath();
+      ctx.ellipse(ox, 0, rx, ry, 0, -Math.PI / 2.05, Math.PI / 2.05);
+      ctx.stroke();
+    }
+    ctx.fillStyle = st.core;
+    ctx.fillRect(-w * 0.55, -2, w * 0.95, 4);
+  }
+  ctx.globalAlpha = 1;
 }
 
 // 上/下攻撃の方向別エフェクト
@@ -2655,6 +3316,17 @@ function drawParticles() {
       ctx.beginPath();
       ctx.moveTo(p.x, p.y);
       ctx.lineTo(p.x - p.vx * 1.5, p.y - p.vy * 1.5);
+      ctx.stroke();
+    } else if (p.shape === 'shockarc') {
+      // 前方へ広がる空気の壁 (rot が向き)
+      const r = p.size * (0.5 + (1 - t) * 1.1);
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth = 1 + 5 * t;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r, r * 0.72, 0, -1.0, 1.0);
       ctx.stroke();
     } else if (p.shape === 'shard') {
       ctx.translate(p.x, p.y);
@@ -3043,8 +3715,8 @@ function updateHUD() {
   p2SF.style.width = p2Super + '%';
   p1SF.classList.toggle('ready', (p1.hitCount || 0) >= 5);
   p2SF.classList.toggle('ready', (p2.hitCount || 0) >= 5);
-  document.querySelector('#p1-info .super-count').textContent = Math.min(5, p1.hitCount || 0) + '/5';
-  document.querySelector('#p2-info .super-count').textContent = Math.min(5, p2.hitCount || 0) + '/5';
+  document.querySelector('#p1-info .super-count').textContent = Math.floor(Math.min(5, p1.hitCount || 0)) + '/5';
+  document.querySelector('#p2-info .super-count').textContent = Math.floor(Math.min(5, p2.hitCount || 0)) + '/5';
 }
 
 function loop() {
