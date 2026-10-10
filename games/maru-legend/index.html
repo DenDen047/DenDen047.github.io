@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#12121a">
+<title>マルの伝説 ― 三つの宝珠</title>
+<meta name="description" content="丸3つだけでできた勇者マルが、見下ろし視点の世界を冒険するアクションアドベンチャー。剣とブーメランと爆弾で、森の神殿・岩の神殿・魔王の城の謎を解き、三つの宝珠を取りもどす。">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ==================== ゲーム画面 ==================== -->
+  <div id="stage-wrap">
+    <canvas id="game"></canvas>
+  </div>
+
+  <!-- ==================== タッチ操作 ==================== -->
+  <div id="touch" class="hidden">
+    <div id="stick"><i id="stick-knob"></i></div>
+    <div id="tbtns">
+      <button class="tb tb-a" data-act="a">A<small>剣</small></button>
+      <button class="tb tb-b" data-act="b">B<small>道具</small></button>
+      <button class="tb tb-swap" data-act="swap">⇆</button>
+    </div>
+    <button class="tb tb-menu" data-act="menu">☰</button>
+  </div>
+
+  <!-- ==================== タイトル ==================== -->
+  <div id="screen-title" class="screen">
+    <div class="panel title-panel">
+      <div class="logo-dots"><i></i><i></i><i></i></div>
+      <h1>マルの伝説</h1>
+      <p class="subtitle">― 三つの宝珠 ―</p>
+      <div class="btns col">
+        <button class="btn btn-main" id="btn-continue">つづきから</button>
+        <button class="btn" id="btn-new">はじめから</button>
+        <button class="btn btn-ghost" id="btn-howto">あそびかた</button>
+      </div>
+      <p class="hint" id="title-hint">Z / Enter で決定　↑↓ でえらぶ</p>
+    </div>
+  </div>
+
+  <!-- ==================== あそびかた ==================== -->
+  <div id="screen-howto" class="screen hidden">
+    <div class="panel">
+      <h2>あそびかた</h2>
+      <table class="keys">
+        <tr><th>移動</th><td>矢印キー / WASD</td></tr>
+        <tr><th>剣・調べる</th><td>Z / J / Space（ためて はなすと回転斬り）</td></tr>
+        <tr><th>道具を使う</th><td>X / K</td></tr>
+        <tr><th>道具の切りかえ</th><td>C / L</td></tr>
+        <tr><th>メニュー</th><td>Enter / Esc / P</td></tr>
+        <tr><th>音のオン・オフ</th><td>M</td></tr>
+      </table>
+      <ul class="tips">
+        <li>はじめは剣を持っていない。<b>スタート地点の左上の洞窟</b>へ行こう。</li>
+        <li>ライフが満タンのときに剣をふると、<b>剣のビーム</b>が飛ぶ。</li>
+        <li>神殿では、鍵のかかった扉に体当たりすると小さな鍵で開く。</li>
+        <li><b>丸の模様がついたブロック</b>は押せる。何かが起こるかも。</li>
+        <li>ひびの入った岩や壁は、爆弾でこわせる。</li>
+        <li>二つの神殿の宝珠をそろえると、魔王の城の門がひらく。</li>
+      </ul>
+      <div class="btns"><button class="btn btn-main" id="btn-howto-back">もどる</button></div>
+    </div>
+  </div>
+
+  <!-- ==================== メニュー（一時停止） ==================== -->
+  <div id="screen-pause" class="screen hidden">
+    <div class="panel">
+      <h2>メニュー</h2>
+      <div class="inv">
+        <div class="inv-title">道具 <span class="inv-note">（えらぶと <b id="inv-bkey">X</b> で使える）</span></div>
+        <div class="inv-row" id="inv-row"></div>
+      </div>
+      <div class="map-box">
+        <div class="inv-title" id="map-title">地図</div>
+        <canvas id="map" width="640" height="300"></canvas>
+      </div>
+      <div class="stat-row" id="pause-stats"></div>
+      <div class="btns col">
+        <button class="btn btn-main" id="btn-resume">つづける</button>
+        <button class="btn" id="btn-mute">音: オン</button>
+        <button class="btn btn-ghost" id="btn-quit">セーブしてタイトルへ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== ゲームオーバー ==================== -->
+  <div id="screen-over" class="screen hidden">
+    <div class="panel narrow">
+      <h2 class="over">ゲームオーバー</h2>
+      <p class="lead">最後に入った神殿の入口か、<br>地上の出口から やりなおせます。</p>
+      <div class="btns col">
+        <button class="btn btn-main" id="btn-retry">つづける</button>
+        <button class="btn btn-ghost" id="btn-over-title">タイトルへ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== エンディング ==================== -->
+  <div id="screen-ending" class="screen hidden">
+    <div class="panel narrow">
+      <div class="logo-dots shine"><i></i><i></i><i></i></div>
+      <h2>三つの宝珠が そろった！</h2>
+      <p class="lead">マルランドに まるい平和が もどった。<br>ありがとう、勇者マル。</p>
+      <div class="result-rows" id="ending-stats"></div>
+      <div class="btns col"><button class="btn btn-main" id="btn-ending-title">タイトルへ</button></div>
+    </div>
+  </div>
+
+</div>
+
+<script src="world.js"></script>
+<script src="core.js"></script>
+<script src="actors.js"></script>
+<script src="game.js"></script>
+<script src="render.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
