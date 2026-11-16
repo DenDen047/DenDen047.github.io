@@ -226,7 +226,7 @@ const mountOnView = (selector, fn, rootMargin) => {
       fn(e.target).catch((err) => {
         console.error(err);
         const l = e.target.querySelector('.loading');
-        if (l) l.textContent = '3D を読み込めませんでした';
+        if (l) l.textContent = document.documentElement.lang === 'en' ? 'Could not load the 3D model' : '3D を読み込めませんでした';
       });
     }
   }, { rootMargin });
