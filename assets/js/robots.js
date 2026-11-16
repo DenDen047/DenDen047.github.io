@@ -143,7 +143,6 @@ async function loadRobot(name) {
 // Renderer, camera framing, drag-to-orbit and a render loop that only runs while the element is on screen.
 function stage(el, radius, view, tick) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   el.prepend(renderer.domElement);
   el.querySelector('.loading')?.remove();
@@ -166,6 +165,8 @@ function stage(el, radius, view, tick) {
 
   const resize = () => {
     const { width, height } = el.getBoundingClientRect();
+    // HiDPI, but never more than about a million pixels: the large plate would otherwise draw 4x the small ones
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2, Math.sqrt(1e6 / (width * height))));
     renderer.setSize(width, height, false);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
@@ -200,9 +201,9 @@ function stage(el, radius, view, tick) {
 
 async function mountRobot(el) {
   const r = await loadRobot(el.dataset.robot);
-  // the GLBs carry no normals: smooth within a part, keep edges sharper than 35°
+  // GLBs without normals: smooth within a part, keep edges sharper than 35° (wildpose.glb has them baked in)
   r.robot.traverse((o) => {
-    if (o.isMesh) o.geometry = toCreasedNormals(o.geometry, THREE.MathUtils.degToRad(35));
+    if (o.isMesh && !o.geometry.attributes.normal) o.geometry = toCreasedNormals(o.geometry, THREE.MathUtils.degToRad(35));
   });
   const { renderer, scene } = stage(el, r.radius, r.cfg.view, (t) => { if (t !== null) r.pose(t); });
   scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;

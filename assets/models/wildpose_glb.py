@@ -221,6 +221,7 @@ def roll_link():
 
 
 def payload(livox_step):
+    """Parts of the tilt link; the Livox housing comes back as a mesh, the rest as CAD shapes."""
     p = [("motor", cyl((0, -112.2, 0), (0, -105, 0), 24))]                           # tilt rotor
     p += [("black_alu", rbox((-12, -105, -97), (12, -95.5, 27), 2, 0, "Y"))]         # vertical tilt arm
     for z in (-30, -60):
@@ -234,8 +235,8 @@ def payload(livox_step):
     # perforated base plate
     x0, x1, y0, y1 = -82.0, 54.0, -93.0, 132.0
     plate = cq.Workplane("XY").box(x1 - x0, y1 - y0, 6.5).edges("|Z").fillet(4)
-    holes = [(x - (x0 + x1) / 2, y - (y0 + y1) / 2) for x in np.arange(x0 + 8, x1 - 4, 20)
-             for y in np.arange(y0 + 12.5, y1 - 4, 20)]
+    holes = [(x - (x0 + x1) / 2, y - (y0 + y1) / 2) for x in np.arange(x0 + 9, x1 - 4, 24)
+             for y in np.arange(y0 + 10.5, y1 - 4, 24)]
     plate = plate.faces(">Z").workplane().pushPoints(holes).hole(5.5)
     p += [("alu", plate.val().translate(V((x0 + x1) / 2, (y0 + y1) / 2, PLATE_TOP - 3.25)))]
 
@@ -243,9 +244,21 @@ def payload(livox_step):
     solids = sorted(cq.importers.importStep(str(livox_step)).solids().vals(), key=lambda s: -s.Volume())
     window = cq.Workplane("XY").box(77.6, 63.5, 0.5).val().translate(V(0, 2.05, -60.75))
     socket = [s for s in solids[1:] if s.BoundingBox().zmax < 70]   # leaves out the cable and the FOV shape
-    for material, shapes in (("silver", solids[:1]), ("glass", [window]), ("gloss", socket)):
+    shell = max(solids[0].Shells(), key=lambda s: s.Area())         # the other shells are closed voids inside
+    for material, shapes in (("glass", [window]), ("gloss", socket)):
         for shape in shapes:
             p += [(material, frame(shape, (-14, sum(LIVOX_Y) / 2, PLATE_TOP + 40), (0, -1, 0), (0, 0, 1)))]
+    # the STEP is a hollow housing; nothing inside the walls can be seen, so drop those triangles
+    mesh = tessellate(shell, 0.8, 1.2)   # the housing is full of small fillets, so tessellate it coarsely
+    inside = (np.abs(mesh.vertices[:, 0]) < 50.7) & (np.abs(mesh.vertices[:, 2]) < 59.9)
+    inside &= (mesh.vertices[:, 1] > -38.2) & (mesh.vertices[:, 1] < 36.7)
+    mesh.update_faces(~inside[mesh.faces].all(axis=1))
+    mesh.remove_unreferenced_vertices()
+    T = np.eye(4)
+    T[:3, :3] = [[0, 0, -1], [-1, 0, 0], [0, 1, 0]]
+    T[:3, 3] = (-14, sum(LIVOX_Y) / 2, PLATE_TOP + 40)
+    mesh.apply_transform(T)
+    p += [("silver", mesh)]
     top = PLATE_TOP + 94.3
     p += [("dark_steel", rbox((-25, -92, top), (40, -56, top + 3)))]                 # angle bracket on top
     p += [("dark_steel", rbox((-25, -92, top), (40, -89, top + 38)))]
@@ -315,19 +328,21 @@ def main(livox_step: Path, out: Path):
             scene.graph.update(frame_to=name, frame_from=f"{name}__origin", matrix=np.eye(4))
         by_mat = defaultdict(list)
         for material, shape in parts:
-            coarse = material == "silver"   # the Livox STEP is full of small fillets
-            by_mat[material].append(tessellate(shape, 0.5 if coarse else 0.15, 1.0 if coarse else 0.4))
+            by_mat[material].append(shape if isinstance(shape, trimesh.Trimesh) else tessellate(shape, 0.15, 0.45))
         for material, meshes in by_mat.items():
             m = trimesh.util.concatenate(meshes)
             m.vertices = (m.vertices - origin) / 1000
             m.merge_vertices()
+            # bake the normals (smooth within a part, sharp above 35 degrees) so the page need not compute them
+            m = trimesh.graph.smooth_shade(m, angle=math.radians(35))
+            m.vertex_normals
             rgb, metal, rough = MATERIALS[material]
             m.visual = trimesh.visual.TextureVisuals(material=trimesh.visual.material.PBRMaterial(
                 baseColorFactor=[*(int(c * 255) for c in rgb), 255], metallicFactor=metal, roughnessFactor=rough))
             key = f"{name}_{material}"
             scene.add_geometry(m, node_name=key, geom_name=key, parent_node_name=name)
             faces += len(m.faces)
-    scene.export(out)
+    scene.export(out, include_normals=True)
     joints = {
         "pan_joint": {"axis": [0.0, 0.0, 1.0], "lower": -3.1416, "upper": 3.1416},
         "roll_joint": {"axis": [round(float(a), 4) for a in A], "lower": -0.6, "upper": 0.6},
