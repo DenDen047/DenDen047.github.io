@@ -1,485 +1,604 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
-
 <head>
-    <meta charset="utf-8">
-    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>村松直哉 | Robotics × Computer Vision</title>
+  <meta name="description" content="カメラと LiDAR で現場の動きを測り、ロボットを実機で動かすエンジニア・研究者、村松直哉のポートフォリオ。">
+  <link rel="icon" href="./assets/img/avatar.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+JP:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Shippori+Mincho:wght@500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --paper-light: #f5f4f0;  --paper-dark: #0d0f11;
+      --ink-light: #121417;    --ink-dark: #e7e5df;
+      --muted-light: #575c63;  --muted-dark: #9a9fa6;
+      --rule-light: #d6d4cc;   --rule-dark: #262a30;
+      --rule-strong-light: #8b8f95; --rule-strong-dark: #5b616a;
+      --accent-light: #2449c9; --accent-dark: #86a6ff;
+      --paper: var(--paper-light); --ink: var(--ink-light); --muted: var(--muted-light);
+      --rule: var(--rule-light); --rule-strong: var(--rule-strong-light); --accent: var(--accent-light);
+      @media (prefers-color-scheme: dark) {
+        --paper: var(--paper-dark); --ink: var(--ink-dark); --muted: var(--muted-dark);
+        --rule: var(--rule-dark); --rule-strong: var(--rule-strong-dark); --accent: var(--accent-dark);
+      }
+      --sans: "IBM Plex Sans JP", system-ui, sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+      --serif: "Instrument Serif", Georgia, serif;
+      --mincho: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+      --wrap: 76rem;
+      accent-color: var(--accent);
+    }
+    @media (forced-colors: active) { :root { --rule: CanvasText; --rule-strong: CanvasText; --accent: LinkText; } }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 4rem; }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+    body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 1rem; line-height: 1.8; letter-spacing: .01em; font-size-adjust: from-font; -webkit-font-smoothing: antialiased; }
+    @supports not (font-size-adjust: from-font) { .mono, .label { font-size: .72rem; } }
+    h1, h2, h3, h4 { text-wrap: balance; word-break: auto-phrase; font-weight: 500; font-feature-settings: "palt"; letter-spacing: .03em; margin: 0; }
+    p, li { text-wrap: pretty; overflow-wrap: break-word; }
+    a { color: inherit; text-underline-offset: .2em; text-decoration-thickness: 1px; }
+    img { max-width: 100%; display: block; }
+    .wrap { max-width: var(--wrap); margin: 0 auto; padding: 0 2rem; }
+    @media (max-width: 40rem) { .wrap { padding: 0 1rem; } }
+    .mono { font-family: var(--mono); }
+    .label { font-family: var(--mono); font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-feature-settings: "palt"; }
+    .label a { color: var(--accent); text-decoration: none; }
+    .serif { font-family: var(--serif); font-style: italic; font-weight: 400; font-size-adjust: none; letter-spacing: 0; }
+    .mono, .label, time, .venue, .career dt, .plate-body dl { font-variant-numeric: tabular-nums; }
 
-    <title>Naoya Muramatsu</title>
-    <meta content="村松直哉は、リモートセンシングによる生体認識を専門とする研究者・エンジニアです。カメラやLiDARを用いた野生動物の3次元計測と画像処理技術の研究開発に取り組んでいます。" name="description">
-    <meta content="村松直哉, コンピュータビジョン, ロボティクス, 野生動物, 生体力学, 3D再構成, WildPose, WildDepth" name="keywords">
+    /* header: white over the hero photo, solid paper once scrolled */
+    header.site { position: fixed; inset: 0 0 auto; z-index: 10; color: #fff; transition: background-color .3s, color .3s; }
+    header.site.solid { background: color-mix(in oklab, var(--paper) 90%, transparent); backdrop-filter: blur(8px); color: var(--ink); box-shadow: 0 1px 0 var(--rule); }
+    header.site .wrap { display: flex; align-items: center; justify-content: space-between; min-height: 3.5rem; gap: 1rem; }
+    .brand { text-decoration: none; font-weight: 600; white-space: nowrap; }
+    nav.site { display: flex; gap: 1.4rem; }
+    nav.site a { text-decoration: none; font-family: var(--mono); font-size: .76rem; opacity: .85; }
+    nav.site a:hover { opacity: 1; }
+    @media (max-width: 54rem) { nav.site a:not(.cta) { display: none; } }
+    @media (prefers-reduced-motion: reduce) { header.site { transition: none; } }
 
-    <!-- Favicons -->
-    <!-- <link href="assets/img/logo_new.svg" rel="icon">
-    <link href="assets/img/logo_new.svg" rel="apple-touch-icon"> -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+    /* icon links */
+    .icons { display: flex; flex-wrap: wrap; gap: .4rem; }
+    a.ic { display: inline-grid; place-items: center; width: 2rem; height: 2rem; border: 1px solid var(--rule-strong); color: var(--muted); }
+    a.ic svg { width: .95rem; height: .95rem; fill: currentColor; }
+    a.ic:hover, a.ic:focus-visible { color: var(--accent); border-color: var(--accent); }
+    a.ic.sm { width: 1.7rem; height: 1.7rem; } a.ic.sm svg { width: .8rem; height: .8rem; }
 
-    <!-- Google Fonts -->
-    <link
-        href="https://fonts.googleapis.com/css?family=Open+Sans:300,300i,400,400i,600,600i,700,700i|Raleway:300,300i,400,400i,500,500i,600,600i,700,700i|Satisfy"
-        rel="stylesheet">
+    /* side navigation on wide screens (like a paper's sidebar) */
+    .side { display: none; }
+    @media (min-width: 75rem) {
+      header.site { display: none; }
+      main, footer.site { margin-left: 16rem; }
+      .side { display: flex; flex-direction: column; position: fixed; inset: 0 auto 0 0; z-index: 20; width: 16rem; padding: 2rem 1.5rem 1.5rem; background: #0f1113; color: #e7e5df; border-right: 1px solid #23272c; overflow-y: auto; }
+      .side .me { display: flex; flex-direction: column; align-items: center; text-align: center; gap: .6rem; padding-bottom: 1.4rem; border-bottom: 1px solid #23272c; }
+      .side .me img { width: 6.5rem; height: 6.5rem; border-radius: 50%; object-fit: cover; object-position: 50% 30%; border: 1px solid #3a3f46; }
+      .side .me b { font-family: var(--mincho); font-weight: 600; font-size: 1.35rem; letter-spacing: .08em; font-size-adjust: none; line-height: 1.2; }
+      .side .me span { font-family: var(--mono); font-size: .68rem; letter-spacing: .08em; color: #9a9fa6; text-transform: uppercase; }
+      .side .icons { justify-content: center; margin-top: .4rem; }
+      .side a.ic { border-color: #3a3f46; color: #b9bdc2; }
+      .side a.ic:hover { color: #fff; border-color: #86a6ff; }
+      .side nav { margin-top: 1.2rem; display: flex; flex-direction: column; }
+      .side nav a { display: flex; gap: .8rem; align-items: baseline; padding: .42rem .6rem; text-decoration: none; color: #b9bdc2; font-size: .88rem; border-left: 2px solid transparent; }
+      .side nav a span { font-family: var(--mono); font-size: .66rem; color: #6b7178; min-width: 1.4rem; }
+      .side nav a:hover { color: #fff; background: #171a1e; }
+      .side nav a[aria-current="true"] { color: #fff; border-left-color: #86a6ff; background: #171a1e; }
+      .side nav a[aria-current="true"] span { color: #86a6ff; }
+      .side .foot { margin-top: auto; padding-top: 1.2rem; font-family: var(--mono); font-size: .64rem; color: #6b7178; line-height: 1.6; }
+      .side .foot a { color: #9a9fa6; }
+    }
 
-    <!-- Vendor CSS Files -->
-    <link href="assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="assets/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="assets/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
-    <link href="assets/vendor/glightbox/css/glightbox.min.css" rel="stylesheet">
-    <link href="assets/vendor/swiper/swiper-bundle.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="./assets/css/wow.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons/css/academicons.min.css">
+    /* hero: full-bleed photo */
+    .hero { position: relative; min-height: min(92svh, 56rem); display: grid; align-items: end; color: #fff; background: #111; overflow: hidden; }
+    .hero > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: var(--focus, 50% 40%); }
+    .hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgb(0 0 0 / .8) 0%, rgb(0 0 0 / .2) 50%, rgb(0 0 0 / .4) 100%); }
+    .hero .wrap { position: relative; z-index: 1; width: 100%; padding-bottom: 3.5rem; }
+    .hero .label { color: rgb(255 255 255 / .8); }
+    .hero h1 { font-family: var(--mincho); font-weight: 600; font-size-adjust: none; font-size: clamp(2.6rem, 1.5rem + 4.6vw, 5rem); line-height: 1.15; margin: .6rem 0 .25rem; letter-spacing: .08em; }
+    .hero .en { font-size: clamp(1.3rem, 1rem + 1.2vw, 2rem); color: rgb(255 255 255 / .88); margin: 0; }
+    .hero .tags { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; margin-top: 1.5rem; font-family: var(--mono); font-size: .8rem; color: rgb(255 255 255 / .85); }
+    .hero .tags span::before { content: "— "; opacity: .6; }
+    .hero figcaption { position: absolute; right: 1rem; bottom: .8rem; z-index: 1; font-family: var(--mono); font-size: .68rem; color: rgb(255 255 255 / .7); }
 
-    <!-- Slick slider -->
-    <link rel="stylesheet" type="text/css" href="assets/css/slick.css">
+    /* about */
+    .about { padding: 4.5rem 0 3rem; }
+    .about-grid { display: grid; grid-template-columns: 15rem 1fr; gap: 2.5rem; align-items: start; }
+    .about figure { margin: 0; }
+    .about figure img { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; }
+    .about h2 { font-family: var(--mincho); font-weight: 600; font-size-adjust: none; font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2rem); line-height: 1.4; margin-bottom: .3rem; }
+    .about .role { color: var(--muted); margin: 0 0 1rem; font-size: .9rem; }
+    .about .bio { max-width: 44em; margin: 0 0 1.4rem; }
+    .spec { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--ink); border-bottom: 1px solid var(--rule); margin-top: 3rem; }
+    .spec div { padding: 1.1rem 1.25rem 1.2rem 0; }
+    .spec div + div { border-left: 1px solid var(--rule); padding-left: 1.25rem; }
+    .spec b { display: block; font-family: var(--serif); font-weight: 400; font-size: 2.6rem; line-height: 1.1; font-size-adjust: none; }
+    .spec span { display: block; font-size: .8rem; color: var(--muted); line-height: 1.55; margin-top: .3rem; word-break: auto-phrase; }
+    @media (max-width: 54rem) {
+      .about-grid { grid-template-columns: 1fr; gap: 1.5rem; } .about figure { max-width: 14rem; }
 
-    <!-- Template Main CSS File -->
-    <link href="assets/css/style.css?v=20260806" rel="stylesheet">
+      .spec { grid-template-columns: 1fr 1fr; } .spec div:nth-child(3) { border-left: 0; padding-left: 0; } .spec div:nth-child(n+3) { border-top: 1px solid var(--rule); }
+    }
 
+    /* section frame */
+    section.sec { padding: 4.5rem 0; border-top: 1px solid var(--rule); }
+    .sec-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem 1rem; margin-bottom: 2rem; }
+    .sec-title .no { font-family: var(--mono); font-size: .76rem; color: var(--accent); }
+    .sec-title h2 { font-family: var(--mincho); font-weight: 600; font-size-adjust: none; font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2.1rem); line-height: 1.35; }
+    .sec-title .label { margin-left: auto; }
+
+    /* robots (3D) */
+    .plates { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--rule); border-left: 1px solid var(--rule); }
+    .plate { border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); display: flex; flex-direction: column; }
+    .viewport { position: relative; aspect-ratio: 1 / 1; }
+    .viewport canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
+    .plate .viewport { cursor: grab; margin: .75rem; }
+    .plate .viewport:active { cursor: grabbing; }
+    .crop { position: absolute; inset: 0; pointer-events: none; }
+    .crop::before, .crop::after { content: ""; position: absolute; width: 1rem; height: 1rem; border: 1px solid var(--rule-strong); }
+    .crop::before { left: 0; top: 0; border-right: 0; border-bottom: 0; }
+    .crop::after { right: 0; bottom: 0; border-left: 0; border-top: 0; }
+    .readout { position: absolute; right: 0; top: 0; font-family: var(--mono); font-size: .66rem; color: var(--muted); padding: .1rem .2rem; pointer-events: none; text-align: right; }
+    .loading { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--mono); font-size: .7rem; color: var(--muted); }
+    .plate-body { padding: 0 1rem 1.1rem; }
+    .plate-body h3 { font-size: 1rem; margin: .1rem 0 .3rem; }
+    .plate-body p { margin: 0; font-size: .82rem; color: var(--muted); line-height: 1.6; }
+    .plate-body dl { display: grid; grid-template-columns: auto 1fr; gap: 0 .7rem; margin: .6rem 0 0; font-family: var(--mono); font-size: .68rem; }
+    .plate-body dt { color: var(--muted); }
+    .plate-body dd { margin: 0; }
+    @media (max-width: 64rem) { .plates { grid-template-columns: 1fr 1fr; } }
+
+    /* projects */
+    .projects { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.25rem 1.75rem; }
+    .proj .media { position: relative; display: block; aspect-ratio: 16 / 10; overflow: hidden; background: var(--rule); }
+    .proj .media img, .proj .media video { width: 100%; height: 100%; object-fit: cover; transition: scale .5s; }
+    .proj .media:hover img { scale: 1.03; }
+    button.media { border: 0; padding: 0; width: 100%; cursor: pointer; font: inherit; }
+    .proj .media .play { position: absolute; left: .75rem; bottom: .75rem; font-family: var(--mono); font-size: .7rem; color: #fff; background: rgb(0 0 0 / .7); padding: .3rem .55rem; }
+    button.media .play::before { content: "▶ "; }
+    .proj .media iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+    .proj .badges { display: flex; flex-wrap: wrap; gap: .35rem; margin: .9rem 0 .5rem; }
+    .venue { font-family: var(--mono); font-size: .66rem; letter-spacing: .05em; padding: .3rem .45rem; border: 1px solid var(--rule-strong); color: var(--muted); text-box: trim-both cap alphabetic; white-space: nowrap; }
+    .venue.hl { border-color: var(--accent); color: var(--accent); }
+    .proj h3 { font-size: 1.05rem; line-height: 1.55; }
+    .proj p { margin: .35rem 0 0; font-size: .86rem; color: var(--muted); line-height: 1.7; }
+    .links { margin-top: .7rem; }
+    .others { margin-top: 3rem; }
+    .others ul { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--ink); }
+    .others li { display: grid; grid-template-columns: 1fr auto; gap: 1rem; padding: .8rem 0; border-bottom: 1px solid var(--rule); font-size: .92rem; }
+    .others .who { font-family: var(--mono); font-size: .72rem; color: var(--muted); text-align: right; padding-top: .15rem; }
+    @media (max-width: 64rem) { .projects { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 40rem) { .projects { grid-template-columns: 1fr; } .others li { grid-template-columns: 1fr; gap: 0; } .others .who { text-align: left; } }
+    @media (prefers-reduced-motion: reduce) { .proj .media img { transition: none; } }
+
+    /* business */
+    .biz { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--ink); }
+    .biz > li { display: grid; grid-template-columns: 12rem 1fr 15rem; gap: 1.75rem; padding: 1.75rem 0; border-bottom: 1px solid var(--rule); }
+    .biz .meta time { display: block; font-family: var(--mono); font-size: .74rem; color: var(--accent); }
+    .biz .meta b { display: block; font-weight: 600; margin-top: .3rem; line-height: 1.5; word-break: auto-phrase; }
+    .biz .meta span { display: block; font-size: .78rem; color: var(--muted); line-height: 1.5; margin-top: .15rem; }
+    .biz h3 { font-size: 1.1rem; line-height: 1.55; margin-bottom: .5rem; }
+    .biz ul { margin: 0; padding-left: 1.1em; font-size: .88rem; line-height: 1.75; }
+    .biz ul li::marker { color: var(--accent); }
+    .biz .stack { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .75rem; }
+    .biz .stack span { font-family: var(--mono); font-size: .66rem; color: var(--muted); border: 1px solid var(--rule); padding: .25rem .4rem; text-box: trim-both cap alphabetic; }
+    .biz figure { margin: 0; }
+    .biz figure img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+    .biz figure.diagram img { object-fit: contain; background: #fff; border: 1px solid var(--rule); }
+    .biz figure.none { display: grid; place-items: center; aspect-ratio: 4 / 3; border: 1px dashed var(--rule-strong); font-family: var(--mono); font-size: .7rem; color: var(--muted); text-align: center; padding: 1rem; }
+    @media (max-width: 64rem) { .biz > li { grid-template-columns: 10rem 1fr; } .biz figure { grid-column: 2; max-width: 22rem; } }
+    @media (max-width: 40rem) { .biz > li { grid-template-columns: 1fr; gap: .9rem; } .biz figure { grid-column: auto; max-width: none; } }
+
+    /* publications */
+    .pubs { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--ink); }
+    .pubs li { display: grid; grid-template-columns: 8.5rem 1fr; gap: 1.25rem; padding: .8rem 0; border-bottom: 1px solid var(--rule); font-size: .88rem; line-height: 1.6; }
+    .pubs .venue { justify-self: start; align-self: start; margin-top: .15rem; }
+    .pubs .t { font-weight: 500; }
+    .pubs .a { color: var(--muted); font-size: .8rem; }
+    .pubs .a b { color: var(--ink); font-weight: 600; }
+    .pubs .links { margin-top: .35rem; }
+    @media (max-width: 40rem) { .pubs li { grid-template-columns: 1fr; gap: .4rem; } }
+
+    /* news & media */
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; }
+    .news { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--ink); }
+    .news li { display: grid; grid-template-columns: 5rem 1fr; gap: 1rem; padding: .65rem 0; border-bottom: 1px solid var(--rule); font-size: .9rem; line-height: 1.6; }
+    .news time { font-family: var(--mono); font-size: .74rem; color: var(--accent); padding-top: .1rem; }
+    .news a { text-decoration: none; }
+    .news a:hover { color: var(--accent); }
+    .news a::after { content: " ↗"; color: var(--accent); font-family: var(--mono); font-size: .8em; }
+    @media (max-width: 54rem) { .two { grid-template-columns: 1fr; gap: 2.5rem; } }
+
+    /* career */
+    .career { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; }
+    .career h3 { font-size: .74rem; font-family: var(--mono); font-weight: 400; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; padding-bottom: .5rem; border-bottom: 1px solid var(--ink); margin-bottom: .6rem; }
+    .career dl { margin: 0; display: grid; grid-template-columns: 7.5rem 1fr; gap: .45rem 1rem; font-size: .88rem; line-height: 1.6; }
+    .career dt { color: var(--muted); font-family: var(--mono); font-size: .74rem; padding-top: .1rem; }
+    .career dd { margin: 0; }
+    @media (max-width: 54rem) { .career { grid-template-columns: 1fr; } .career dl { grid-template-columns: 6.5rem 1fr; } }
+
+    /* gallery: bento grid, captions over the photos */
+    .gallery { display: grid; grid-template-columns: repeat(6, 1fr); grid-auto-rows: 10rem; grid-auto-flow: dense; gap: .5rem; }
+    .gallery figure { position: relative; margin: 0; overflow: hidden; background: var(--rule); }
+    .gallery .w2 { grid-column: span 2; } .gallery .w3 { grid-column: span 3; } .gallery .w4 { grid-column: span 4; } .gallery .w6 { grid-column: span 6; }
+    .gallery .h2 { grid-row: span 2; } .gallery .h3 { grid-row: span 3; }
+    .gallery img { width: 100%; height: 100%; object-fit: cover; transition: scale .6s; }
+    .gallery figure:hover img { scale: 1.04; }
+    .gallery figcaption { position: absolute; inset: auto 0 0; padding: 1.6rem .7rem .55rem; font-family: var(--mono); font-size: .68rem; line-height: 1.45; color: #fff; background: linear-gradient(to top, rgb(0 0 0 / .72), transparent); }
+    @media (max-width: 54rem) { .gallery { grid-template-columns: repeat(2, 1fr); grid-auto-rows: 9rem; } .gallery .w3, .gallery .w4 { grid-column: span 2; } .gallery .h3 { grid-row: span 2; } }
+    @media (prefers-reduced-motion: reduce) { .gallery img { transition: none; } }
+
+    /* contact */
+    .contact { padding: 4.5rem 0 4rem; border-top: 1px solid var(--rule); }
+    .contact h2 { font-family: var(--mincho); font-weight: 600; font-size-adjust: none; font-size: clamp(1.7rem, 1.2rem + 2vw, 2.8rem); line-height: 1.35; margin-top: .6rem; }
+    .contact h2 .serif { color: var(--accent); font-size: 1.15em; }
+    .offer { display: flex; flex-wrap: wrap; gap: .4rem; margin: 1.25rem 0 0; padding: 0; list-style: none; }
+    .offer li { border: 1px solid var(--rule-strong); padding: .35rem .7rem; font-size: .84rem; }
+    .actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: 1.75rem; }
+    .actions a.ic { width: 2.6rem; height: 2.6rem; }
+    .btn { display: inline-flex; align-items: center; gap: .6rem; padding: .7rem 1.1rem; font-family: var(--mono); font-size: .8rem; text-decoration: none; border: 1px solid var(--rule-strong); color: var(--ink); }
+    .btn > span { text-box: trim-both cap alphabetic; }
+    .btn::after { content: "→"; transition: translate .2s; }
+    .btn:hover::after { translate: .2rem 0; }
+    .btn.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+    .btn.primary:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+    @media (prefers-reduced-motion: reduce) { .btn::after { transition: none; } }
+    footer.site { border-top: 1px solid var(--rule); padding: 1.5rem 0 2.5rem; font-size: .78rem; color: var(--muted); }
+    footer.site .wrap { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    footer.site a { color: var(--muted); }
+
+    @media (prefers-reduced-motion: no-preference) {
+      @supports ((animation-timeline: view()) and (animation-range: entry)) {
+        @keyframes rise { from { opacity: 0; translate: 0 1rem; } }
+        .reveal { animation: rise auto ease-out backwards; animation-timeline: view(); animation-range: entry 0% entry 50%; }
+      }
+    }
+  </style>
+  <script type="importmap">
+    { "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    } }
+  </script>
+  <script type="module" src="./assets/js/robots.js"></script>
+  <script type="module" src="./assets/js/page.js"></script>
 </head>
-
 <body>
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none"><symbol id="i-github" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"/></symbol><symbol id="i-linkedin" viewBox="0 0 16 16"><path d="M0 1.146C0 .513.526 0 1.175 0h13.65C15.474 0 16 .513 16 1.146v13.708c0 .633-.526 1.146-1.175 1.146H1.175C.526 16 0 15.487 0 14.854zm4.943 12.248V6.169H2.542v7.225zm-1.2-8.212c.837 0 1.358-.554 1.358-1.248-.015-.709-.52-1.248-1.342-1.248S2.4 3.226 2.4 3.934c0 .694.521 1.248 1.327 1.248zm4.908 8.212V9.359c0-.216.016-.432.08-.586.173-.431.568-.878 1.232-.878.869 0 1.216.662 1.216 1.634v3.865h2.401V9.25c0-2.22-1.184-3.252-2.764-3.252-1.274 0-1.845.7-2.165 1.193v.025h-.016l.016-.025V6.169h-2.4c.03.678 0 7.225 0 7.225z"/></symbol><symbol id="i-youtube" viewBox="0 0 16 16"><path d="M8.051 1.999h.089c.822.003 4.987.033 6.11.335a2.01 2.01 0 0 1 1.415 1.42c.101.38.172.883.22 1.402l.01.104.022.26.008.104c.065.914.073 1.77.074 1.957v.075c-.001.194-.01 1.108-.082 2.06l-.008.105-.009.104c-.05.572-.124 1.14-.235 1.558a2.01 2.01 0 0 1-1.415 1.42c-1.16.312-5.569.334-6.18.335h-.142c-.309 0-1.587-.006-2.927-.052l-.17-.006-.087-.004-.171-.007-.171-.007c-1.11-.049-2.167-.128-2.654-.26a2.01 2.01 0 0 1-1.415-1.419c-.111-.417-.185-.986-.235-1.558L.09 9.82l-.008-.104A31 31 0 0 1 0 7.68v-.123c.002-.215.01-.958.064-1.778l.007-.103.003-.052.008-.104.022-.26.01-.104c.048-.519.119-1.023.22-1.402a2.01 2.01 0 0 1 1.415-1.42c.487-.13 1.544-.21 2.654-.26l.17-.007.172-.006.086-.003.171-.007A100 100 0 0 1 7.858 2zM6.4 5.209v4.818l4.157-2.408z"/></symbol><symbol id="i-pdf" viewBox="0 0 16 16"><path d="M14 14V4.5L9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2M9.5 3A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5z"/>
+  <path d="M4.603 14.087a.8.8 0 0 1-.438-.42c-.195-.388-.13-.776.08-1.102.198-.307.526-.568.897-.787a7.7 7.7 0 0 1 1.482-.645 20 20 0 0 0 1.062-2.227 7.3 7.3 0 0 1-.43-1.295c-.086-.4-.119-.796-.046-1.136.075-.354.274-.672.65-.823.192-.077.4-.12.602-.077a.7.7 0 0 1 .477.365c.088.164.12.356.127.538.007.188-.012.396-.047.614-.084.51-.27 1.134-.52 1.794a11 11 0 0 0 .98 1.686 5.8 5.8 0 0 1 1.334.05c.364.066.734.195.96.465.12.144.193.32.2.518.007.192-.047.382-.138.563a1.04 1.04 0 0 1-.354.416.86.86 0 0 1-.51.138c-.331-.014-.654-.196-.933-.417a5.7 5.7 0 0 1-.911-.95 11.7 11.7 0 0 0-1.997.406 11.3 11.3 0 0 1-1.02 1.51c-.292.35-.609.656-.927.787a.8.8 0 0 1-.58.029m1.379-1.901q-.25.115-.459.238c-.328.194-.541.383-.647.547-.094.145-.096.25-.04.361q.016.032.026.044l.035-.012c.137-.056.355-.235.635-.572a8 8 0 0 0 .45-.606m1.64-1.33a13 13 0 0 1 1.01-.193 12 12 0 0 1-.51-.858 21 21 0 0 1-.5 1.05zm2.446.45q.226.245.435.41c.24.19.407.253.498.256a.1.1 0 0 0 .07-.015.3.3 0 0 0 .094-.125.44.44 0 0 0 .059-.2.1.1 0 0 0-.026-.063c-.052-.062-.2-.152-.518-.209a4 4 0 0 0-.612-.053zM8.078 7.8a7 7 0 0 0 .2-.828q.046-.282.038-.465a.6.6 0 0 0-.032-.198.5.5 0 0 0-.145.04c-.087.035-.158.106-.196.283-.04.192-.03.469.046.822q.036.167.09.346z"/></symbol><symbol id="i-paper" viewBox="0 0 16 16"><path d="M5.5 7a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1zM5 9.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 0 1h-2a.5.5 0 0 1-.5-.5"/>
+  <path d="M9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4.5zm0 1v2A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"/></symbol><symbol id="i-code" viewBox="0 0 16 16"><path d="M10.478 1.647a.5.5 0 1 0-.956-.294l-4 13a.5.5 0 0 0 .956.294zM4.854 4.146a.5.5 0 0 1 0 .708L1.707 8l3.147 3.146a.5.5 0 0 1-.708.708l-3.5-3.5a.5.5 0 0 1 0-.708l3.5-3.5a.5.5 0 0 1 .708 0m6.292 0a.5.5 0 0 0 0 .708L14.293 8l-3.147 3.146a.5.5 0 0 0 .708.708l3.5-3.5a.5.5 0 0 0 0-.708l-3.5-3.5a.5.5 0 0 0-.708 0"/></symbol><symbol id="i-project" viewBox="0 0 16 16"><path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8m7.5-6.923c-.67.204-1.335.82-1.887 1.855q-.215.403-.395.872c.705.157 1.472.257 2.282.287zM4.249 3.539q.214-.577.481-1.078a7 7 0 0 1 .597-.933A7 7 0 0 0 3.051 3.05q.544.277 1.198.49zM3.509 7.5c.036-1.07.188-2.087.436-3.008a9 9 0 0 1-1.565-.667A6.96 6.96 0 0 0 1.018 7.5zm1.4-2.741a12.3 12.3 0 0 0-.4 2.741H7.5V5.091c-.91-.03-1.783-.145-2.591-.332M8.5 5.09V7.5h2.99a12.3 12.3 0 0 0-.399-2.741c-.808.187-1.681.301-2.591.332zM4.51 8.5c.035.987.176 1.914.399 2.741A13.6 13.6 0 0 1 7.5 10.91V8.5zm3.99 0v2.409c.91.03 1.783.145 2.591.332.223-.827.364-1.754.4-2.741zm-3.282 3.696q.18.469.395.872c.552 1.035 1.218 1.65 1.887 1.855V11.91c-.81.03-1.577.13-2.282.287zm.11 2.276a7 7 0 0 1-.598-.933 9 9 0 0 1-.481-1.079 8.4 8.4 0 0 0-1.198.49 7 7 0 0 0 2.276 1.522zm-1.383-2.964A13.4 13.4 0 0 1 3.508 8.5h-2.49a6.96 6.96 0 0 0 1.362 3.675c.47-.258.995-.482 1.565-.667m6.728 2.964a7 7 0 0 0 2.275-1.521 8.4 8.4 0 0 0-1.197-.49 9 9 0 0 1-.481 1.078 7 7 0 0 1-.597.933M8.5 11.909v3.014c.67-.204 1.335-.82 1.887-1.855q.216-.403.395-.872A12.6 12.6 0 0 0 8.5 11.91zm3.555-.401c.57.185 1.095.409 1.565.667A6.96 6.96 0 0 0 14.982 8.5h-2.49a13.4 13.4 0 0 1-.437 3.008M14.982 7.5a6.96 6.96 0 0 0-1.362-3.675c-.47.258-.995.482-1.565.667.248.92.4 1.938.437 3.008zM11.27 2.461q.266.502.482 1.078a8.4 8.4 0 0 0 1.196-.49 7 7 0 0 0-2.275-1.52c.218.283.418.597.597.932m-.488 1.343a8 8 0 0 0-.395-.872C9.835 1.897 9.17 1.282 8.5 1.077V4.09c.81-.03 1.577-.13 2.282-.287z"/></symbol><symbol id="i-dataset" viewBox="0 0 16 16"><path d="M4.318 2.687C5.234 2.271 6.536 2 8 2s2.766.27 3.682.687C12.644 3.125 13 3.627 13 4c0 .374-.356.875-1.318 1.313C10.766 5.729 9.464 6 8 6s-2.766-.27-3.682-.687C3.356 4.875 3 4.373 3 4c0-.374.356-.875 1.318-1.313M13 5.698V7c0 .374-.356.875-1.318 1.313C10.766 8.729 9.464 9 8 9s-2.766-.27-3.682-.687C3.356 7.875 3 7.373 3 7V5.698c.271.202.58.378.904.525C4.978 6.711 6.427 7 8 7s3.022-.289 4.096-.777A5 5 0 0 0 13 5.698M14 4c0-1.007-.875-1.755-1.904-2.223C11.022 1.289 9.573 1 8 1s-3.022.289-4.096.777C2.875 2.245 2 2.993 2 4v9c0 1.007.875 1.755 1.904 2.223C4.978 15.71 6.427 16 8 16s3.022-.289 4.096-.777C13.125 14.755 14 14.007 14 13zm-1 4.698V10c0 .374-.356.875-1.318 1.313C10.766 11.729 9.464 12 8 12s-2.766-.27-3.682-.687C3.356 10.875 3 10.373 3 10V8.698c.271.202.58.378.904.525C4.978 9.71 6.427 10 8 10s3.022-.289 4.096-.777A5 5 0 0 0 13 8.698m0 3V13c0 .374-.356.875-1.318 1.313C10.766 14.729 9.464 15 8 15s-2.766-.27-3.682-.687C3.356 13.875 3 13.373 3 13v-1.302c.271.202.58.378.904.525C4.978 12.71 6.427 13 8 13s3.022-.289 4.096-.777c.324-.147.633-.323.904-.525"/></symbol><symbol id="i-mail" viewBox="0 0 16 16"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1zm13 2.383-4.708 2.825L15 11.105zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741M1 11.105l4.708-2.897L1 5.383z"/></symbol><symbol id="i-scholar" viewBox="0 0 24 24"><path d="M5.242 13.769L0 9.5 12 0l12 9.5-5.242 4.269C17.548 11.249 14.978 9.5 12 9.5c-2.977 0-5.548 1.748-6.758 4.269zM12 10a7 7 0 1 0 0 14 7 7 0 0 0 0-14z"/></symbol></svg>
+  <header class="site">
+    <div class="wrap">
+      <a class="brand" href="#top">村松直哉</a>
+      <nav class="site" aria-label="ページ内">
+        <a href="#robots">Robots</a>
+        <a href="#business">Business</a>
+        <a href="#projects">Research</a>
+        <a href="#publications">Publications</a>
+        <a href="#news">News</a>
+        <a href="#gallery">Gallery</a>
+        <a href="./index_en.html" lang="en">EN</a>
+        <a class="cta" href="#contact">Contact →</a>
+      </nav>
+    </div>
+  </header>
 
-    <!-- ======= Header ======= -->
-    <header id="header" class="fixed-top d-flex justify-content-center align-items-center header-transparent">
-        <a class="logo-sp logo-sp-origin" href="">
-            <img src="./assets/img/logo_new_white.svg" alt="">
-        </a>
-        <nav id="navbar" class="navbar">
+  <aside class="side" aria-label="サイドメニュー">
+    <div class="me">
+      <img src="./assets/photos/portrait.jpg" alt="" width="104" height="104">
+      <b>村松直哉</b>
+      <span>Robotics × Computer Vision</span>
+      <div class="icons"><a class="ic sm" href="https://scholar.google.com/citations?user=H7NhyxQAAAAJ" aria-label="Google Scholar" title="Google Scholar"><svg aria-hidden="true"><use href="#i-scholar"/></svg></a><a class="ic sm" href="https://github.com/DenDen047" aria-label="GitHub" title="GitHub"><svg aria-hidden="true"><use href="#i-github"/></svg></a><a class="ic sm" href="https://www.linkedin.com/in/naoya-muramatsu-a01182184/" aria-label="LinkedIn" title="LinkedIn"><svg aria-hidden="true"><use href="#i-linkedin"/></svg></a><a class="ic sm" href="./CV/cv.pdf" aria-label="CV (PDF)" title="CV (PDF)"><svg aria-hidden="true"><use href="#i-pdf"/></svg></a><a class="ic sm" href="mailto:sh.mn.nat@gmail.com" aria-label="メール" title="メール"><svg aria-hidden="true"><use href="#i-mail"/></svg></a></div>
+    </div>
+    <nav aria-label="ページ内">
+      <a href="#about"><span>00</span>About</a>
+      <a href="#robots"><span>01</span>Robots</a>
+      <a href="#business"><span>02</span>Business</a>
+      <a href="#projects"><span>03</span>Research</a>
+      <a href="#publications"><span>04</span>Publications</a>
+      <a href="#news"><span>05</span>News &amp; Media</a>
+      <a href="#career"><span>06</span>Career</a>
+      <a href="#gallery"><span>07</span>Gallery</a>
+      <a href="#contact"><span>→</span>Contact</a>
+    </nav>
+    <div class="foot">© Naoya Muramatsu<br><a href="./index_en.html" lang="en">English</a></div>
+  </aside>
 
-            <ul>
-                <li><a class="nav-link scrollto active" href="#mu-slider">ホーム</a></li>
-                <li><a class="nav-link scrollto" href="#services">紹介</a></li>
-                <li><a class="nav-link scrollto" href="#resume">経歴</a></li>
-                <li><a class="nav-link scrollto" href="#expert">プロジェクト</a></li>
-                <li><a class="nav-link scrollto" href="mailto:sh.mn.nat@gmail.com">お問い合わせ</a></li>
-            </ul>
-            <ul id="language-navbar" class="navbar language">
-                <li><a class="nav-link scrollto active" style="color: white;" href="./index_en.html">English</a></li>
-                <span style="border-right: solid white 1px; height: 10px;"></span>
-                <li><a class="nav-link scrollto" style="color: #0FAF8A !important;" href="./index.html">日本語</a></li>
-            </ul>
-            <i class="bi bi-list mobile-nav-toggle"></i>
-        </nav>
-        <!-- .navbar -->
-    </header>
-    <!-- End Header -->
+  <main id="top">
+    <figure class="hero" style="margin:0">
+      <img src="./assets/photos/hero.jpg" alt="夕暮れの空を背にした WildPose の望遠レンズと LiDAR" fetchpriority="high" style="--focus: 50% 55%">
+      <div class="wrap">
+        <span class="label">Robotics × Computer Vision</span>
+        <h1>村松直哉</h1>
+        <p class="en serif" lang="en">Naoya Muramatsu, Ph.D.</p>
+        <div class="tags"><span>3D Perception</span><span>LiDAR</span><span>Robot Learning</span><span>Wildlife MoCap</span></div>
+      </div>
+      <figcaption>WildPose · Kalahari, 2022</figcaption>
+    </figure>
 
-    <!-- Start slider  -->
-    <section id="mu-slider" class="banner">
-        <div class="swiper-container mySwiper">
-            <img class="logo wow fadeIn" data-wow-delay=".3s" src="./assets/img/logo_new.svg" alt="">
-            <div class="swiper-wrapper wow fadeIn">
-                <div class="swiper-slide slide1">
-                </div>
-
-                <div class="swiper-slide slide2">
-                </div>
-
-                <div class="swiper-slide slide3">
-                </div>
-
-                <div class="swiper-slide slide4">
-                </div>
-            </div>
-
+    <section class="about" id="about">
+      <div class="wrap">
+        <div class="about-grid">
+          <figure class="reveal"><img src="./assets/photos/portrait.jpg" alt="村松直哉の写真" loading="lazy"></figure>
+          <div class="reveal">
+            <h2>カメラで測り、ロボットを動かす。</h2>
+            <p class="role">Ph.D., University of Cape Town · 合同会社frogiraffe 業務執行社員</p>
+            <p class="bio">動く人・動物・車をカメラと LiDAR で 3D 計測し、その技術でロボットを実機で動かします。</p>
+<div class="icons"><a class="ic" href="https://scholar.google.com/citations?user=H7NhyxQAAAAJ" aria-label="Google Scholar" title="Google Scholar"><svg aria-hidden="true"><use href="#i-scholar"/></svg></a><a class="ic" href="https://github.com/DenDen047" aria-label="GitHub" title="GitHub"><svg aria-hidden="true"><use href="#i-github"/></svg></a><a class="ic" href="https://www.linkedin.com/in/naoya-muramatsu-a01182184/" aria-label="LinkedIn" title="LinkedIn"><svg aria-hidden="true"><use href="#i-linkedin"/></svg></a><a class="ic" href="./CV/cv.pdf" aria-label="CV (PDF)" title="CV (PDF)"><svg aria-hidden="true"><use href="#i-pdf"/></svg></a><a class="ic" href="mailto:sh.mn.nat@gmail.com" aria-label="メール" title="メール"><svg aria-hidden="true"><use href="#i-mail"/></svg></a></div>
+          </div>
         </div>
+        <div class="spec reveal" aria-label="数字で見る実績">
+          <div><b>16</b><span>査読付き論文（ICRA・IROS・ECCV・JEB）</span></div>
+          <div><b>Cover</b><span><i>Journal of Experimental Biology</i> 2025年3月号</span></div>
+          <div><b>MSR</b><span>Microsoft Research PhD Fellowship 2022</span></div>
+          <div><b>未踏</b><span>スーパークリエータ（2018年度）</span></div>
+        </div>
+      </div>
     </section>
-    <main id="main">
 
-        <section id="services" class="services">
-            <div class="container">
-                <div class="section-title">
-                    <h2>
-                        <span class="wow fadeIn">紹</span>
-                        <span class="wow fadeIn" data-wow-delay="0.1s">介</span>
-                    </h2>
-                </div>
-                <img class="border-circle mt-2 wow zoomIn" src="./assets/img/avatar.jpg" alt="">
-                <h3 class="text-center mt-4 fw-bold wow fadeIn">村松 直哉</h3>
-                <div class="social-links mt-4">
-                    <a href="https://twitter.com/DenDen047" class="twitter wow fadeInUp"><i
-                            class="bi bi-twitter"></i></a>
-                    <a href="https://github.com/DenDen047" class="facebook wow fadeInUp" data-wow-delay=".2s"><i
-                            class="bi bi-github"></i></a>
-                    <a href="https://www.linkedin.com/in/naoya-muramatsu-a01182184/" class="linkedin wow fadeInUp"
-                        data-wow-delay=".4s"><i class="bi bi-linkedin"></i></a>
-                    <a href="./CV/cv.pdf"
-                        class="file-earmark-person wow fadeInUp" data-wow-delay=".6s"><i
-                            class="bi bi-file-earmark-person"></i></a>
-                </div>
-                <p class="service-main-description mb-3 wow fadeInUp">
-                    リモートセンシングによる生体認識を専門とする研究者・エンジニアです。
-                    カメラやLiDAR、コンピュータビジョンを組み合わせ、野生動物の動きや形態を自然環境のまま3次元計測・解析するシステムを研究しています。
-                    ケープタウン大学で工学博士号を取得。現在は合同会社frogiraffeを創業し、画像処理技術の研究開発と技術コンサルティングに取り組んでいます。
-                </p>
-
-                <div class="d-flex justify-content-center align-itmes-center mt-5 py-5 wow zoomIn"><a href="#contact"
-                        class="contact-btn">お問い合わせ</a></div>
-            </div>
-        </section>
-        <!-- ======= Logo Section ===== -->
-        <section class="logo-container">
-            <div><img src="./assets/img/logo_new.svg" alt=""></div>
-        </section>
-        <!-- End logo Section -->
-
-
-        <!-- ======= My Resume Section ======= -->
-        <section id="resume" class="resume">
-            <div class="container">
-
-                <div class="section-title">
-                    <h2>
-                        <span class="wow fadeIn" data-wow-delay="">経</span>
-                        <span class="wow fadeIn" data-wow-delay=".1s">歴</span>
-                    </h2>
-                </div>
-
-                <div class="row">
-                    <div class="col-lg-6">
-                        <div class="d-flex align-items-center justify-content-center">
-                            <h3 class="resume-title wow fadeIn">発表文献</h3>
-                            <!-- <a class="image-icon" href="https://scholar.google.com/citations?user=H7NhyxQAAAAJ">
-                                <img src="./assets/img/scholar.png" alt="">
-                            </a>
-                            <a class="image-icon second" href="https://dblp.org/">
-                                <img src="./assets/img/dblp.png" alt="">
-                            </a> -->
-                            <div class="social-links mx-3 mb-2 wow fadeIn" data-wow-delay=".2s">
-                                <a href="https://scholar.google.com/citations?user=H7NhyxQAAAAJ"
-                                    class="google-scholar"><i class="ai ai-google-scholar"></i></a>
-                                <a href="https://dblp.org/pid/45/11394" class="dblp"><i class="ai ai-dblp"></i></a>
-                            </div>
-                        </div>
-                        <div class="resume-item">
-                            <h4>査読付き学術雑誌</h4>
-                            <ul class="number-ul__inner">
-                                <li class="wow fadeInUp">
-                                    <p><span class="fw-bold">Naoya Muramatsu</span>, Sangyun Shin, Qianyi Deng, Andrew
-                                        Markham, Amir Patel, "<a href="https://doi.org/10.1242/jeb.249987">WildPose: A
-                                        Long-Range 3D Wildlife Motion Capture System</a>", Journal of Experimental
-                                        Biology 228 (5), 2025. <span class="fw-bold text-danger">(Cover article)</span></p>
-                                </li>
-                                <li class="wow fadeInUp">
-                                    <p>Stacey Shield, <span class="fw-bold">Naoya Muramatsu</span>, Zico Da Silva, Amir
-                                        Patel, "Chasing the cheetah: how field biomechanics has evolved to
-                                        keep up with the fastest land animal",
-                                        Journal of Experimental Biology 226, Suppl_1 (2023).</p>
-                                </li>
-                                <li class="wow fadeInUp">
-                                    <p><span class="fw-bold">Naoya Muramatsu</span>, Hai-Tao Yu, Tetsuji Satoh,
-                                        "Combining Spiking Neural Networks with Artificial Neural Networks for Enhanced
-                                        Image Classification",
-                                        IEICE TRANSACTIONS on Information and Systems 106, 2 (2023).</p>
-                                </li>
-                            </ul>
-                        </div>
-                        <div class="resume-item">
-                            <h4>査読付き国際学会</h4>
-                            <ul class="number-ul__inner">
-                                <li class="wow fadeInUp">
-                                    <p>Muhammad Aamir*, <span class="fw-bold">Naoya Muramatsu</span>*, Sangyun Shin,
-                                        Matthew Wijers, Jia-Xing Zhong, Xinyu Hou, Amir Patel, Andrew Loveridge,
-                                        Andrew Markham, "<a href="https://yunshin.github.io/WildDepth/">WildDepth: A
-                                        Multimodal Dataset for 3D Wildlife Perception and Depth Estimation</a>",
-                                        European Conference on Computer Vision (ECCV 2026) and
-                                        <a href="https://sites.google.com/view/cv4animals/home">CVPR 2026 CV4Animals
-                                        Workshop</a>. (* Joint first authorship)</p>
-                                </li>
-                                <li class="wow fadeInUp">
-                                    <p>Amaan Vally, Daniel Joska, <span class="fw-bold">Naoya Muramatsu</span>, Paul
-                                        Amayo, Amir Patel, "Autonomous Rotating Cameras Boost 3D Wildlife MoCap Yield
-                                        without Human Operators", in Proc. IEEE International Conference on Robotics
-                                        and Automation (ICRA 2026).</p>
-                                </li>
-                                <li class="wow fadeInUp">
-                                    <p>
-                                        Zico da Silva, <span class="fw-bold">Naoya Muramatsu</span>, Zuhayr Parkar, Fred Nicolls, Amir Patel, "Monocular 3D Reconstruction of Cheetahs in the Wild", in Proc. IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS 2024).
-                                    </p>
-                                </li>
-                                <li class="wow fadeInUp">
-                                    <p>
-                                        <span class="fw-bold">Naoya Muramatsu</span>, Sangyun Shin, Andrew Markham, Amir Patel, "WildPose: A Long-range 3D Motion Capture System for Wildlife", in the IEEE/CVF Conference on Computer Vision and Pattern Recognition 2024 (CVPR 2024 CV4Animals Workshop).
-                                    </p>
-                                </li>
-                                <li class="wow fadeInUp">
-                                    <p>
-                                        <span class="fw-bold">Naoya Muramatsu</span>*, Zico da Silva*, Daniel Joska,
-                                        Fred Nicolls, Amir Patel.
-                                        "Improving 3D Markerless Pose Estimation of Animals in the Wild using Low-Cost
-                                        Cameras".
-                                        2022 IEEE International Conference on Intelligent Robots and Systems (IROS).
-                                        (* Joint first authorship)
-                                    </p>
-                                </li>
-                                <li class="wow fadeInUp">
-                                    <p>Daniel Joska, Liam Clark, <span class="fw-bold">Naoya Muramatsu</span>, Ricardo
-                                        Jericevich, Fred Nicolls, Alexander Mathis, Mackenzie Mathis, Amir Patel,
-                                        "AcinoSet: A 3D Pose Estimation Dataset and Baseline Models for Cheetahs in the Wild",
-                                        2021 IEEE International Conference on Robotics and Automation (ICRA).
-                                    </p>
-                                </li>
-                                <li class="wow fadeInUp">
-                                    <p>Chun Wei Ooi, <span class="fw-bold">Naoya Muramatsu</span>, Yoichi Ochiai, "Eholo
-                                        glass: Electroholography glass. A lensless approach to holographic augmented
-                                        reality near-eye display", in Proc. SIGGRAPH Asia 2018 Technical
-                                        Briefs.
-                                    </p>
-                                </li>
-                                <li class="wow fadeInUp">
-                                    <p>Natsumi Kato, Hiroyuki Osone, Daitetsu Sato, <span class="fw-bold">Naoya
-                                            Muramatsu</span>, Yoichi Ochiai. "DeepWear: a Case Study of Collaborative
-                                        Design between Human and Artificial Intelligence", in Proc. Twelfth
-                                        International Conference on Tangible, Embedded, and Embodied Interaction (TEI
-                                        2018).</p>
-                                </li>
-                                <li class="wow fadeInUp">
-                                    <p>Natsumi Kato, Hiroyuki Osone, Daitetsu Sato, <span class="fw-bold">Naoya
-                                            Muramatsu</span>, Yoichi Ochiai. "Crowd Sourcing Clothes Design Directed by
-                                        Adversarial Neural Networks", in Thirty-third Conference on Neural
-                                        Information Processing Systems (NIPS 2017 Workshop).</p>
-                                </li>
-                                <li class="wow fadeInUp">
-                                    <p><span class="fw-bold">Naoya Muramatsu</span>, Chun Wei Ooi, Yuta Itoh, and Yoichi
-                                        Ochiai. "DeepHolo: Recognizing 3D Objects using a Binary-weighted
-                                        Computer-Generated Hologram", in SIGGRAPH Asia 2017 Posters.</p>
-                                </li>
-                                <li class="wow fadeInUp">
-                                    <p>Mose Sakashita, Yuta Sato, Ayaka Ebisu, Keisuke Kawahara, Satoshi Hashizume,
-                                        <span class="fw-bold">Naoya Muramatsu</span>, Yoichi Ochiai, "Haptic Marionette:
-                                        Wrist Control Technology Combined with Electrical Muscle
-                                        Stimulation and Hanger Reflex", in SIGGRAPH Asia 2017 Posters.
-                                    </p>
-                                </li>
-                                <li class="wow fadeInUp">
-                                    <p><span class="fw-bold">Naoya Muramatsu</span>, Kazuki Ohshima, Ryota Kawamura, Ooi
-                                        Chun Wei, Yuta Sato, Yoichi Ochiai. "Sonoliards: Rendering Audible Sound Spots
-                                        by Reflecting the Ultrasound Beams", in Adjunct Proc.
-                                        30th Annual ACM Symposium on User Interface Software and Technology (UIST 2017).
-                                    </p>
-                                </li>
-                                <li class="wow fadeInUp">
-                                    <p><span class="fw-bold">Naoya Muramatsu</span>, Ooi Chun Wei, Takashi Miyazaki.
-                                        "Development of High Performance Filter for Indoor Positioning System", The 5th
-                                        IIAE International Conference on Intelligent Systems and
-                                        Image Processing (ICISIP), September 2017.
-                                    </p>
-                                </li>
-                            </ul>
-                        </div>
-                        <div class="resume-item">
-                            <h4>その他（査読なし学会、国内学会・研究会等）</h4>
-                            <ul class="number-ul__inner">
-                                <li class="wow fadeInUp">
-                                    <p><span class="fw-bold">Naoya Muramatsu</span>, Hai-Tao Yu, "Combining Spiking
-                                        Neural Network and Artificial Neural Network for Enhanced Image Classification",
-                                        第13回データ工学と情報マネジメントに関するフォーラム (DEIM2021).</p>
-                                </li>
-                                <li class="wow fadeInUp">
-                                    <p><span class="fw-bold">村松直哉</span>, 佐藤哲司, 伏見卓恭, "レビュー観点の推移パターンに基づく商品属性の抽出手法",
-                                        第9回データ工学と情報マネジメントに関するフォーラム (DEIM2017). <span
-                                            class="fw-bold">(学生プレゼンテーション賞)</span></p>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-                    <div class="col-lg-6">
-                        <h3 class="resume-title">活動等</h3>
-                        <div class="resume-item">
-                            <h4>学歴</h4>
-                            <h5 class="wow fadeInUp">2021年5月 &#8212; 2026年7月</h5>
-                            <p class="px-3 wow fadeInUp">ケープタウン大学 博士課程 (工学博士)</p>
-                            <h5 class="wow fadeInUp">2021年3月</h5>
-                            <p class="px-3 wow fadeInUp">筑波大学大学院 図書館情報メディア研究科 博士前期課程 修了（情報学）</p>
-                            <h5 class="wow fadeInUp">2018年3月</h5>
-                            <p class="px-3 wow fadeInUp">筑波大学 情報学群 知識情報・図書館学類 卒業</p>
-                            <h5 class="wow fadeInUp">2016年3月</h5>
-                            <p class="px-3 wow fadeInUp">長野工業高等専門学校 電気電子工学科 卒業</p>
-                        </div>
-                        <div class="resume-item">
-                            <h4>職歴</h4>
-                            <h5 class="wow fadeInUp">2018年5月 &#8212; 現在</h5>
-                            <p class="px-3 wow fadeInUp">フリーランス &amp; 合同会社frogiraffe（業務執行社員）</p>
-                            <p class="px-4 wow fadeInUp" style="font-size: 1">取引先企業実績:</p>
-                            <ul class="px-5 wow fadeInUp">
-                                <li>株式会社ユーソナー</li>
-                                <li>Nordot USA Inc.</li>
-                                <li>株式会社Ugotoru</li>
-                                <li>株式会社ハイパーデジタルツイン</li>
-                                <li>正解株式会社</li>
-                            </ul>
-                            <h5 class="wow fadeInUp">2017年8月 &#8212; 2019年3月</h5>
-                            <p class="px-3 wow fadeInUp">ピクシーダストテクノロジーズ株式会社（エンジニア）</p>
-                            <h5 class="wow fadeInUp">2016年2月 &#8212; 2017年12月</h5>
-                            <p class="px-3 wow fadeInUp">株式会社フィックスターズ（エンジニア）</p>
-                        </div>
-                        <div class="resume-item">
-                            <h4>受賞・フェローシップ等</h4>
-                            <h5 class="wow fadeInUp">2025年</h5>
-                            <p class="px-3 wow fadeInUp">Journal of Experimental Biology カバー記事</p>
-                            <h5 class="wow fadeInUp">2022年</h5>
-                            <p class="px-3 wow fadeInUp">Microsoft Research PhD Fellowship</p>
-                            <h5 class="wow fadeInUp">2019年</h5>
-                            <p class="px-3 wow fadeInUp">2018年度未踏IT人材発掘・育成事業 スーパークリエータ認定</p>
-                            <h5 class="wow fadeInUp">2018年</h5>
-                            <p class="px-3 wow fadeInUp">未踏IT人材発掘・育成事業 クリエータ</p>
-                            <h5 class="wow fadeInUp">2018年</h5>
-                            <p class="px-3 wow fadeInUp">筑波大学 学生表彰</p>
-                            <h5 class="wow fadeInUp">2017年</h5>
-                            <p class="px-3 wow fadeInUp">学生プレゼンテーション賞, 第9回データ工学と情報マネジメントに関するフォーラム</p>
-                            <h5 class="wow fadeInUp">2015年</h5>
-                            <p class="px-3 wow fadeInUp">北信越ブロック3位受賞, ロボカップジュニア2015 サッカーチャレンジ</p>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-        </section>
-        <!-- End My Resume Section -->
-
-        <!-- ===== Expert Section ===== -->
-        <section id="expert" class="expert">
-            <div class="section-title">
-                <h2>
-                    <span class="wow fadeIn" data-wow-delay="">プ</span>
-                    <span class="wow fadeIn" data-wow-delay=".1s">ロ</span>
-                    <span class="wow fadeIn" data-wow-delay=".2s">ジェ</span>
-                    <span class="wow fadeIn" data-wow-delay=".3s">ク</span>
-                    <span class="wow fadeIn" data-wow-delay=".4s">ト</span>
-                </h2>
-            </div>
-            <div class="project-grid">
-                <div class="expert-card">
-                    <iframe src="https://www.youtube.com/embed/Le_72hkZfmY"></iframe>
-                    <div class="mt-4 mb-3 fw-bold wow fadeInUp">2018年度未踏IT人材発掘・育成事業</div>
-                    <div class="expert-description wow fadeInUp">
-                        <p>短時間でロボットの動きを学習し、故障しても歩ける制御プログラムを開発しました。段階的に強化学習を行うことで、現実的な時間でロボットの動きを学習できます。 <span
-                                class="fw-bold text-warning">未踏スーパークリエーター認定</span>を頂きました。
-                        </p>
-                        <ul>
-                            <li>
-                                <a
-                                    href="https://www.meti.go.jp/press/2019/05/20190524001/20190524001.html">経産省プレスリリース</a>
-                            </li>
-                            <li>
-                                <a href="https://www.ipa.go.jp/jinzai/mitou/2018/20190524.html">IPAプレスリリース</a>
-                            </li>
-                            <li>
-                                <a href="https://www.ipa.go.jp/files/000074112.pdf">クリエータ紹介資料</a>
-                            </li>
-                        </ul>
-                    </div>
-                </div>
-                <div class="expert-card">
-                    <iframe src="https://www.youtube.com/embed/golHt_Y71oI"></iframe>
-                    <div class="mt-4 mb-3 fw-bold wow fadeInUp">チーターのフィールド生体力学<br>（博士研究）</div>
-                    <div class="expert-description wow fadeInUp">
-                        <p>コンピュータビジョンを用いて、野生のチーターの動きを計測・解析するシステムを開発しました。
-                            <span class="fw-bold text-warning">Google</span>、<span
-                                class="fw-bold text-warning">マイクロソフト</span>、<span
-                                class="fw-bold text-warning">MathWorks</span>の支援を受けました。
-                        </p>
-                        <ul>
-                            <li>
-                                <a
-                                    href="https://www.news.uct.ac.za/article/-2022-11-09-patels-cheetah-locomotion-study-gets-major-funding-boost">ケープタウン大学の特集記事</a>
-                            </li>
-                            <li><a
-                                    href="https://www.microsoft.com/en-us/research/academic-program/phd-fellowship/2022-recipients/">
-                                    Microsoft PhD Fellowship
-                                </a>
-                            </li>
-                            <li>
-                                <a
-                                    href="https://journals.biologists.com/jeb/article/226/Suppl_1/jeb245930/307100/ECR-Spotlight-Stacey-Shield-and-Naoya-Muramatsu">ECR
-                                    Spotlight（注目の若手研究者）</a>
-                            </li>
-                        </ul>
-                    </div>
-                </div>
-                <div class="expert-card">
-                    <img src="./static/images/wildpose/IMG_5295.jpg" alt="WildPoseのフィールド設置">
-                    <div class="mt-4 mb-3 fw-bold wow fadeInUp">WildPose（2025）</div>
-                    <div class="expert-description wow fadeInUp">
-                        <p><span class="fw-bold text-warning">Google</span>と<span
-                                class="fw-bold text-warning">Microsoft PhD Fellowship</span>の支援を受け、長距離から野生動物を3D計測するシステムを開発しました。<span class="fw-bold text-warning">Journal of Experimental Biology</span>のカバー記事に掲載されています。
-                        </p>
-                        <ul>
-                            <li><a href="./wildpose.html">プロジェクトページ</a></li>
-                            <li>
-                                <a
-                                    href="https://journals.biologists.com/jeb/article-abstract/228/5/JEB249987/367271/WildPose-a-long-range-3D-wildlife-motion-capture?redirectedFrom=fulltext">Journal of Experimental Biology</a>
-                            </li>
-                            <li>
-                                <a
-                                    href="https://journals.biologists.com/jeb/article/228/5/JEB250311/367270/High-resolution-WildPose-3D-scans-revolutionise">Inside JEB</a>
-                            </li>
-                            <li><a
-                                    href="https://www.microsoft.com/en-us/research/academic-program/phd-fellowship/2022-recipients/">
-                                    Microsoft PhD Fellowship
-                                </a>
-                            </li>
-                            <li><a href="https://github.com/DenDen047/WildPose_v1.1">コード</a></li>
-                        </ul>
-                    </div>
-                </div>
-                <div class="expert-card">
-                    <img src="https://yunshin.github.io/WildDepth/assets/RGB_Lidar_points.png"
-                        alt="同期された野生動物のRGB・LiDARデータ">
-                    <div class="mt-4 mb-3 fw-bold wow fadeInUp">WildDepth（ECCV 2026）</div>
-                    <div class="expert-description wow fadeInUp">
-                        <p>野生動物の深度推定・3D認識のための、同期RGB・LiDAR公開データセットです。</p>
-                        <ul>
-                            <li><a href="https://yunshin.github.io/WildDepth/">プロジェクト・データセット</a></li>
-                            <li><a href="https://arxiv.org/abs/2603.16816">論文（arXiv）</a></li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-            <div class="text-center my-5 py-4 wow fadeInUp">
-                <img src="./assets/img/expert-dot.svg" alt="">
-            </div>
-            <div class="d-flex justify-content-center mb-5 wow zoomIn">
-                <a href="mailto:sh.mn.nat@gmail.com" class="contact-btn">お問い合わせ</a>
-            </div>
-        </section>
-        <!-- End Expert Section -->
-
-    </main>
-    <!-- End #main -->
-
-    <!-- ======= Footer ======= -->
-    <footer id="footer">
-        <img class="wow zoomIn" src="./assets/img/logo_new_white.svg">
-        <div class="copyright">
-            © Copyright Naoya Muramatsu. All Rights Reserved
+    <section class="sec" id="robots">
+      <div class="wrap">
+        <div class="sec-title"><span class="no">01</span><h2>扱ってきたロボット</h2><span class="label">Drag to rotate</span></div>
+        <div class="plates">
+          <article class="plate reveal">
+            <div class="viewport" data-robot="openarm" aria-label="OpenArm 2.0 の 3D モデル"><span class="crop"></span><span class="readout">FIG. 01</span><span class="loading">loading…</span></div>
+            <div class="plate-body"><span class="label">Dual-arm</span><h3>OpenArm 2.0</h3><p>立ち上げ・テレオペ・学習データ収集</p><dl><dt>DOF</dt><dd>7 × 2 + gripper</dd></dl></div>
+          </article>
+          <article class="plate reveal">
+            <div class="viewport" data-robot="r1" aria-label="Unitree R1 の 3D モデル"><span class="crop"></span><span class="readout">FIG. 02</span><span class="loading">loading…</span></div>
+            <div class="plate-body"><span class="label">Humanoid</span><h3>Unitree R1</h3><p>段差昇降の強化学習</p><dl><dt>DOF</dt><dd>26</dd></dl></div>
+          </article>
+          <article class="plate reveal">
+            <div class="viewport" data-robot="g1" aria-label="Unitree G1 の 3D モデル"><span class="crop"></span><span class="readout">FIG. 03</span><span class="loading">loading…</span></div>
+            <div class="plate-body"><span class="label">Humanoid</span><h3>Unitree G1</h3><p>生成モデルによる動作生成の検証</p><dl><dt>DOF</dt><dd>29</dd></dl></div>
+          </article>
+          <article class="plate reveal">
+            <div class="viewport" data-robot="go2" aria-label="Unitree Go2 の 3D モデル"><span class="crop"></span><span class="readout">FIG. 04</span><span class="loading">loading…</span></div>
+            <div class="plate-body"><span class="label">Quadruped</span><h3>Unitree Go2</h3><p>マルチモーダル AI による自律化</p><dl><dt>DOF</dt><dd>12</dd></dl></div>
+          </article>
         </div>
-    </footer>
-    <!-- End Footer -->
+      </div>
+    </section>
 
-    <a href="#" class="back-to-top d-flex align-items-center justify-content-center"><i
-            class="bi bi-arrow-up-short"></i></a>
+    <section class="sec" id="business">
+      <div class="wrap">
+        <div class="sec-title"><span class="no">02</span><h2>業務の実績</h2><span class="label">Client work · since 2018</span></div>
+        <ol class="biz">
+          <li class="reveal">
+            <div class="meta"><time>2026.05 —</time><b>ロボット開発のスタートアップ</b><span>ロボット開発</span></div>
+            <div>
+              <h3>双腕モバイルマニピュレータの試作</h3>
+              <ul><li>NEDO 事業の汎用ロボットコンペ向け試作機</li><li>双腕・全方向台車・昇降胴体の立ち上げ</li><li>テレオペでの学習データ収集と触覚センサの検証</li></ul>
+              <div class="stack"><span>ROS 2</span><span>LeRobot</span><span>CAN FD</span><span>Quest 3S</span><span>LiDAR</span></div>
+            </div>
+            <figure class="diagram"><img src="./assets/diagrams/biz-dual-arm.jpg" alt="正面から見た双腕アームと関節の動きを示した概念図" loading="lazy"></figure>
+          </li>
+          <li class="reveal">
+            <div class="meta"><time>2026.09 —</time><b>ロボット開発のスタートアップ</b><span>ヒューマノイド</span></div>
+            <div>
+              <h3>ヒューマノイドの動作生成と実機展開</h3>
+              <ul><li>強化学習で 20 cm の段差を越える歩行</li><li>G1 で生成モデルによる動作生成を検証</li></ul>
+              <div class="stack"><span>Isaac Lab</span><span>MuJoCo</span><span>RL</span><span>sim2real</span></div>
+            </div>
+            <figure class="diagram"><img src="./assets/diagrams/biz-humanoid.jpg" alt="車の座席に座る人型ロボットの概念図" loading="lazy"></figure>
+          </li>
+          <li class="reveal">
+            <div class="meta"><time>2025 —</time><b>空間把握プラットフォームの開発企業</b><span>LiDAR · モビリティ</span></div>
+            <div>
+              <h3>多数の LiDAR による屋外の人・車の追跡</h3>
+              <ul><li>対象ごとに動きのモデルを切り替える追跡（IMM）を提案</li><li>複数 LiDAR の自動キャリブレーション</li><li>反射強度マーカーと、点群だけからの姿勢推定</li></ul>
+              <div class="stack"><span>LiDAR</span><span>Kalman / IMM</span><span>ROS 2</span><span>CARLA</span></div>
+            </div>
+            <figure class="diagram"><img src="./assets/diagrams/biz-lidar.jpg" alt="LiDAR が歩く 2 人を追跡する概念図" loading="lazy"></figure>
+          </li>
+          <li class="reveal">
+            <div class="meta"><time>2025 —</time><b>企業データベースの運営企業</b><span>画像処理 · OCR</span></div>
+            <div>
+              <h3>名刺画像の読み取りパイプライン</h3>
+              <ul><li>7 段の名刺 OCR パイプラインを改善</li><li>影除去のモデルを蒸留し、8.8M パラメータで速度を 2 倍にした</li><li>名刺画像の合成と認識器の選定</li></ul>
+              <div class="stack"><span>OCR</span><span>Distillation</span><span>RF-DETR</span><span>Synthetic data</span><span>VLM</span></div>
+            </div>
+            <figure class="diagram"><img src="./assets/diagrams/biz-ocr.jpg" alt="名刺の撮影から項目の抽出までの流れの概念図" loading="lazy"></figure>
+          </li>
+          <li class="reveal">
+            <div class="meta"><time>2025.08 — 2026.10</time><b>3D アバターのスタートアップ</b><span>3D ビジョン</span></div>
+            <div>
+              <h3>1 枚の写真から、動かせる人物の 3D モデル</h3>
+              <ul><li>1 枚の写真から人物の 3D モデルを生成</li><li>自動リギングと 3DGS の検証</li></ul>
+              <div class="stack"><span>Image-to-3D</span><span>Rigging</span><span>3DGS</span><span>PyTorch</span></div>
+            </div>
+            <figure class="diagram"><img src="./assets/diagrams/biz-avatar.jpg" alt="1 枚の写真から 3D の人物モデルを作り骨格を入れる流れの概念図" loading="lazy"></figure>
+          </li>
+          <li class="reveal">
+            <div class="meta"><time>2024.12 — 2025.05</time><b>AI 企業（再委託）</b><span>LLM</span></div>
+            <div>
+              <h3>大規模言語モデルの事後学習と評価</h3>
+              <ul><li>Thought Preference Optimization の実装</li><li>DPO による学習と AlpacaEval での評価</li></ul>
+              <div class="stack"><span>LLM</span><span>DPO</span><span>AlpacaEval</span></div>
+            </div>
+            <figure class="diagram"><img src="./assets/diagrams/biz-llm.jpg" alt="言語モデルを好みのペアで追加学習し評価する流れの概念図" loading="lazy"></figure>
+          </li>
+        </ol>
+      </div>
+    </section>
 
-    <!-- Vendor JS Files -->
-    <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
-    <script src="assets/vendor/glightbox/js/glightbox.min.js"></script>
-    <script src="assets/vendor/isotope-layout/isotope.pkgd.min.js"></script>
-    <!-- <script src="assets/vendor/php-email-form/validate.js"></script> -->
-    <script src="assets/vendor/purecounter/purecounter.js"></script>
-    <script src="assets/vendor/swiper/swiper-bundle.min.js"></script>
-    <script src="assets/vendor/waypoints/noframework.waypoints.js"></script>
+    <section class="sec" id="projects">
+      <div class="wrap">
+        <div class="sec-title"><span class="no">03</span><h2>研究プロジェクト</h2><span class="label">Research</span></div>
+        <div class="projects">
+          <article class="proj reveal">
+            <div class="media"><video muted loop playsinline preload="none" poster="./assets/videos/wildpose.jpg" data-src="./assets/videos/wildpose.mp4" aria-label="車の窓に付けた WildPose のジンバルが、望遠カメラと LiDAR を振る様子"></video><span class="play">WildPose · gimbal</span></div>
+            <div class="badges"><span class="venue hl">JEB 2025 · COVER</span><span class="venue">CVPR 2024 WS</span></div>
+            <h3>WildPose</h3>
+            <p>LiDAR とズームカメラで、遠くの野生動物を 3D で測ります。</p>
+            <div class="icons links"><a class="ic sm" href="./wildpose.html" aria-label="Project" title="Project"><svg aria-hidden="true"><use href="#i-project"/></svg></a><a class="ic sm" href="https://doi.org/10.1242/jeb.249987" aria-label="Paper" title="Paper"><svg aria-hidden="true"><use href="#i-paper"/></svg></a><a class="ic sm" href="https://github.com/DenDen047/WildPose_v1.1" aria-label="Code" title="Code"><svg aria-hidden="true"><use href="#i-code"/></svg></a></div>
+          </article>
+          <article class="proj reveal">
+            <div class="media"><video muted loop playsinline preload="none" poster="./assets/videos/wilddepth.jpg" data-src="./assets/videos/wilddepth.mp4" aria-label="チーターの RGB 映像と LiDAR の深度"></video><span class="play">WildDepth dataset · CC BY 4.0</span></div>
+            <div class="badges"><span class="venue hl">ECCV 2026</span><span class="venue">CVPR 2026 WS</span></div>
+            <h3>WildDepth</h3>
+            <p>野生動物の RGB-LiDAR データセットを公開しました（共同筆頭）。</p>
+            <div class="icons links"><a class="ic sm" href="https://yunshin.github.io/WildDepth/" aria-label="Dataset" title="Dataset"><svg aria-hidden="true"><use href="#i-dataset"/></svg></a><a class="ic sm" href="https://arxiv.org/abs/2603.16816" aria-label="arXiv" title="arXiv"><svg aria-hidden="true"><use href="#i-paper"/></svg></a></div>
+          </article>
+          <article class="proj reveal">
+            <div class="media"><video muted loop playsinline preload="none" poster="./assets/videos/iros2022.jpg" data-src="./assets/videos/iros2022.mp4" aria-label="走るチーターに重ねた 3D 姿勢のキーポイント"></video><span class="play">IROS 2022</span></div>
+            <div class="badges"><span class="venue hl">IROS 2022</span></div>
+            <h3>低コストカメラによる野生動物の 3D 姿勢推定</h3>
+            <p>市販のカメラで、走るチーターの 3D 姿勢を推定します（共同筆頭）。</p>
+            <div class="icons links"><a class="ic sm" href="https://www.youtube.com/watch?v=golHt_Y71oI" aria-label="YouTube" title="YouTube"><svg aria-hidden="true"><use href="#i-youtube"/></svg></a></div>
+          </article>
+          <article class="proj reveal">
+            <div class="media"><video muted loop playsinline preload="none" poster="./assets/videos/cheetah.jpg" data-src="./assets/videos/cheetah.mp4" aria-label="ルアーを追って旋回し走り出すチーターのスロー映像"></video><span class="play">120 fps · 4× slow</span></div>
+            <div class="badges"><span class="venue hl">ICRA 2021</span><span class="venue">IROS 2024</span><span class="venue">ICRA 2026</span></div>
+            <h3>チーターの 3D 計測</h3>
+            <p>データセット・単眼 3D 復元・自律回転カメラを研究しました。</p>
+            <div class="icons links"><a class="ic sm" href="https://github.com/African-Robotics-Unit/AcinoSet" aria-label="AcinoSet (GitHub)" title="AcinoSet (GitHub)"><svg aria-hidden="true"><use href="#i-code"/></svg></a></div>
+          </article>
+          <article class="proj reveal">
+            <button class="media" type="button" data-youtube="Le_72hkZfmY" aria-label="動画を再生: 未踏 2018 成果発表"><img src="./assets/photos/mitou-hexapod.jpg" alt="未踏で作った六脚歩行ロボット" loading="lazy"><span class="play">未踏 2018 成果発表</span></button>
+            <div class="badges"><span class="venue hl">未踏 SUPER CREATOR</span></div>
+            <h3>壊れても歩き続けるロボット</h3>
+            <p>脚が壊れても歩き方を学び直す六脚ロボットです。</p>
+            <div class="icons links"><a class="ic sm" href="https://www.ipa.go.jp/jinzai/mitou/2018/20190524.html" aria-label="IPA の発表" title="IPA の発表"><svg aria-hidden="true"><use href="#i-project"/></svg></a><a class="ic sm" href="https://www.meti.go.jp/press/2019/05/20190524001/20190524001.html" aria-label="経済産業省の発表" title="経済産業省の発表"><svg aria-hidden="true"><use href="#i-paper"/></svg></a></div>
+          </article>
+        </div>
 
-    <!-- Template Main JS File -->
-    <script src="assets/js/main.js"></script>
+      </div>
+    </section>
 
-    <!-- jQuery library -->
-    <script src="assets/js/jquery.min.js"></script>
+    <section class="sec" id="publications">
+      <div class="wrap">
+        <div class="sec-title"><span class="no">04</span><h2>論文</h2><span class="label"><a class="ic sm" href="https://scholar.google.com/citations?user=H7NhyxQAAAAJ" aria-label="Google Scholar" title="Google Scholar"><svg aria-hidden="true"><use href="#i-scholar"/></svg></a></span></div>
+        <ul class="pubs">
+          <li><span class="venue hl">ECCV 2026</span><div><div class="t">WildDepth: A Multimodal Dataset for 3D Wildlife Perception and Depth Estimation</div><div class="a">M. Aamir*, <b>N. Muramatsu*</b>, S. Shin, M. Wijers, J.-X. Zhong, X. Hou, A. Patel, A. Loveridge, A. Markham · also CV4Animals @ CVPR 2026 · *equal contribution</div><div class="icons links"><a class="ic sm" href="https://yunshin.github.io/WildDepth/" aria-label="Project" title="Project"><svg aria-hidden="true"><use href="#i-project"/></svg></a><a class="ic sm" href="https://arxiv.org/abs/2603.16816" aria-label="arXiv" title="arXiv"><svg aria-hidden="true"><use href="#i-paper"/></svg></a></div></div></li>
+          <li><span class="venue hl">ICRA 2026</span><div><div class="t">Autonomous Rotating Cameras Boost 3D Wildlife MoCap Yield without Human Operators</div><div class="a">A. Vally, D. Joska, <b>N. Muramatsu</b>, P. Amayo, A. Patel</div></div></li>
+          <li><span class="venue hl">JEB 2025</span><div><div class="t">WildPose: A Long-Range 3D Wildlife Motion Capture System <span class="mono">· Cover article</span></div><div class="a"><b>N. Muramatsu</b>, S. Shin, Q. Deng, A. Markham, A. Patel · Journal of Experimental Biology 228(5)</div><div class="icons links"><a class="ic sm" href="https://doi.org/10.1242/jeb.249987" aria-label="Paper" title="Paper"><svg aria-hidden="true"><use href="#i-paper"/></svg></a><a class="ic sm" href="./wildpose.html" aria-label="Project" title="Project"><svg aria-hidden="true"><use href="#i-project"/></svg></a><a class="ic sm" href="https://github.com/DenDen047/WildPose_v1.1" aria-label="Code" title="Code"><svg aria-hidden="true"><use href="#i-code"/></svg></a></div></div></li>
+          <li><span class="venue hl">IROS 2024</span><div><div class="t">Monocular 3D Reconstruction of Cheetahs in the Wild</div><div class="a">Z. da Silva, <b>N. Muramatsu</b>, Z. Parkar, F. Nicolls, A. Patel</div></div></li>
+          <li><span class="venue">CVPR 2024 WS</span><div><div class="t">WildPose: A Long-range 3D Motion Capture System for Wildlife</div><div class="a"><b>N. Muramatsu</b>, S. Shin, A. Markham, A. Patel · CV4Animals Workshop</div></div></li>
+          <li><span class="venue">JEB 2023</span><div><div class="t">Chasing the cheetah: how field biomechanics has evolved to keep up with the fastest land animal</div><div class="a">S. Shield, <b>N. Muramatsu</b>, Z. Da Silva, A. Patel · Journal of Experimental Biology 226 Suppl. 1</div></div></li>
+          <li><span class="venue">IEICE 2023</span><div><div class="t">Combining Spiking Neural Networks with Artificial Neural Networks for Enhanced Image Classification</div><div class="a"><b>N. Muramatsu</b>, H.-T. Yu, T. Satoh · IEICE Trans. Inf. &amp; Syst. 106(2)</div></div></li>
+          <li><span class="venue hl">IROS 2022</span><div><div class="t">Improving 3D Markerless Pose Estimation of Animals in the Wild using Low-Cost Cameras</div><div class="a"><b>N. Muramatsu*</b>, Z. da Silva*, D. Joska, F. Nicolls, A. Patel · *equal contribution</div><div class="icons links"><a class="ic sm" href="https://www.youtube.com/watch?v=golHt_Y71oI" aria-label="Video" title="Video"><svg aria-hidden="true"><use href="#i-youtube"/></svg></a></div></div></li>
+          <li><span class="venue hl">ICRA 2021</span><div><div class="t">AcinoSet: A 3D Pose Estimation Dataset and Baseline Models for Cheetahs in the Wild</div><div class="a">D. Joska, L. Clark, <b>N. Muramatsu</b>, R. Jericevich, F. Nicolls, A. Mathis, M. Mathis, A. Patel</div><div class="icons links"><a class="ic sm" href="https://github.com/African-Robotics-Unit/AcinoSet" aria-label="Code" title="Code"><svg aria-hidden="true"><use href="#i-code"/></svg></a></div></div></li>
+          <li><span class="venue">SIGGRAPH Asia 2018</span><div><div class="t">Eholo Glass: Electroholography Glass. A Lensless Approach to Holographic Augmented Reality Near-Eye Display</div><div class="a">C. W. Ooi, <b>N. Muramatsu</b>, Y. Ochiai · Technical Briefs</div></div></li>
+          <li><span class="venue">TEI 2018</span><div><div class="t">DeepWear: a Case Study of Collaborative Design between Human and Artificial Intelligence</div><div class="a">N. Kato, H. Osone, D. Sato, <b>N. Muramatsu</b>, Y. Ochiai</div></div></li>
+          <li><span class="venue">NIPS 2017 WS</span><div><div class="t">Crowd Sourcing Clothes Design Directed by Adversarial Neural Networks</div><div class="a">N. Kato, H. Osone, D. Sato, <b>N. Muramatsu</b>, Y. Ochiai</div></div></li>
+          <li><span class="venue">SIGGRAPH Asia 2017</span><div><div class="t">DeepHolo: Recognizing 3D Objects using a Binary-weighted Computer-Generated Hologram</div><div class="a"><b>N. Muramatsu</b>, C. W. Ooi, Y. Itoh, Y. Ochiai · Posters</div></div></li>
+          <li><span class="venue">SIGGRAPH Asia 2017</span><div><div class="t">Haptic Marionette: Wrist Control Technology Combined with Electrical Muscle Stimulation and Hanger Reflex</div><div class="a">M. Sakashita, Y. Sato, A. Ebisu, K. Kawahara, S. Hashizume, <b>N. Muramatsu</b>, Y. Ochiai · Posters</div></div></li>
+          <li><span class="venue">UIST 2017</span><div><div class="t">Sonoliards: Rendering Audible Sound Spots by Reflecting the Ultrasound Beams</div><div class="a"><b>N. Muramatsu</b>, K. Ohshima, R. Kawamura, C. W. Ooi, Y. Sato, Y. Ochiai · Adjunct</div></div></li>
+          <li><span class="venue">ICISIP 2017</span><div><div class="t">Development of High Performance Filter for Indoor Positioning System</div><div class="a"><b>N. Muramatsu</b>, C. W. Ooi, T. Miyazaki</div></div></li>
+        </ul>
+      </div>
+    </section>
 
-    <!-- Slick slider -->
-    <script type="text/javascript" src="assets/js/slick.js"></script>
-    <script src="assets/js/swiper-bundle.min.js"></script>
-    <script src="./assets/js/wow.js"></script>
-    <script src="assets/js/slide.js"></script>
-    <script src="assets/js/script.js" async defer></script>
+    <section class="sec" id="news">
+      <div class="wrap two">
+        <div>
+          <div class="sec-title"><span class="no">05</span><h2>ニュース</h2></div>
+          <ul class="news">
+            <li><time>2026.09</time><span>ECCV 2026（Malmö）で WildDepth を発表</span></li>
+            <li><time>2026.07</time><span>ケープタウン大学で博士（工学）を取得</span></li>
+            <li><time>2026.06</time><span>ICRA 2026（Vienna）で自律回転カメラの論文を発表</span></li>
+            <li><time>2025.03</time><span>WildPose が <i>Journal of Experimental Biology</i> の表紙に掲載</span></li>
+            <li><time>2024.06</time><span>CVPR 2024 CV4Animals で WildPose を発表</span></li>
+            <li><time>2022.10</time><span>IROS 2022（Kyoto）で 3D 姿勢推定の論文を発表</span></li>
+            <li><time>2022</time><span>Microsoft Research PhD Fellowship に選出</span></li>
+            <li><time>2019.05</time><span>未踏スーパークリエータに認定</span></li>
+          </ul>
+        </div>
+        <div>
+          <div class="sec-title"><span class="no">05</span><h2>メディア掲載</h2></div>
+          <ul class="news">
+            <li><time>2025.03</time><span><a href="https://journals.biologists.com/jeb/article/228/5/JEB250311/367270/High-resolution-WildPose-3D-scans-revolutionise">Inside JEB — High-resolution WildPose 3D scans</a></span></li>
+            <li><time>2023</time><span><a href="https://journals.biologists.com/jeb/article/226/Suppl_1/jeb245930/307100/ECR-Spotlight-Stacey-Shield-and-Naoya-Muramatsu">JEB — ECR Spotlight</a></span></li>
+            <li><time>2022.11</time><span><a href="https://www.news.uct.ac.za/article/-2022-11-09-patels-cheetah-locomotion-study-gets-major-funding-boost">UCT News — チーターの運動研究に大型の研究資金</a></span></li>
+            <li><time>2022</time><span><a href="https://www.microsoft.com/en-us/research/academic-program/phd-fellowship/2022-recipients/">Microsoft Research — PhD Fellowship 2022</a></span></li>
+            <li><time>2019.05</time><span><a href="https://www.meti.go.jp/press/2019/05/20190524001/20190524001.html">経済産業省 — 未踏スーパークリエータの認定</a></span></li>
+            <li><time>2019.05</time><span><a href="https://www.ipa.go.jp/jinzai/mitou/2018/20190524.html">IPA — 2018 年度 未踏スーパークリエータ</a></span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec" id="career">
+      <div class="wrap">
+        <div class="sec-title"><span class="no">06</span><h2>経歴</h2><span class="label"><a class="ic sm" href="./CV/cv.pdf" aria-label="CV (PDF)" title="CV (PDF)"><svg aria-hidden="true"><use href="#i-pdf"/></svg></a></span></div>
+        <div class="career">
+          <div>
+            <h3>Experience &amp; Education</h3>
+            <dl>
+              <dt>2018 —</dt><dd>フリーランス、のちに合同会社frogiraffe 業務執行社員</dd>
+              <dt>2021 — 2026</dt><dd>ケープタウン大学 博士課程（工学）</dd>
+              <dt>2017 — 2019</dt><dd>ピクシーダストテクノロジーズ（エンジニア）</dd>
+              <dt>2016 — 2017</dt><dd>フィックスターズ（エンジニア）</dd>
+              <dt>2021</dt><dd>筑波大学大学院 修士（情報学）</dd>
+              <dt>2018</dt><dd>筑波大学 情報学群 卒業</dd>
+              <dt>2016</dt><dd>長野工業高等専門学校 電気電子工学科 卒業</dd>
+            </dl>
+          </div>
+          <div>
+            <h3>Awards</h3>
+            <dl>
+              <dt>2025</dt><dd><i>Journal of Experimental Biology</i> 表紙</dd>
+              <dt>2022</dt><dd>Microsoft Research PhD Fellowship</dd>
+              <dt>2019</dt><dd>未踏スーパークリエータ</dd>
+              <dt>2018</dt><dd>IPA 未踏事業 採択</dd>
+              <dt>2018</dt><dd>筑波大学 学生表彰</dd>
+              <dt>2017</dt><dd>DEIM2017 学生プレゼンテーション賞</dd>
+              <dt>2015</dt><dd>RoboCup Junior 北信越ブロック 3 位</dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec" id="gallery">
+      <div class="wrap">
+        <div class="sec-title"><span class="no">07</span><h2>ギャラリー</h2><span class="label">Field · Lab · Conference</span></div>
+        <div class="gallery">
+          <figure class="w3 h3"><img src="./assets/photos/g-cvpr2024-poster.jpg" alt="CVPR 2024 で WildPose のポスターを発表する村松" loading="lazy" style="object-position: 28% 50%"><figcaption>Presenting WildPose · CVPR 2024, Seattle</figcaption></figure>
+          <figure class="w3 h3"><img src="./assets/photos/c-icra2026-group.jpg" alt="ICRA 2026 の会場で研究者たちと並ぶ村松" loading="lazy" style="object-position: 50% 62%"><figcaption>With fellow researchers · ICRA 2026, Vienna</figcaption></figure>
+          <figure class="w2 h3"><img src="./assets/photos/c-eccv2026-poster.jpg" alt="ECCV 2026 の WildDepth のポスターの前で共同研究者と並ぶ村松" loading="lazy" style="object-position: 50% 45%"><figcaption>WildDepth poster · ECCV 2026</figcaption></figure>
+          <figure class="w4 h3"><img src="./assets/photos/c-eccv2026-keynote.jpg" alt="ECCV 2026 の基調講演の会場" loading="lazy" style="object-position: 50% 45%"><figcaption>ECCV 2026 · keynote</figcaption></figure>
+          <figure class="w4 h3"><img src="./assets/photos/g-filming-kalahari.jpg" alt="車内から望遠カメラでチーターを撮る村松" loading="lazy" style="object-position: 52% 42%"><figcaption>Filming cheetahs · Kalahari, 2022</figcaption></figure>
+          <figure class="w2 h3"><img src="./assets/photos/g-lion-dune.jpg" alt="砂丘に立つライオン" loading="lazy" style="object-position: 45% 52%"><figcaption>Lion on a dune · Kalahari</figcaption></figure>
+          <figure class="w4 h2"><img src="./assets/photos/g-kgalagadi-gate.jpg" alt="カラハリの国立公園の入口でトラックの横に立つ村松" loading="lazy" style="object-position: 45% 62%"><figcaption>Kgalagadi Transfrontier Park, 2022</figcaption></figure>
+          <figure class="w2 h2"><img src="./assets/photos/g-cheetah-walking.jpg" alt="こちらへ歩いてくるチーター" loading="lazy" style="object-position: 52% 50%"><figcaption>Cheetah · 2024</figcaption></figure>
+          <figure class="w2 h2"><img src="./assets/photos/g-rig-sunset.jpg" alt="夕焼けのサバンナに向けた WildPose の装置" loading="lazy" style="object-position: 60% 40%"><figcaption>WildPose · sunset</figcaption></figure>
+          <figure class="w2 h2"><img src="./assets/photos/g-selfie-rig.jpg" alt="車のドアに付けた計測装置と村松" loading="lazy" style="object-position: 62% 35%"><figcaption>Rig on the door · Kalahari</figcaption></figure>
+          <figure class="w2 h2"><img src="./assets/photos/g-lab-bench.jpg" alt="研究室の作業台に組んだ WildPose" loading="lazy" style="object-position: 62% 55%"><figcaption>WildPose · lab bench, UCT</figcaption></figure>
+          <figure class="w4 h2"><img src="./assets/photos/g-cheetah-road.jpg" alt="夕暮れの道を横切るチーター" loading="lazy" style="object-position: 38% 80%"><figcaption>Cheetah crossing · dusk</figcaption></figure>
+          <figure class="w2 h2"><img src="./assets/photos/mitou-hexapod.jpg" alt="六脚歩行ロボット" loading="lazy" style="object-position: 60% 50%"><figcaption>Hexapod · 未踏 2018</figcaption></figure>
+          <figure class="w4 h3"><img src="./assets/photos/g-leopard.jpg" alt="木の上からこちらを見るヒョウ" loading="lazy" style="object-position: 58% 38%"><figcaption>Leopard · Kalahari, 2024</figcaption></figure>
+          <figure class="w2 h3"><img src="./assets/photos/g-lioness.jpg" alt="休むメスライオン" loading="lazy" style="object-position: 55% 45%"><figcaption>Lioness · Kalahari</figcaption></figure>
+          <figure class="w2 h2"><img src="./assets/photos/g-livox.jpg" alt="三脚に載せた LiDAR" loading="lazy" style="object-position: 48% 42%"><figcaption>LiDAR on a tripod</figcaption></figure>
+          <figure class="w2 h2"><img src="./assets/photos/g-gimbal.jpg" alt="ジンバルを調整する手" loading="lazy" style="object-position: 45% 45%"><figcaption>Tuning the gimbal</figcaption></figure>
+          <figure class="w2 h2"><img src="./assets/photos/g-rig-lion.jpg" alt="WildPose の装置と、奥で寝ているライオン" loading="lazy" style="object-position: 42% 55%"><figcaption>WildPose & a sleeping lion</figcaption></figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="contact" id="contact">
+      <div class="wrap">
+        <span class="label">Contact</span>
+        <h2>お仕事のご相談はこちらから</h2>
+        <ul class="offer">
+          <li>画像・点群の PoC</li><li>ロボットの立ち上げと学習</li><li>LiDAR による追跡</li><li>論文の再現と評価</li><li>技術顧問</li>
+        </ul>
+        <div class="actions">
+          <a class="btn primary" href="mailto:sh.mn.nat@gmail.com"><span>メールで相談する</span></a>
+          <a class="ic" href="https://www.linkedin.com/in/naoya-muramatsu-a01182184/" aria-label="LinkedIn" title="LinkedIn"><svg aria-hidden="true"><use href="#i-linkedin"/></svg></a><a class="ic" href="https://github.com/DenDen047" aria-label="GitHub" title="GitHub"><svg aria-hidden="true"><use href="#i-github"/></svg></a><a class="ic" href="https://scholar.google.com/citations?user=H7NhyxQAAAAJ" aria-label="Google Scholar" title="Google Scholar"><svg aria-hidden="true"><use href="#i-scholar"/></svg></a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="wrap">
+      <span class="mono">© Naoya Muramatsu</span>
+      <span>小物置き場: <a href="./tools/point_cloud_viewer/">点群ビューア</a> · <a href="./tools/image_processing_tool/">画像処理ツール</a> · <a href="https://github.com/DenDen047/DenDen047.github.io#games">ブラウザゲーム</a></span>
+    </div>
+  </footer>
 </body>
-
 </html>

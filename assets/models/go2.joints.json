@@ -1,0 +1,110 @@
+{
+ "FL_hip_joint": {
+  "axis": [
+   1.0,
+   0.0,
+   0.0
+  ],
+  "lower": -1.0472,
+  "upper": 1.0472
+ },
+ "FL_thigh_joint": {
+  "axis": [
+   0.0,
+   1.0,
+   0.0
+  ],
+  "lower": -1.5708,
+  "upper": 3.4907
+ },
+ "FL_calf_joint": {
+  "axis": [
+   0.0,
+   1.0,
+   0.0
+  ],
+  "lower": -2.7227,
+  "upper": -0.83776
+ },
+ "FR_hip_joint": {
+  "axis": [
+   1.0,
+   0.0,
+   0.0
+  ],
+  "lower": -1.0472,
+  "upper": 1.0472
+ },
+ "FR_thigh_joint": {
+  "axis": [
+   0.0,
+   1.0,
+   0.0
+  ],
+  "lower": -1.5708,
+  "upper": 3.4907
+ },
+ "FR_calf_joint": {
+  "axis": [
+   0.0,
+   1.0,
+   0.0
+  ],
+  "lower": -2.7227,
+  "upper": -0.83776
+ },
+ "RL_hip_joint": {
+  "axis": [
+   1.0,
+   0.0,
+   0.0
+  ],
+  "lower": -1.0472,
+  "upper": 1.0472
+ },
+ "RL_thigh_joint": {
+  "axis": [
+   0.0,
+   1.0,
+   0.0
+  ],
+  "lower": -0.5236,
+  "upper": 4.5379
+ },
+ "RL_calf_joint": {
+  "axis": [
+   0.0,
+   1.0,
+   0.0
+  ],
+  "lower": -2.7227,
+  "upper": -0.83776
+ },
+ "RR_hip_joint": {
+  "axis": [
+   1.0,
+   0.0,
+   0.0
+  ],
+  "lower": -1.0472,
+  "upper": 1.0472
+ },
+ "RR_thigh_joint": {
+  "axis": [
+   0.0,
+   1.0,
+   0.0
+  ],
+  "lower": -0.5236,
+  "upper": 4.5379
+ },
+ "RR_calf_joint": {
+  "axis": [
+   0.0,
+   1.0,
+   0.0
+  ],
+  "lower": -2.7227,
+  "upper": -0.83776
+ }
+}

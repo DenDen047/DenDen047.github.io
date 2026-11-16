@@ -1,0 +1,263 @@
+{
+ "left_hip_pitch_joint": {
+  "axis": [
+   0.0,
+   1.0,
+   0.0
+  ],
+  "lower": -2.5307,
+  "upper": 2.8798
+ },
+ "left_hip_roll_joint": {
+  "axis": [
+   1.0,
+   0.0,
+   0.0
+  ],
+  "lower": -0.5236,
+  "upper": 2.9671
+ },
+ "left_hip_yaw_joint": {
+  "axis": [
+   0.0,
+   0.0,
+   1.0
+  ],
+  "lower": -2.7576,
+  "upper": 2.7576
+ },
+ "left_knee_joint": {
+  "axis": [
+   0.0,
+   1.0,
+   0.0
+  ],
+  "lower": -0.087267,
+  "upper": 2.8798
+ },
+ "left_ankle_pitch_joint": {
+  "axis": [
+   0.0,
+   1.0,
+   0.0
+  ],
+  "lower": -0.87267,
+  "upper": 0.5236
+ },
+ "left_ankle_roll_joint": {
+  "axis": [
+   1.0,
+   0.0,
+   0.0
+  ],
+  "lower": -0.2618,
+  "upper": 0.2618
+ },
+ "right_hip_pitch_joint": {
+  "axis": [
+   0.0,
+   1.0,
+   0.0
+  ],
+  "lower": -2.5307,
+  "upper": 2.8798
+ },
+ "right_hip_roll_joint": {
+  "axis": [
+   1.0,
+   0.0,
+   0.0
+  ],
+  "lower": -2.9671,
+  "upper": 0.5236
+ },
+ "right_hip_yaw_joint": {
+  "axis": [
+   0.0,
+   0.0,
+   1.0
+  ],
+  "lower": -2.7576,
+  "upper": 2.7576
+ },
+ "right_knee_joint": {
+  "axis": [
+   0.0,
+   1.0,
+   0.0
+  ],
+  "lower": -0.087267,
+  "upper": 2.8798
+ },
+ "right_ankle_pitch_joint": {
+  "axis": [
+   0.0,
+   1.0,
+   0.0
+  ],
+  "lower": -0.87267,
+  "upper": 0.5236
+ },
+ "right_ankle_roll_joint": {
+  "axis": [
+   1.0,
+   0.0,
+   0.0
+  ],
+  "lower": -0.2618,
+  "upper": 0.2618
+ },
+ "waist_yaw_joint": {
+  "axis": [
+   0.0,
+   0.0,
+   1.0
+  ],
+  "lower": -2.618,
+  "upper": 2.618
+ },
+ "waist_roll_joint": {
+  "axis": [
+   1.0,
+   0.0,
+   0.0
+  ],
+  "lower": -0.52,
+  "upper": 0.52
+ },
+ "waist_pitch_joint": {
+  "axis": [
+   0.0,
+   1.0,
+   0.0
+  ],
+  "lower": -0.52,
+  "upper": 0.52
+ },
+ "left_shoulder_pitch_joint": {
+  "axis": [
+   0.0,
+   1.0,
+   0.0
+  ],
+  "lower": -3.0892,
+  "upper": 2.6704
+ },
+ "left_shoulder_roll_joint": {
+  "axis": [
+   1.0,
+   0.0,
+   0.0
+  ],
+  "lower": -1.5882,
+  "upper": 2.2515
+ },
+ "left_shoulder_yaw_joint": {
+  "axis": [
+   0.0,
+   0.0,
+   1.0
+  ],
+  "lower": -2.618,
+  "upper": 2.618
+ },
+ "left_elbow_joint": {
+  "axis": [
+   0.0,
+   1.0,
+   0.0
+  ],
+  "lower": -1.0472,
+  "upper": 2.0944
+ },
+ "left_wrist_roll_joint": {
+  "axis": [
+   1.0,
+   0.0,
+   0.0
+  ],
+  "lower": -1.97222,
+  "upper": 1.97222
+ },
+ "left_wrist_pitch_joint": {
+  "axis": [
+   0.0,
+   1.0,
+   0.0
+  ],
+  "lower": -1.61443,
+  "upper": 1.61443
+ },
+ "left_wrist_yaw_joint": {
+  "axis": [
+   0.0,
+   0.0,
+   1.0
+  ],
+  "lower": -1.61443,
+  "upper": 1.61443
+ },
+ "right_shoulder_pitch_joint": {
+  "axis": [
+   0.0,
+   1.0,
+   0.0
+  ],
+  "lower": -3.0892,
+  "upper": 2.6704
+ },
+ "right_shoulder_roll_joint": {
+  "axis": [
+   1.0,
+   0.0,
+   0.0
+  ],
+  "lower": -2.2515,
+  "upper": 1.5882
+ },
+ "right_shoulder_yaw_joint": {
+  "axis": [
+   0.0,
+   0.0,
+   1.0
+  ],
+  "lower": -2.618,
+  "upper": 2.618
+ },
+ "right_elbow_joint": {
+  "axis": [
+   0.0,
+   1.0,
+   0.0
+  ],
+  "lower": -1.0472,
+  "upper": 2.0944
+ },
+ "right_wrist_roll_joint": {
+  "axis": [
+   1.0,
+   0.0,
+   0.0
+  ],
+  "lower": -1.97222,
+  "upper": 1.97222
+ },
+ "right_wrist_pitch_joint": {
+  "axis": [
+   0.0,
+   1.0,
+   0.0
+  ],
+  "lower": -1.61443,
+  "upper": 1.61443
+ },
+ "right_wrist_yaw_joint": {
+  "axis": [
+   0.0,
+   0.0,
+   1.0
+  ],
+  "lower": -1.61443,
+  "upper": 1.61443
+ }
+}
