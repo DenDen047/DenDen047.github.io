@@ -137,6 +137,10 @@ section.sec { padding: 4.5rem 0; border-top: 1px solid var(--rule); }
 .plate-body dl { display: grid; grid-template-columns: auto 1fr; gap: 0 .7rem; margin: .6rem 0 0; font-family: var(--mono); font-size: .68rem; }
 .plate-body dt { color: var(--muted); }
 .plate-body dd { margin: 0; }
+/* the self-built rig leads the grid: 2 x 2 cells, viewport fills what the text leaves */
+.plate.feature { grid-column: span 2; grid-row: span 2; }
+.plate.feature .viewport { aspect-ratio: auto; flex: 1; min-height: 18rem; }
+.plate.feature .plate-body h3 { font-size: 1.15rem; }
 @media (max-width: 64rem) { .plates { grid-template-columns: 1fr 1fr; } }
 
 /* projects */

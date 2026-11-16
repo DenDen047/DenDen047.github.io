@@ -92,6 +92,18 @@ const ROBOTS = {
     },
     view: { azimuth: 25, elevation: 14 },
   },
+  wildpose: {
+    home: {},
+    // pans to follow an animal, pauses, tilts a little; roll stays level like a stabiliser
+    move(t) {
+      return {
+        pan_joint: 0.6 * Math.sin(t * 0.45) + 0.15 * Math.sin(t * 1.3),
+        tilt_joint: 0.12 * Math.sin(t * 0.7 + 1),
+        roll_joint: 0.03 * Math.sin(t * 0.9),
+      };
+    },
+    view: { azimuth: 55, elevation: 14 },
+  },
 };
 
 const loader = new GLTFLoader();
