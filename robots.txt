@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://denden047.github.io/sitemap.xml
